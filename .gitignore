@@ -1,0 +1,7 @@
+*.bin
+*.queue
+*.nc
+*.toolkits
+/__pycache__
+.claude/
+bedrock_profiles/
