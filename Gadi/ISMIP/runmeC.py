@@ -27,7 +27,7 @@ from pyissm import plot as iplt
 # md.initialization.temperature = 
 # ====================================================================================================
 
-ParamFile = 'IsmipA.py'
+ParamFile = 'IsmipC.py'
 
 x_max_length = 80000 # metres
 y_max_length = 80000 # metres
@@ -48,7 +48,7 @@ md_mesh, md_x, md_y, md_elements, md_is3d = issm.model.mesh.process_mesh(md)
 print("Plotting mesh")
 iplt.plot_mesh2d(md_mesh, show_nodes = True)
 plt.title("Full mesh") 
-plt.savefig(f"ismip_A_mesh.png")
+plt.savefig(f"ismip_C_mesh.png")
 # plt.show()
 
 # convert the vertex on boundary array into boolean
@@ -61,7 +61,7 @@ iplt.plot_mesh2d(md_mesh, show_nodes = True)
 plt.scatter(x_boundaries, y_boundaries, label='boundaries')
 plt.legend()
 plt.title("Mesh boundaries") 
-plt.savefig(f"ismip_A_mesh_boundaries.png")
+plt.savefig(f"ismip_C_mesh_boundaries.png")
 # plt.show()
 
 # ====================================================================================================
@@ -98,7 +98,7 @@ iplt.plot_model_elements(md,
 # )
 
 plt.title("Set mask - grounded ice elements") 
-plt.savefig("ismip_A_grounded_ice_elements.png")
+plt.savefig("ismip_C_grounded_ice_elements.png")
 # plt.show()
 
 # ====================================================================================================
@@ -110,7 +110,7 @@ md = parameterize(md, ParamFile)
 # THICKNESS plot
 iplt.plot_model_field(md, md.geometry.thickness, show_cbar = True)
 plt.title("Ice thickness") 
-plt.savefig("ismip_A_thickness_geometry_2D.png")
+plt.savefig("ismip_C_thickness_geometry_2D.png")
 # plt.show()
 
 
@@ -134,13 +134,13 @@ plotmodel(md, 'data', md.geometry.base, 'figure', 4,
 
 plt.tight_layout()
 plt.title("3D model geometry") 
-plt.savefig("ismip_A_geometry_3D.png")
+plt.savefig("ismip_C_geometry_3D.png")
 # plt.show()
 
 # 2D plot
 iplt.plot_model_field(md, md.geometry.base, layer=1, show_cbar = True)
 plt.title("Base geometry") 
-plt.savefig("ismip_A_base_geometry_2D.png")
+plt.savefig("ismip_C_base_geometry_2D.png")
 # plt.show()
 
 # ====================================================================================================
@@ -162,7 +162,7 @@ flowequation_type = 'High Order'
 print("\n===== setting boundary conditions =====")
 
 # DIRICHLET boundary condition are known as SPCs
-# ice frozen to the base, no velocity
+# ice is not frozen to the base
 # SPCs are initialized at NaN one value per vertex
 md.stressbalance.spcvx = np.nan * np.ones((md.mesh.numberofvertices))
 md.stressbalance.spcvy = np.nan * np.ones((md.mesh.numberofvertices))
@@ -170,9 +170,9 @@ md.stressbalance.spcvz = np.nan * np.ones((md.mesh.numberofvertices))
 
 # extract the nodenumbers at the base #md.mesh.vertexonbase
 basalnodes = np.nonzero(md.mesh.vertexonbase)
-# set the sliding to zero on the bed (Vx and Vy)
-md.stressbalance.spcvx[basalnodes] = 0.0
-md.stressbalance.spcvy[basalnodes] = 0.0
+# Allow sliding at the bed; velocity will be determined by the friction law
+md.stressbalance.spcvx[basalnodes] = np.nan
+md.stressbalance.spcvy[basalnodes] = np.nan
 
 # periodic boundaries have to be fixed on the sides
 # Find the indices of the sides of the domain, for x and then for y
@@ -207,7 +207,7 @@ md.stressbalance.abstol = np.nan
 # md.groundingline.migration = 'None'
 
 # solver settings    
-md.settings.solver_residue_threshold = 1e-4 
+md.settings.solver_residue_threshold = 1e-2 
 md.stressbalance.restol = 1e-4
 md.stressbalance.reltol = 1e-4
 md.stressbalance.maxiter = 100
@@ -279,131 +279,131 @@ print(
 
 # ======================================================================================= 
 
-# Solving TRANSIENT #8
-print("\n===== Transient solver for the A case =====")
+# # Solving TRANSIENT #8
+# print("\n===== Transient solver for the C case =====")
 
-time_step = 1
-final_time = 20
+# time_step = 1
+# final_time = 20
 
-# # Initialise Transient model from zero
-md.initialization.vx = np.zeros_like(vx_full)
-md.initialization.vy = np.zeros_like(vy_full)
-md.initialization.vz = np.zeros_like(vz_full)
-md.initialization.vel = np.zeros_like(vel_full)
-md.initialization.pressure =  np.zeros_like(Pressure_full)
-md.initialization.thickness =  np.zeros_like(Thickness_full)
+# # # Initialise Transient model from zero
+# md.initialization.vx = np.zeros_like(vx_full)
+# md.initialization.vy = np.zeros_like(vy_full)
+# md.initialization.vz = np.zeros_like(vz_full)
+# md.initialization.vel = np.zeros_like(vel_full)
+# md.initialization.pressure =  np.zeros_like(Pressure_full)
+# md.initialization.thickness =  np.zeros_like(Thickness_full)
 
-# # Initialise from stress balance
-# md.initialization.vx = stress_solution.Vx
-# md.initialization.vy = stress_solution.Vy
-# md.initialization.vz =s tress_solution.Vz
-# md.initialization.vel = stress_solution.Vel
-# md.initialization.pressure = stress_solution.Pressure
-# md.initialization.thickness = stress_solution.Thickness
+# # # Initialise from stress balance
+# # md.initialization.vx = stress_solution.Vx
+# # md.initialization.vy = stress_solution.Vy
+# # md.initialization.vz =s tress_solution.Vz
+# # md.initialization.vel = stress_solution.Vel
+# # md.initialization.pressure = stress_solution.Pressure
+# # md.initialization.thickness = stress_solution.Thickness
 
-# Set which control message to see
-# md.verbose = verbose('convergence', True)
-# SET active Physics
-md.settings.sb_coupling_frequency = 1 # run stress balance every timestep
-md.transient.isstressbalance = 1
-md.transient.ismasstransport = 1
-md.transient.isthermal = 0
-md.transient.issmb = 0
+# # Set which control message to see
+# # md.verbose = verbose('convergence', True)
+# # SET active Physics
+# md.settings.sb_coupling_frequency = 1 # run stress balance every timestep
+# md.transient.isstressbalance = 1
+# md.transient.ismasstransport = 1
+# md.transient.isthermal = 0
+# md.transient.issmb = 0
 
-# define the timestepping scheme (YEARS)
-md.timestepping.time_step = time_step
-md.timestepping.start_time = 0.0
-md.timestepping.final_time = time_step * final_time
+# # define the timestepping scheme (YEARS)
+# md.timestepping.time_step = time_step
+# md.timestepping.start_time = 0.0
+# md.timestepping.final_time = time_step * final_time
 
-md.settings.output_frequency = time_step # <<<
+# md.settings.output_frequency = time_step # <<<
 
 
-# Set up output settings
-md.transient.requested_outputs = ['default',
-                                    'Thickness',
-                                    'Surface',
-                                    'Base',
-]
+# # Set up output settings
+# md.transient.requested_outputs = ['default',
+#                                     'Thickness',
+#                                     'Surface',
+#                                     'Base',
+# ]
 
-print("sb_coupling_frequency:", md.settings.sb_coupling_frequency)
-print("output_frequency:", md.settings.output_frequency)
-print("isstressbalance:", md.transient.isstressbalance)
-print("ismasstransport:", md.transient.ismasstransport)
+# print("sb_coupling_frequency:", md.settings.sb_coupling_frequency)
+# print("output_frequency:", md.settings.output_frequency)
+# print("isstressbalance:", md.transient.isstressbalance)
+# print("ismasstransport:", md.transient.ismasstransport)
 
-print(f"\nΔt (yr): {md.timestepping.time_step}\nTfinal (yr): {md.timestepping.final_time}\n≈nsteps: {int(md.timestepping.final_time/md.timestepping.time_step)}")
+# print(f"\nΔt (yr): {md.timestepping.time_step}\nTfinal (yr): {md.timestepping.final_time}\n≈nsteps: {int(md.timestepping.final_time/md.timestepping.time_step)}")
 
-print(f"\n===== Solving Transient {flowequation_type} =====")
-md = solve(md, 'Transient')
-# plot the surface velocities #plotdoc
-plotmodel(md, 'data', md.results.TransientSolution[19].Vel, 'layer', 5, 'figure', 5)
+# print(f"\n===== Solving Transient {flowequation_type} =====")
+# md = solve(md, 'Transient')
+# # plot the surface velocities #plotdoc
+# plotmodel(md, 'data', md.results.TransientSolution[19].Vel, 'layer', 5, 'figure', 5)
 
-# # # Check transient fields   
-# plot_transient_fields(md)
+# # # # Check transient fields   
+# # plot_transient_fields(md)
 
-# save the given model
-print(f"\n===== Saving Transient Solution =====")
-output_filename = f"Transient_{md.miscellaneous.name}_{final_time=}_yrs_timestep={time_step:.5f}_yrs.nc"
+# # save the given model
+# print(f"\n===== Saving Transient Solution =====")
+# output_filename = f"Transient_{md.miscellaneous.name}_{final_time=}_yrs_timestep={time_step:.5f}_yrs.nc"
 
-# export_netCDF(md, output_filename)
-print(f"✓ Full results saved to {output_filename}")
+# # export_netCDF(md, output_filename)
+# print(f"✓ Full results saved to {output_filename}")
 
-# ## check max velocity evolution
-# plot_max_velocity_from_netcdf(output_filename)
+# # ## check max velocity evolution
+# # plot_max_velocity_from_netcdf(output_filename)
 
-print("=======================================================================================")
+# print("=======================================================================================")
 
-print("\nAvailable results in (last time step) md.results.TransientSolution:")
-transient_solution = md.results.TransientSolution
-# print(stress_solution)
+# print("\nAvailable results in (last time step) md.results.TransientSolution:")
+# transient_solution = md.results.TransientSolution
+# # print(stress_solution)
 
-# Full solution arrays for last time step
-vx_full_transient = transient_solution.Vx[:,-1]
-vy_full_transient = transient_solution.Vy[:,-1]
-vz_full_transient = transient_solution.Vz[:,-1]
-vel_full_transient = transient_solution.Vel[:,-1]
-Pressure_full_transient = transient_solution.Pressure[:,-1]
-Thickness_full_transient = transient_solution.Thickness[:,-1]
-Surface_full_transient = transient_solution.Surface[:,-1]
-Base_full_transient = transient_solution.Base[:,-1]
+# # Full solution arrays for last time step
+# vx_full_transient = transient_solution.Vx[:,-1]
+# vy_full_transient = transient_solution.Vy[:,-1]
+# vz_full_transient = transient_solution.Vz[:,-1]
+# vel_full_transient = transient_solution.Vel[:,-1]
+# Pressure_full_transient = transient_solution.Pressure[:,-1]
+# Thickness_full_transient = transient_solution.Thickness[:,-1]
+# Surface_full_transient = transient_solution.Surface[:,-1]
+# Base_full_transient = transient_solution.Base[:,-1]
 
-basal_idx = np.where(md.mesh.vertexonbase == 1)[0]
-vx_basal_transient = vx_full_transient[basal_idx]
-vy_basal_transient = vy_full_transient[basal_idx]
-vz_basal_transient = vz_full_transient[basal_idx]
+# basal_idx = np.where(md.mesh.vertexonbase == 1)[0]
+# vx_basal_transient = vx_full_transient[basal_idx]
+# vy_basal_transient = vy_full_transient[basal_idx]
+# vz_basal_transient = vz_full_transient[basal_idx]
 
-surface_idx = np.where(md.mesh.vertexonsurface == 1)[0]
-vx_surface_transient = vx_full_transient[surface_idx]
-vy_surface_transient = vy_full_transient[surface_idx]
-vz_surface_transient = vz_full_transient[surface_idx]
+# surface_idx = np.where(md.mesh.vertexonsurface == 1)[0]
+# vx_surface_transient = vx_full_transient[surface_idx]
+# vy_surface_transient = vy_full_transient[surface_idx]
+# vz_surface_transient = vz_full_transient[surface_idx]
 
-# ------------------------------------------------------------------
-# Quick print‑outs
-# ------------------------------------------------------------------
-print(
-    f"Surface velocity ranges (m a⁻¹):\n"
-    f"  vx_surface: [{vx_surface_transient.min():.5f}, {vx_surface_transient.max():.5f}]\n"
-    f"  vy_surface: [{vy_surface_transient.min():.5f}, {vy_surface_transient.max():.5f}]\n"
-    f"  vz_surface: [{vz_surface_transient.min():.5f}, {vz_surface_transient.max():.5f}]"
-)
-print(
-    "Basal velocity ranges (m a⁻¹):\n"
-    f"  vx_basal: [{vx_basal_transient.min():.5f}, {vx_basal_transient.max():.5f}]\n"
-    f"  vy_basal: [{vy_basal_transient.min():.5f}, {vy_basal_transient.max():.5f}]\n"
-    f"  vz_basal: [{vz_basal_transient.min():.5f}, {vz_basal_transient.max():.5f}]"
-)
+# # ------------------------------------------------------------------
+# # Quick print‑outs
+# # ------------------------------------------------------------------
+# print(
+#     f"Surface velocity ranges (m a⁻¹):\n"
+#     f"  vx_surface: [{vx_surface_transient.min():.5f}, {vx_surface_transient.max():.5f}]\n"
+#     f"  vy_surface: [{vy_surface_transient.min():.5f}, {vy_surface_transient.max():.5f}]\n"
+#     f"  vz_surface: [{vz_surface_transient.min():.5f}, {vz_surface_transient.max():.5f}]"
+# )
+# print(
+#     "Basal velocity ranges (m a⁻¹):\n"
+#     f"  vx_basal: [{vx_basal_transient.min():.5f}, {vx_basal_transient.max():.5f}]\n"
+#     f"  vy_basal: [{vy_basal_transient.min():.5f}, {vy_basal_transient.max():.5f}]\n"
+#     f"  vz_basal: [{vz_basal_transient.min():.5f}, {vz_basal_transient.max():.5f}]"
+# )
 
-print(
-    "Vel ranges (m a⁻¹):\n"
-    f"  vel: [{vel_full_transient.min():.5f}, {vel_full_transient.max():.5f}]\n"
-)
+# print(
+#     "Vel ranges (m a⁻¹):\n"
+#     f"  vel: [{vel_full_transient.min():.5f}, {vel_full_transient.max():.5f}]\n"
+# )
 
-print(
-    "Pressure ranges (Pa):"f"[{Pressure_full_transient.min():.5f}, {Pressure_full_transient.max():.5f}]\n"
-)
+# print(
+#     "Pressure ranges (Pa):"f"[{Pressure_full_transient.min():.5f}, {Pressure_full_transient.max():.5f}]\n"
+# )
 
-print(
-    "Thickness ranges (m):"f"[{Thickness_full_transient.min():.5f}, {Thickness_full_transient.max():.5f}]\n"
-)
-print("=======================================================================================")
+# print(
+#     "Thickness ranges (m):"f"[{Thickness_full_transient.min():.5f}, {Thickness_full_transient.max():.5f}]\n"
+# )
+# print("=======================================================================================")
 
-# breakpoint()
+# # breakpoint()
