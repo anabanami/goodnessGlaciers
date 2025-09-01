@@ -4,7 +4,7 @@ from SetIceSheetBC import SetIceSheetBC
 #Parameterization for ISMIP F experiment
 
 #Set the Simulation generic name #md.miscellaneous
-md.miscellaneous.name = 'IsmipF'
+md.miscellaneous.name = 'IsmipF_500'
 
 A = 2.140373 * 1e-7 # ice-flow parameter, units: Pa⁻¹ a⁻¹
 n = 1 # flow law exponent
@@ -14,7 +14,7 @@ H_0 =1e3 # ice thickness, units: m
 
 # perturbation parameters
 sigma = 10 * H_0 # gaussian bump width, units: m
-amplitude_0 = 0.1 * H_0 # gaussian bump amplitude(500m), units: m
+amplitude_0 = 0.5 * H_0 # gaussian bump amplitude(500m), units: m
 
 #Geometry
 print('   Constructing Geometry')
