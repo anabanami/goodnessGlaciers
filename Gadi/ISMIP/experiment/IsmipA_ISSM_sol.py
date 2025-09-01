@@ -33,8 +33,8 @@ md.geometry.thickness = md.geometry.surface - md.geometry.base
 # plot the geometry to check it out
 # plotmodel(md,'data',md.geometry.thickness);
 
-plotmodel(md,'data', md.geometry.thickness)
-plt.show()
+# plotmodel(md,'data', md.geometry.thickness)
+# plt.show()
 
 print('   Defining friction parameters')
 # These parameters will not be used but need to be fixed # md.friction

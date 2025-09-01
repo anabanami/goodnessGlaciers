@@ -27,13 +27,13 @@ from pyissm import plot as iplt
 # md.initialization.temperature = 
 # ====================================================================================================
 
-ParamFile = 'IsmipA.py'
+ParamFile = 'cos_ripple.py'
 
 x_max_length = 80000 # metres
 y_max_length = 80000 # metres
 
-x_nodes = 20
-y_nodes = 20
+x_nodes = 40
+y_nodes = 40
 
 #Run Steps
 
@@ -48,7 +48,7 @@ md_mesh, md_x, md_y, md_elements, md_is3d = issm.model.mesh.process_mesh(md)
 print("Plotting mesh")
 iplt.plot_mesh2d(md_mesh, show_nodes = True)
 plt.title("Full mesh") 
-plt.savefig(f"ismip_A_mesh.png")
+plt.savefig(f"cos_ripple_mesh.png")
 # plt.show()
 
 # convert the vertex on boundary array into boolean
@@ -61,7 +61,7 @@ iplt.plot_mesh2d(md_mesh, show_nodes = True)
 plt.scatter(x_boundaries, y_boundaries, label='boundaries')
 plt.legend()
 plt.title("Mesh boundaries") 
-plt.savefig(f"ismip_A_mesh_boundaries.png")
+plt.savefig(f"cos_ripple_mesh_boundaries.png")
 # plt.show()
 
 # ====================================================================================================
@@ -98,7 +98,7 @@ iplt.plot_model_elements(md,
 # )
 
 plt.title("Set mask - grounded ice elements") 
-plt.savefig("ismip_A_grounded_ice_elements.png")
+plt.savefig("cos_ripple_grounded_ice_elements.png")
 # plt.show()
 
 # ====================================================================================================
@@ -110,7 +110,7 @@ md = parameterize(md, ParamFile)
 # THICKNESS plot
 iplt.plot_model_field(md, md.geometry.thickness, show_cbar = True)
 plt.title("Ice thickness") 
-plt.savefig("ismip_A_thickness_geometry_2D.png")
+plt.savefig("cos_ripple_thickness_geometry_2D.png")
 # plt.show()
 
 
@@ -134,13 +134,13 @@ plotmodel(md, 'data', md.geometry.base, 'figure', 4,
 
 plt.tight_layout()
 plt.title("3D model geometry") 
-plt.savefig("ismip_A_geometry_3D.png")
+plt.savefig("cos_ripple_geometry_3D.png")
 # plt.show()
 
 # 2D plot
 iplt.plot_model_field(md, md.geometry.base, layer=1, show_cbar = True)
 plt.title("Base geometry") 
-plt.savefig("ismip_A_base_geometry_2D.png")
+plt.savefig("cos_ripple_base_geometry_2D.png")
 # plt.show()
 
 # ====================================================================================================
@@ -277,6 +277,7 @@ print(
 
 # export_netCDF(md, "sb_solution.nc")
 
+breakpoint()
 # ======================================================================================= 
 
 # Solving TRANSIENT #8

@@ -4,10 +4,10 @@ from plotmodel import plotmodel
 import matplotlib.pyplot as plt
 
 
-# Parameterization for ISMIP A experiment
+# Parameterization for ISMIP A experiment TRANSLATED FROM MATLAB
 
 # Set the Simulation generic name # md.miscellaneous
-md.miscellaneous.name = 'ISMIP_A'
+md.miscellaneous.name = "ISMIP_A_issm_sol"
 
 # Geometry
 print('   Constructing Geometry')
@@ -30,9 +30,15 @@ md.geometry.base = md.geometry.surface - 1000.0 + 500.0 * np.sin(md.mesh.x * 2.0
 
 md.geometry.thickness = md.geometry.surface - md.geometry.base
 
+# plot the geometry to check it out
+# plotmodel(md,'data',md.geometry.thickness);
+
+# plotmodel(md,'data', md.geometry.thickness)
+# plt.show()
+
 print('   Defining friction parameters')
 # These parameters will not be used but need to be fixed # md.friction
-# one friction coefficient per node (md.mesh.numberofvertices,1)
+# one friciton coefficient per node (md.mesh.numberofvertices,1)
 # md.friction.coefficient=200.0*ones(md.mesh.numberofvertices,1);
 
 md.friction.coefficient = 200.0 * np.ones(md.mesh.numberofvertices)
@@ -56,9 +62,6 @@ md.materials.rheology_B = 6.8067e7 * np.ones(md.mesh.numberofvertices)
 # md.materials.rheology_n=3*ones(md.mesh.numberofelements,1);
 
 md.materials.rheology_n = 3 * np.ones(md.mesh.numberofelements)
-
-# Rheology law
-md.materials.rheology_law = "BuddJacka"
 
 print('   Set boundary conditions')
 # Set the default boundary conditions for an ice-sheet
