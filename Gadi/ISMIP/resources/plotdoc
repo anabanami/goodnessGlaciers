@@ -1,0 +1,69 @@
+
+
+
+(Pdb) plotmodel(md, 'data', 'quiver')
+WARNING: 'quiver' is not implemented or is not a valid string for option 'data'
+*** ValueError: data passed to plotmodel has bad dimensions; check that column vectors are rank - 1
+
+(Pdb) plotdoc()
+   Plot usage:  plotmodel(model, varargin)
+   plotting is done with couples of keywords values, the type and style of data to display is given by one (or several) of the followings
+   Options:  
+     'data' :  and a model field or one of the following options.
+ - quiver :   quiver plot give data and a vector array [Vx, Vy]
+ - mesh :   draw mesh using trisurf
+ - BC :   this will draw all the boundary conditions (Dirichlet and Neumann).
+ - elementnumbering :   numbering of elements (matlab indices)
+ - 3D disclaimer :  3D is implemented with plot3d for now this is not optimal and may change to mayavi at some point. The impelementation is on the development side for now so expect some issue and question your plotting before you results.
+
+   The general look of the plot is then given by the following keywords
+ - alpha :   set transparency of plotted data (in [0, 1]) 
+ - axes_pad :   spacing between axes (default is 0.25)
+ - axis :   show ('on') or hide ('off') axes
+ - backgroundcolor :   plot background color. RGB tuple or standard string
+ - caxis :   modify  colorbar range. (array of type [a b] where b >= a)
+ - colorbar :   add colorbar (string 'on', 'off' or 'one')
+ - colorbarfontsize :   specify colorbar fontsize
+ - colorbarticks :   set colorbar ticks manually (list)
+ - colorbartitle :   colorbar title (string)
+ - colorlevels :   N, number of levels to use
+ - colormap :   change the default colormap ('viridis' is the default)
+ - contourlevels :   N or [value1, ...] add the contours of the specified values or N contours
+ - edgecolor :   color of mesh edges. RGB tuple or standard string
+ - elementnumbering :   numbering of elements (matlab indices)
+ - expdisp :   path (or list of paths) to the exp file to be plotted 
+ - expfill :   (True / False) fill a closed contour 
+ - expfillalpha :   alpha transparency for filled contour 
+ - expfillcolor :   Color for a filled contour, only used if expfill is True 
+ - explinecolor :   matplotlib color string 
+ - explinestyle :   matplotlib linestyle string 
+ - explinewidth :   linewidth 
+ - fontcolor :   TODO
+ - fontsize :   fontsize for the title
+ - fontweight :   fontweight for the title 'normal', 'bold'
+ - highlight :   highlights certain nodes or elements when using 'vetrexnumbering' or 'elementnumbering' or 'highlightvertices ' or 'highlightelements' option
+ - highlightelements :   to highlight elements to highlight the element list
+ - layer :  number of the layer to display for 3D runs
+ - log :   cutoff value for log
+ - mask :   condition. Only 'true' values are plotted 
+ - overlay :   True / False. Overlay a georeferenced image (radar / visible) 
+ - overlay_image :   path to overlay image 
+ - overlayhist :   plot a histogram of overlay image, used for setting overlaylims 
+ - overlaylims :   normalized limits to clip and stretch contrast of overlay image (in [0, 1], ex. [0.25, 0.75]) 
+ - quivercol :   color of quiver arrows, 'values' give value colored arrows
+ - scaling :   scaling factor used by quiver plots.
+ - streamlines :   TOFIX argument does nothing
+ - text :   print string or list of strings
+ - textcolor :   text color
+ - textposition :   [x, y] position of text, list if several texts (position betwee 0 and 1)
+ - textrotation :   text rotation angle
+ - textsize :   text fontsize TOFIX 
+ - textweight :   text fontweight
+ - title :   subplot title (string)
+ - vertexnumbering :   numbering of vertices
+ - xlabel :   X axis title
+ - xlim :   limits of X axis (all subplots) (ex:  [0, 500])
+ - ylabel :   Y axis title
+ - ylim :   limits of Y axis (all subplots) (ex:  [0, 500])
+       any options (except 'data') can be followed by '  #i' where 'i' is the subplot number, or '  #all' if applied to all plots
+(Pdb) qt.qpa.wayland: There are no outputs - creating placeholder screen
