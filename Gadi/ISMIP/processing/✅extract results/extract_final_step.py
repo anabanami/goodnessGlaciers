@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 Usage:
 
@@ -9,8 +10,8 @@ This script processes a single transient NetCDF output file from ISSM. It:
 2.  Reconstructs the original 3D model mesh by replicating the meshing
     and extrusion steps from the 'runme.py' script.
 3.  Opens the .nc file and processes ONLY THE FINAL TIME STEP.
-4.  Plots the surface layer for velocity fields and the BASAL layer for pressure.
-5.  Saves final-state plots to a directory named after the results file.
+4.  Plots both surface and basal layers for velocity fields and basal for pressure.
+5.  Saves final-state plots to a directory structure separated by layer.
 6.  Additionally, it creates a summary plot of max velocity over time.
 
 Example:
@@ -45,10 +46,11 @@ def reconstruct_mesh(filename):
     
     param_filename = parts[0] + ".py"
     try:
-        resolution_factor = int(parts[2].split('-')[0])
+        # --- FIX: Changed int() to float() to handle decimal resolutions ---
+        resolution_factor = float(parts[2].split('-')[0])
     except (ValueError, IndexError):
-        print(f"Warning: Could not determine resolution factor from '{base}'. Defaulting to 1.")
-        resolution_factor = 1
+        print(f"Warning: Could not determine resolution factor from '{base}'. Defaulting to 1.0.")
+        resolution_factor = 1.0
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     parent_dir = os.path.dirname(script_dir)
@@ -64,8 +66,9 @@ def reconstruct_mesh(filename):
     md = model()
     x_max = 100000
     y_max = 100000
-    x_nodes = 30 * resolution_factor
-    y_nodes = 30 * resolution_factor
+    # The number of nodes must be an integer
+    x_nodes = int(30 * resolution_factor)
+    y_nodes = int(30 * resolution_factor)
     md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
     md = parameterize(md, param_file_path)
     md = md.extrude(5, 1)
@@ -126,29 +129,41 @@ def visualise_final_step(results_file):
         return
 
     # --- PLOT VELOCITY EVOLUTION (SUMMARY PLOT) ---
-    out_dir_base = os.path.splitext(os.path.basename(results_file))[0]
+    out_dir_base = os.path.splitext(os.path.basename(results_file))[0] + '_FINAL'
     os.makedirs(out_dir_base, exist_ok=True)
     if 'Vel' in tsol_group.variables:
         vel_all_steps = tsol_group.variables['Vel'][:]
         plot_velocity_evolution(times_in_years, vel_all_steps, out_dir_base)
 
-    # --- PLOT FINAL STEP FOR ALL FIELDS ---
-    fields_to_plot = ['Vx', 'Vy', 'Vz', 'Vel', 'Pressure']
+    # --- PLOT FINAL STEP FOR ALL FIELDS AND LAYERS ---
+    fields_and_layers_to_plot = [
+        ('Vx', 'Surface'), ('Vx', 'Basal'),
+        ('Vy', 'Surface'), ('Vy', 'Basal'),
+        ('Vz', 'Surface'), ('Vz', 'Basal'),
+        ('Vel', 'Surface'), ('Vel', 'Basal'),
+        ('Pressure', 'Basal')
+    ]
+    
     last_step_index = n_steps - 1
     final_time_in_years = times_in_years[last_step_index]
 
     print(f"🚀 Generating plots for final time step (t={final_time_in_years:.2f} years)...")
     
-    for field_name in fields_to_plot:
+    for field_name, layer_name in fields_and_layers_to_plot:
         if field_name not in tsol_group.variables:
             print(f"⚠️ Warning: Field '{field_name}' not found. Skipping.")
             continue
 
-        print(f"  Plotting final state for {field_name}...")
+        print(f"  Plotting final state for {field_name} ({layer_name})...")
         
-        # Squeeze to remove unnecessary dimensions
         data_for_final_step = np.squeeze(tsol_group.variables[field_name][last_step_index, :])
         
+        # Additional check for shape mismatch before plotting
+        if data_for_final_step.shape[0] != md.mesh.numberofvertices:
+            print(f"\n❌ Mismatch Error: Data for '{field_name}' has {data_for_final_step.shape[0]} points, but reconstructed mesh has {md.mesh.numberofvertices} vertices. Skipping file.")
+            ds.close()
+            return
+
         fig, ax = plt.subplots(figsize=(12, 6), constrained_layout=True)
         
         plot_kwargs = {'show_cbar': True}
@@ -156,16 +171,21 @@ def visualise_final_step(results_file):
         elif field_name == 'Vel': plot_kwargs['cmap'] = 'viridis'
         elif field_name == 'Pressure': plot_kwargs['cmap'] = 'plasma'
         
-        if field_name == 'Pressure':
-            plot_kwargs['layer'] = 1  # Layer 1 is the base
-            title = f"{field_name} at {final_time_in_years:.4f} years (Base, Final Step)"
+        if layer_name == 'Basal':
+            plot_kwargs['layer'] = 1
+            layer_label = "Base"
         else:
-            title = f"{field_name} at {final_time_in_years:.4f} years (Surface, Final Step)"
+            layer_label = "Surface"
+            
+        title = f"{field_name} at {final_time_in_years:.4f} years ({layer_label}, Final Step)"
 
         iplt.plot_model_field(md, data_for_final_step, ax=ax, **plot_kwargs)
         ax.set_title(title, fontsize=14)
         
-        out_path = os.path.join(out_dir_base, f"final_{field_name}.png")
+        out_dir_final = os.path.join(out_dir_base, layer_label, field_name)
+        os.makedirs(out_dir_final, exist_ok=True)
+        out_path = os.path.join(out_dir_final, f"final_{field_name}.png")
+        
         fig.savefig(out_path, dpi=120)
         plt.close(fig)
 
@@ -179,7 +199,6 @@ if __name__ == "__main__":
         print("   or: python extract_final_step.py *.nc")
         sys.exit(1)
 
-    # Use glob to handle wildcards like *.nc
     files_to_process = []
     for arg in sys.argv[1:]:
         files_to_process.extend(glob.glob(arg))

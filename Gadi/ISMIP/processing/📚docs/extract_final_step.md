@@ -13,7 +13,7 @@ The script performs the following operations:
 3. **Velocity Evolution Plot**: Creates a summary plot showing maximum velocity evolution over the entire simulation timeline
 4. **Final State Visualization**: Creates plots for the final time step showing:
    - Surface layer: Velocity fields (Vx, Vy, Vz, Vel)
-   - Basal layer: Pressure field
+   - Basal layer: Velocity fields (Vx, Vy, Vz, Vel) and Pressure field
 5. **Batch Processing**: Supports processing multiple files using glob patterns
 
 ## Usage
@@ -51,12 +51,17 @@ python extract_final_step.py IsmipF_*-Transient.nc
 ## Output
 
 ### Directory Structure
-- Creates a directory named after each input file (without extension)
-- All outputs for a file are saved in its corresponding directory
+- Creates a directory named after each input file (without extension) with `_FINAL` suffix
+- Within each file directory, creates subdirectories for each layer:
+  - `Surface/` - Contains surface layer plots
+  - `Base/` - Contains basal layer plots
+- Evolution summary plot is saved in the root file directory
 
 ### Generated Files
-- **Final State Plots**: `final_<field>.png` for each field (Vx, Vy, Vz, Vel, Pressure)
-- **Evolution Summary**: `velocity_evolution.png` showing maximum velocity over time
+- **Final State Plots**: `final_<field>.png` for each field, organized by layer:
+  - `Surface/Vx/final_Vx.png`, `Surface/Vy/final_Vy.png`, etc.
+  - `Base/Vx/final_Vx.png`, `Base/Vy/final_Vy.png`, `Base/Pressure/final_Pressure.png`, etc.
+- **Evolution Summary**: `velocity_evolution.png` showing maximum velocity over time (in root directory)
 
 ### Plot Characteristics
 - **Resolution**: 120 DPI for final state plots, 150 DPI for evolution plot
@@ -86,7 +91,7 @@ python extract_final_step.py IsmipF_*-Transient.nc
 
 - **Time Conversion**: Uses `SECONDS_PER_YEAR = 31556926.0` for time unit conversion
 - **Mesh Parameters**: Fixed domain size (100km x 100km) with configurable resolution
-- **Layer Selection**: Surface layer for velocities, basal layer (layer 1) for pressure
+- **Layer Selection**: Both surface and basal layers for velocity fields, basal layer (layer 1) for pressure
 
 ## Error Handling
 

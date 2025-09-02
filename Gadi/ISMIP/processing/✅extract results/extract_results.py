@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 Usage:
 
@@ -9,8 +10,9 @@ This script processes a single transient NetCDF output file from ISSM. It:
 2.  Reconstructs the original 3D model mesh by replicating the meshing
     and extrusion steps from the 'runme.py' script.
 3.  Opens the <transient_results.nc> file to read the solution data.
-4.  Plots the surface layer for velocity fields and the BASAL layer for pressure.
-5.  Saves the plots into a directory named after the transient results file.
+4.  Plots the surface and basal layers for all specified fields.
+5.  Saves the plots into a directory structure separated by layer
+    (e.g., ./RunName/Surface/ and ./RunName/Base/).
 
 Example:
 python extract_results.py IsmipF_S1_1-Transient.nc
@@ -24,6 +26,7 @@ import matplotlib.pyplot as plt
 import netCDF4 as nc
 
 # Add ISSM/pyISSM to path
+# Please ensure this path is correct for your system
 sys.path.append('/home/ana/pyISSM/src')
 from model import model
 from squaremesh import squaremesh
@@ -44,10 +47,11 @@ def reconstruct_mesh(filename):
     
     param_filename = parts[0] + ".py"
     try:
-        resolution_factor = int(parts[2].split('-')[0])
+        # --- FIX: Changed int() to float() to handle decimal resolutions ---
+        resolution_factor = float(parts[2].split('-')[0])
     except (ValueError, IndexError):
-        print(f"Warning: Could not determine resolution factor from '{base}'. Defaulting to 1.")
-        resolution_factor = 1
+        print(f"Warning: Could not determine resolution factor from '{base}'. Defaulting to 1.0.")
+        resolution_factor = 1.0
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     parent_dir = os.path.dirname(script_dir)
@@ -63,8 +67,9 @@ def reconstruct_mesh(filename):
     md = model()
     x_max = 100000
     y_max = 100000
-    x_nodes = 30 * resolution_factor
-    y_nodes = 30 * resolution_factor
+    # The number of nodes must be an integer
+    x_nodes = int(30 * resolution_factor)
+    y_nodes = int(30 * resolution_factor)
     md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
     md = parameterize(md, param_file_path)
     md = md.extrude(5, 1)
@@ -92,7 +97,6 @@ def visualise_file(results_file):
         tsol_group = ds['results/TransientSolution']
         times_in_seconds = tsol_group.variables['time'][:]
         
-        # --- FIX 2: Convert time from seconds to years ---
         times_in_years = times_in_seconds / SECONDS_PER_YEAR
         
         n_steps = len(times_in_years)
@@ -107,27 +111,41 @@ def visualise_file(results_file):
         ds.close()
         return
 
-    fields_to_plot = ['Vx', 'Vy', 'Vz', 'Vel', 'Pressure']
+    fields_and_layers_to_plot = [
+        ('Vx', 'Surface'), ('Vx', 'Basal'),
+        ('Vy', 'Surface'), ('Vy', 'Basal'),
+        ('Vz', 'Surface'), ('Vz', 'Basal'),
+        ('Vel', 'Surface'), ('Vel', 'Basal'),
+        ('Pressure', 'Basal')
+    ]
+    
     out_dir_base = os.path.splitext(os.path.basename(results_file))[0]
 
     plot_start = time.time()
-    total_plots = (n_steps - 1) * len(fields_to_plot)
+    total_plots = (n_steps - 1) * len(fields_and_layers_to_plot)
     plot_count = 0
     print(f"🚀 Starting to generate {total_plots} plots...")
 
     for i in range(1, n_steps):
         current_time_in_years = times_in_years[i]
         
-        for field_name in fields_to_plot:
+        for field_name, layer_name in fields_and_layers_to_plot:
             plot_count += 1
             progress = (plot_count / total_plots) * 100
-            print(f"\r  Plotting... [{progress:3.0f}%] - Time step {i}/{n_steps-1}, Field: {field_name}", end="")
+            print(f"\r  Plotting... [{progress:3.0f}%] - Time step {i}/{n_steps-1}, Field: {field_name} ({layer_name})", end="")
 
             if field_name not in tsol_group.variables:
                 if i == 1: print(f"\n⚠️ Warning: Field '{field_name}' not found. Skipping.")
                 continue
 
             data_for_step = np.squeeze(tsol_group.variables[field_name][i, :])
+            
+            # Additional check for shape mismatch before plotting
+            if data_for_step.shape[0] != md.mesh.numberofvertices:
+                print(f"\n❌ Mismatch Error: Data for '{field_name}' has {data_for_step.shape[0]} points, but reconstructed mesh has {md.mesh.numberofvertices} vertices. Skipping file.")
+                ds.close()
+                return
+
             fig, ax = plt.subplots(figsize=(12, 6), constrained_layout=True)
             
             plot_kwargs = {'show_cbar': True}
@@ -135,19 +153,20 @@ def visualise_file(results_file):
             elif field_name == 'Vel': plot_kwargs['cmap'] = 'viridis'
             elif field_name == 'Pressure': plot_kwargs['cmap'] = 'plasma'
             
-            # --- FIX 1: Use Basal Layer for Pressure, Surface for others ---
-            if field_name == 'Pressure':
-                plot_kwargs['layer'] = 1  # Layer 1 is the base
-                title = f"{field_name} at {current_time_in_years:.4f} years (Base)"
+            if layer_name == 'Basal':
+                plot_kwargs['layer'] = 1
+                layer_label = "Base"
             else:
-                title = f"{field_name} at {current_time_in_years:.4f} years (Surface)"
-
+                layer_label = "Surface"
+            
+            title = f"{field_name} at {current_time_in_years:.4f} years ({layer_label})"
             iplt.plot_model_field(md, data_for_step, ax=ax, **plot_kwargs)
             ax.set_title(title, fontsize=14)
             
-            out_dir_field = os.path.join(out_dir_base, field_name)
-            os.makedirs(out_dir_field, exist_ok=True)
-            out_path = os.path.join(out_dir_field, f"{field_name}_step{i:03d}.png")
+            out_dir_final = os.path.join(out_dir_base, layer_label, field_name)
+            os.makedirs(out_dir_final, exist_ok=True)
+            
+            out_path = os.path.join(out_dir_final, f"{field_name}_step{i:03d}.png")
             
             fig.savefig(out_path, dpi=120)
             plt.close(fig)
