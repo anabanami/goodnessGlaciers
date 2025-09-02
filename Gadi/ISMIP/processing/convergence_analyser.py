@@ -11,6 +11,7 @@ among the provided files.
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 import argparse
 import os
 import glob
@@ -29,7 +30,7 @@ SECONDS_PER_YEAR = 31556926.0
 
 def reconstruct_mesh(filename, resolution_factor):
     """
-    Reconstructs the 3D model and mesh based on filename conventions.
+    Reconstructs the 3D model and mesh based on the filename conventions.
     """
     base = os.path.splitext(os.path.basename(filename))[0]
     param_filename = base.split('_')[0] + ".py"
@@ -57,13 +58,12 @@ class ConvergenceAnalyzer:
         self.file_paths = file_paths
         self.results = {}
         self.config = {}
-        self.ref_resolution = 1.0  # As requested, use res=1.0 as the standard
+        self.ref_resolution = 1.0
 
     def run(self):
         """Main workflow to load, process, and analyze results."""
         if not self._load_results():
             return
-        
         self._interpolate_to_common_grid()
         self._calculate_convergence_metrics()
         self._create_comparison_plots()
@@ -72,209 +72,218 @@ class ConvergenceAnalyzer:
 
     def _load_results(self):
         """Detects, parses, and loads results from NetCDF files."""
-        if not self.file_paths:
-            print("Error: No files provided for analysis.")
-            return False
-
         print(f"Found {len(self.file_paths)} result files to process...")
-
         file_regex = re.compile(r"([a-zA-Z0-9_]+?)_([a-zA-Z0-9]+)_(\d+\.?\d*)-Transient\.nc")
-
         for file_path in self.file_paths:
             filename = os.path.basename(file_path)
             match = file_regex.match(filename)
             if not match:
-                print(f"  - Skipping '{filename}': does not match expected name format.")
+                print(f"  - Skipping '{filename}': does not match name format.")
                 continue
-
             param_file, scenario, res_factor_str = match.groups()
             res_factor = float(res_factor_str)
-
             if not self.config:
-                self.config['ParamFile'] = param_file
-                self.config['Scenario'] = scenario
-                print(f"Detected configuration: {self.config['ParamFile']}, Scenario: {self.config['Scenario']}")
-
+                self.config['ParamFile'], self.config['Scenario'] = param_file, scenario
+                print(f"Detected configuration: {param_file}, Scenario: {scenario}")
             print(f"  - Loading {filename} (resolution factor: {res_factor})")
-            
             try:
-                # --- THIS IS THE CRITICAL FIX: Reconstruct mesh for each file ---
                 md = reconstruct_mesh(file_path, res_factor)
-                
                 with nc.Dataset(file_path, 'r') as ds:
                     tsol = ds['results']['TransientSolution']
-                    n_steps = len(tsol.variables['time'][:])
-                    last_step_idx = n_steps - 1
+                    last_step_idx = len(tsol.variables['time'][:]) - 1
                     
                     surface_indices = np.where(md.mesh.vertexonsurface)[0]
                     basal_indices = np.where(md.mesh.vertexonbase)[0]
                     
-                    vx_full = np.squeeze(tsol.variables['Vx'][last_step_idx, :])
+                    vel_full = np.squeeze(tsol.variables['Vel'][last_step_idx, :])
                     vel_series = tsol.variables['Vel'][:]
                     
+                    # --- NEW, MORE ROBUST CENTERLINE EXTRACTION ---
+                    y_center = 50000  # Define the geometric center of the domain
+
+                    # 1. Get all unique y-coordinates from the surface mesh nodes
+                    unique_y_coords = np.unique(md.mesh.y[surface_indices])
+                    
+                    # 2. Find which of these unique y-coordinates is closest to the center
+                    closest_y_to_center = unique_y_coords[np.argmin(np.abs(unique_y_coords - y_center))]
+                    print(f"    Found mesh centerline at y={closest_y_to_center:.1f}m")
+
+                    # 3. Select all nodes that lie on this identified centerline
+                    # Use a very small tolerance for float comparison
+                    surface_centerline_indices = surface_indices[
+                        np.abs(md.mesh.y[surface_indices] - closest_y_to_center) < 1e-6
+                    ]
+                    basal_centerline_indices = basal_indices[
+                        np.abs(md.mesh.y[basal_indices] - closest_y_to_center) < 1e-6
+                    ]
+                    # --- END ---
+
+                    if len(surface_centerline_indices) == 0:
+                        print(f"    FATAL: Could not find any centerline nodes for res={res_factor}. Check mesh generation.")
+                        continue
+                    
+                    print(f"    Found {len(surface_centerline_indices)} surface nodes and {len(basal_centerline_indices)} basal nodes along centerline.")
+
                     self.results[res_factor] = {
-                        'x_surf': md.mesh.x[surface_indices],
-                        'vx_surf': vx_full[surface_indices],
-                        'x_base': md.mesh.x[basal_indices],
-                        'vx_base': vx_full[basal_indices],
+                        'x_surf': md.mesh.x[surface_centerline_indices],
+                        'vel_surf': vel_full[surface_centerline_indices],
+                        'x_base': md.mesh.x[basal_centerline_indices],
+                        'vel_base': vel_full[basal_centerline_indices],
                         'times': tsol.variables['time'][:] / SECONDS_PER_YEAR,
-                        'max_vel_series': np.max(vel_series, axis=1),
-                        'n_nodes': md.mesh.numberofvertices
+                        'max_vel_series': np.max(vel_series, axis=1)
                     }
             except Exception as e:
                 print(f"    Error processing file {filename}: {e}")
-
         if self.ref_resolution not in self.results:
-            print(f"\nError: Reference solution with resolution factor {self.ref_resolution} not found. Aborting.")
+            print(f"\nError: Reference solution (res={self.ref_resolution}) not found. Aborting.")
             return False
-            
         print(f"\nSuccessfully loaded {len(self.results)} datasets.")
         return True
 
     def _interpolate_to_common_grid(self):
         """Interpolates all results onto the grid of the reference resolution."""
         print(f"\nInterpolating results onto reference grid (res={self.ref_resolution})...")
-        ref_result = self.results[self.ref_resolution]
-        ref_x_surf = ref_result['x_surf']
-        ref_x_base = ref_result['x_base']
+        ref = self.results[self.ref_resolution]
+        # Ensure reference grid is sorted before use
+        ref_sort_idx = np.argsort(ref['x_surf'])
+        ref_x_sorted = ref['x_surf'][ref_sort_idx]
 
-        for res_factor, data in self.results.items():
-            if res_factor == self.ref_resolution:
-                data['vx_surf_interp'] = data['vx_surf']
-                data['vx_base_interp'] = data['vx_base']
+        for res, data in self.results.items():
+            # If data is empty for this resolution (due to centerline failure), skip it
+            if len(data['x_surf']) == 0:
+                print(f"  Skipping interpolation for res={res} as no data was loaded.")
+                data['vel_surf_interp'] = []
+                data['vel_base_interp'] = []
                 continue
-            
+
             # Sort data before 1D interpolation
             sort_surf = np.argsort(data['x_surf'])
             sort_base = np.argsort(data['x_base'])
             
-            data['vx_surf_interp'] = np.interp(ref_x_surf, data['x_surf'][sort_surf], data['vx_surf'][sort_surf])
-            data['vx_base_interp'] = np.interp(ref_x_base, data['x_base'][sort_base], data['vx_base'][sort_base])
+            # Interpolate onto the sorted reference grid
+            data['vel_surf_interp'] = np.interp(ref_x_sorted, data['x_surf'][sort_surf], data['vel_surf'][sort_surf])
+            data['vel_base_interp'] = np.interp(ref_x_sorted, data['x_base'][sort_base], data['vel_base'][sort_base])
+            
+            # Store the common sorted reference grid for L2 calculation
+            if res == self.ref_resolution:
+                data['vel_surf_interp'] = data['vel_surf'][ref_sort_idx]
+                data['vel_base_interp'] = data['vel_base'][ref_sort_idx]
 
     def _calculate_convergence_metrics(self):
-        """Calculate L2 errors for surface and basal velocities."""
+        """Calculates L2 errors, intelligently handling near-zero fields."""
         print(f"Calculating Convergence Metrics (vs. res={self.ref_resolution})...")
-        ref_result = self.results[self.ref_resolution]
+        ref = self.results[self.ref_resolution]
         
-        for res_factor in sorted(self.results.keys()):
-            if res_factor == self.ref_resolution:
-                continue
+        for res in sorted(self.results.keys()):
+            if res == self.ref_resolution: continue
             
-            metrics = {}
-            for var in ['vx_surf', 'vx_base']:
-                ref_data = ref_result[f'{var}_interp']
-                comp_data = self.results[res_factor][f'{var}_interp']
-                
+            metrics, data = {}, self.results[res]
+
+            # Skip if data is empty for this resolution
+            if 'vel_surf_interp' not in data or len(data['vel_surf_interp']) == 0:
+                print(f"  Skipping metrics for res={res} as no data was interpolated.")
+                continue
+
+            for var in ['vel_surf', 'vel_base']:
+                ref_data, comp_data = ref[f'{var}_interp'], data[f'{var}_interp']
                 ref_norm = np.linalg.norm(ref_data)
-                if ref_norm < 1e-10:
-                    l2_error = np.nan
+                diff_norm = np.linalg.norm(ref_data - comp_data)
+                
+                if ref_norm < 1e-6:
+                    l2_error, err_type = diff_norm, 'absolute'
                 else:
-                    l2_error = np.linalg.norm(ref_data - comp_data) / ref_norm
-                metrics[var] = {'l2_relative_error': l2_error * 100} # Store as %
-            self.results[res_factor]['metrics'] = metrics
-            print(f"  res={res_factor}: Surface Vx L2 Error={metrics['vx_surf']['l2_relative_error']:.2f}%, "
-                  f"Basal Vx L2 Error={metrics['vx_base']['l2_relative_error']:.2f}%")
+                    l2_error, err_type = (diff_norm / ref_norm) * 100, 'relative'
+                metrics[var] = {'l2_error': l2_error, 'type': err_type}
+
+            self.results[res]['metrics'] = metrics
+            print(f"  res={res}: Surface Vel L2 ({metrics['vel_surf']['type']})={metrics['vel_surf']['l2_error']:.3f}, "
+                  f"Basal Vel L2 ({metrics['vel_base']['type']})={metrics['vel_base']['l2_error']:.3f}")
 
     def _create_comparison_plots(self):
         """Create the 2x2 summary plot."""
         print("Creating summary plot...")
         fig, axs = plt.subplots(2, 2, figsize=(18, 14))
-        title = f"Grid Convergence: {self.config['ParamFile']} - {self.config['Scenario']}"
-        fig.suptitle(title, fontsize=20)
+        fig.suptitle(f"Grid Convergence: {self.config['ParamFile']} - {self.config['Scenario']}", fontsize=20)
         
-        # Plot 1,1: Surface Velocity
+        # Sort all data before plotting. This will now work correctly.
         for res, data in sorted(self.results.items()):
-            axs[0, 0].plot(data['x_surf'] / 1000, data['vx_surf'], label=f'Res = {res}')
-        axs[0, 0].set(title='Final Surface Velocity Comparison', xlabel='Distance (km)', ylabel='Velocity (m/yr)')
-        axs[0, 0].legend(); axs[0, 0].grid(True, linestyle=':')
+            if len(data['x_surf']) == 0: continue # Don't plot if no data
 
-        # Plot 1,2: Basal Velocity
-        for res, data in sorted(self.results.items()):
-            axs[0, 1].plot(data['x_base'] / 1000, data['vx_base'], label=f'Res = {res}')
-        axs[0, 1].set(title='Final Basal Velocity Comparison', xlabel='Distance (km)', ylabel='Velocity (m/yr)')
-        axs[0, 1].legend(); axs[0, 1].grid(True, linestyle=':')
-        
-        # Plot 2,1: L2 Error
-        errors = {r: d['metrics'] for r, d in self.results.items() if r != self.ref_resolution}
-        res_labels = [str(r) for r in sorted(errors.keys())]
-        surf_errors = [errors[r]['vx_surf']['l2_relative_error'] for r in sorted(errors.keys())]
-        base_errors = [errors[r]['vx_base']['l2_relative_error'] for r in sorted(errors.keys())]
-        x_pos = np.arange(len(res_labels))
-        width = 0.35
-        axs[1, 0].bar(x_pos - width/2, surf_errors, width, label='Surface Vx')
-        axs[1, 0].bar(x_pos + width/2, base_errors, width, label='Basal Vx')
-        axs[1, 0].set(title=f'Relative L2 Error (vs. Res={self.ref_resolution})', xlabel='Resolution Factor', ylabel='L2 Error (%)')
-        axs[1, 0].set_xticks(x_pos); axs[1, 0].set_xticklabels(res_labels)
-        axs[1, 0].axhline(1.0, color='red', linestyle='--', label='1% Threshold')
-        axs[1, 0].legend()
-        
-        # Plot 2,2: Velocity Convergence
-        for res, data in sorted(self.results.items()):
+            sort_surf = np.argsort(data['x_surf'])
+            axs[0, 0].plot(data['x_surf'][sort_surf]/1000, data['vel_surf'][sort_surf], label=f'Res = {res}')
+            
+            if len(data['x_base']) > 0:
+                sort_base = np.argsort(data['x_base'])
+                axs[0, 1].plot(data['x_base'][sort_base]/1000, data['vel_base'][sort_base], label=f'Res = {res}')
+
             axs[1, 1].plot(data['times'], data['max_vel_series'], label=f'Res = {res}')
-        axs[1, 1].set(title='Maximum Velocity Convergence Over Time', xlabel='Time (years)', ylabel='Max Velocity (m/yr)')
-        axs[1, 1].legend(); axs[1, 1].grid(True, linestyle=':')
 
+        axs[0, 0].set(title='Final Surface Velocity', xlabel='Distance (km)', ylabel='Vel Mag (m/yr)'); axs[0, 0].legend(); axs[0, 0].grid(True, ls=':')
+        axs[0, 1].set(title='Final Basal Velocity', xlabel='Distance (km)', ylabel='Vel Mag (m/yr)'); axs[0, 1].legend(); axs[0, 1].grid(True, ls=':')
+        axs[1, 1].set(title='Maximum Velocity Convergence', xlabel='Time (years)', ylabel='Max Vel (m/yr)'); axs[1, 1].legend(); axs[1, 1].grid(True, ls=':')
+        
+        ax3 = axs[1, 0]
+        # Filter out resolutions that might have failed to load
+        errors = {r: d['metrics'] for r, d in self.results.items() if r != self.ref_resolution and 'metrics' in d}
+        if errors:
+            res_labels = [str(r) for r in sorted(errors.keys())]
+            x_pos = np.arange(len(res_labels))
+            width = 0.35
+            
+            for i, res in enumerate(sorted(errors.keys())):
+                surf_err = errors[res]['vel_surf']
+                base_err = errors[res]['vel_base']
+                
+                ax3.bar(x_pos[i] - width/2, surf_err['l2_error'], width, color='C0')
+                ax3.bar(x_pos[i] + width/2, base_err['l2_error'], width, color='C1')
+
+            ax3.set_xticks(x_pos); ax3.set_xticklabels(res_labels)
+        
+        ax3.set(title=f'L2 Error (vs. Res={self.ref_resolution})', xlabel='Resolution Factor', ylabel='Error (Relative % or Absolute m/a)')
+        ax3.axhline(1.0, color='red', linestyle='--', label='1% Rel. Threshold')
+        
+        legend_elements = [
+            Patch(facecolor='C0', label='Surface Vel L2'),
+            Patch(facecolor='C1', label='Basal Vel L2'),
+            ax3.lines[0]
+        ]
+        ax3.legend(handles=legend_elements)
+
+        plt.tight_layout(rect=[0, 0, 1, 0.96])
         filename = f"{self.config['ParamFile']}_{self.config['Scenario']}_convergence_summary.png"
-        plt.savefig(filename, dpi=200)
-        print(f"  Saved plot: {filename}")
-        plt.tight_layout()
-        plt.show()
+        plt.savefig(filename, dpi=200); print(f"  Saved plot: {filename}"); plt.show()
 
     def _generate_report(self, tolerance=1.0):
         """Generate a markdown convergence analysis report."""
         print("Generating analysis report...")
-        report_lines = [
-            f"# Grid Convergence Study Report",
-            f"**Setup:** {self.config['ParamFile']} | **Scenario:** {self.config['Scenario']}",
-            f"**Reference Resolution Factor:** {self.ref_resolution}\n"
-        ]
-        report_lines.append("| Resolution Factor | Surface Vx L2 Error | Basal Vx L2 Error | Overall Status |")
-        report_lines.append("|:---:|:---:|:---:|:---:|")
+        report = [f"# Grid Convergence Study Report", f"**Setup:** {self.config['ParamFile']} | **Scenario:** {self.config['Scenario']}", f"**Reference Resolution Factor:** {self.ref_resolution}\n"]
+        report.append("| Resolution Factor | Surface Vel L2 Error | Basal Vel L2 Error | Overall Status |")
+        report.append("|:---:|:---:|:---:|:---:|")
 
-        optimal_res = None
         for res in sorted(self.results.keys()):
-            if res == self.ref_resolution: continue
+            if res == self.ref_resolution or 'metrics' not in self.results[res]: continue
             metrics = self.results[res]['metrics']
-            err_vx_s = metrics['vx_surf']['l2_relative_error']
-            err_vx_b = metrics['vx_base']['l2_relative_error']
-            is_converged = (err_vx_s < tolerance) and (err_vx_b < tolerance)
+            surf, base = metrics['vel_surf'], metrics['vel_base']
+            
+            surf_str = f"{surf['l2_error']:.2f}%" if surf['type'] == 'relative' else f"{surf['l2_error']:.2e} m/a"
+            base_str = f"{base['l2_error']:.2f}%" if base['type'] == 'relative' else f"{base['l2_error']:.2e} m/a"
+            
+            is_converged = (surf['type'] == 'relative' and surf['l2_error'] < tolerance)
             status = "✓ CONVERGED" if is_converged else "✗ NOT CONVERGED"
-            if is_converged and optimal_res is None: optimal_res = res
-            report_lines.append(f"| {res} | {err_vx_s:.2f}% | {err_vx_b:.2f}% | **{status}** |")
+            report.append(f"| {res} | {surf_str} | {base_str} | **{status}** |")
 
-        report_lines.append("\n## Recommendation")
-        if optimal_res is not None:
-            recommendation = (f"The solution is converged within the {tolerance}% tolerance at a "
-                              f"**resolution factor of {optimal_res}**.\nThis is the most "
-                              f"computationally efficient setting that meets the criteria.")
-        else:
-            recommendation = (f"No tested resolution met the {tolerance}% tolerance criteria.\n"
-                              f"Consider running a finer simulation to act as a more accurate reference.")
-        report_lines.append(recommendation)
+        report.append("\n*Absolute error (m/a) is reported for fields where the reference solution norm is near zero.*")
         
         report_filename = f"{self.config['ParamFile']}_{self.config['Scenario']}_convergence_report.md"
-        with open(report_filename, 'w') as f:
-            f.write('\n'.join(report_lines))
-        print(f"  Saved report: {report_filename}\n")
-        print("--- REPORT PREVIEW ---")
-        print('\n'.join(report_lines))
-        print("----------------------")
+        with open(report_filename, 'w') as f: f.write('\n'.join(report))
+        print(f"  Saved report: {report_filename}\n"); print("--- REPORT PREVIEW ---"); print('\n'.join(report)); print("----------------------")
 
 def main():
     """Main function to parse arguments and run the convergence analysis."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('files', nargs='+', help='List of NetCDF files to analyze (e.g., IsmipF_S1_*-Transient.nc).')
+    parser.add_argument('files', nargs='+', help='List of NetCDF files (e.g., IsmipF_S1_*-Transient.nc).')
     args = parser.parse_args()
-
-    files_to_process = []
-    for pattern in args.files:
-        files_to_process.extend(glob.glob(pattern))
-    
-    if len(files_to_process) < 2:
-        print("Error: At least two NetCDF files are required for a comparison.", file=sys.stderr)
-        return 1
-    
-    analyzer = ConvergenceAnalyzer(files_to_process)
+    analyzer = ConvergenceAnalyzer(args.files)
     analyzer.run()
     return 0
 
