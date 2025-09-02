@@ -34,7 +34,7 @@ steps = [1, 2, 3, 4, 5, 6, 7, 8]
 x_max = 100000
 y_max = 100000
 
-resolution_factor = 0.5
+resolution_factor = 1.5
 
 x_nodes = int(30 * resolution_factor)
 y_nodes = int(30 * resolution_factor)
