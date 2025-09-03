@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `convergence_analyser.py` script is a specialized tool for performing grid convergence studies on ISSM (Ice Sheet System Model) transient simulations. It automates the process of analyzing multiple simulation results at different mesh resolutions to assess numerical convergence and determine appropriate grid resolution for ice flow modeling.
+The `convergence_analyser.py` script is a specialized tool for performing grid convergence studies on ISSM (Ice Sheet System Model) 2D/3D transient simulations. It automates the process of analyzing multiple simulation results at different mesh resolutions to assess numerical convergence and determine appropriate grid resolution for ice flow modeling.
 
 ## Table of Contents
 

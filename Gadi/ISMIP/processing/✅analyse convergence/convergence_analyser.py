@@ -98,37 +98,37 @@ class ConvergenceAnalyzer:
                     vel_full = np.squeeze(tsol.variables['Vel'][last_step_idx, :])
                     vel_series = tsol.variables['Vel'][:]
                     
-                    # --- NEW, MORE ROBUST CENTERLINE EXTRACTION ---
-                    y_center = 50000  # Define the geometric center of the domain
+                    # --- CENTERLINE EXTRACTION ---
+                    y_centre = 50000  # Define the geometric centre of the domain
 
                     # 1. Get all unique y-coordinates from the surface mesh nodes
                     unique_y_coords = np.unique(md.mesh.y[surface_indices])
                     
-                    # 2. Find which of these unique y-coordinates is closest to the center
-                    closest_y_to_center = unique_y_coords[np.argmin(np.abs(unique_y_coords - y_center))]
-                    print(f"    Found mesh centerline at y={closest_y_to_center:.1f}m")
+                    # 2. Find which of these unique y-coordinates is closest to the centre
+                    closest_y_to_centre = unique_y_coords[np.argmin(np.abs(unique_y_coords - y_centre))]
+                    print(f"    Found mesh centreline at y={closest_y_to_centre:.1f}m")
 
-                    # 3. Select all nodes that lie on this identified centerline
+                    # 3. Select all nodes that lie on this identified centreline
                     # Use a very small tolerance for float comparison
-                    surface_centerline_indices = surface_indices[
-                        np.abs(md.mesh.y[surface_indices] - closest_y_to_center) < 1e-6
+                    surface_centreline_indices = surface_indices[
+                        np.abs(md.mesh.y[surface_indices] - closest_y_to_centre) < 1e-6
                     ]
-                    basal_centerline_indices = basal_indices[
-                        np.abs(md.mesh.y[basal_indices] - closest_y_to_center) < 1e-6
+                    basal_centreline_indices = basal_indices[
+                        np.abs(md.mesh.y[basal_indices] - closest_y_to_centre) < 1e-6
                     ]
-                    # --- END ---
+                    # --- --- ---
 
-                    if len(surface_centerline_indices) == 0:
-                        print(f"    FATAL: Could not find any centerline nodes for res={res_factor}. Check mesh generation.")
+                    if len(surface_centreline_indices) == 0:
+                        print(f"    FATAL: Could not find any centreline nodes for res={res_factor}. Check mesh generation.")
                         continue
                     
-                    print(f"    Found {len(surface_centerline_indices)} surface nodes and {len(basal_centerline_indices)} basal nodes along centerline.")
+                    print(f"    Found {len(surface_centreline_indices)} surface nodes and {len(basal_centreline_indices)} basal nodes along centreline.")
 
                     self.results[res_factor] = {
-                        'x_surf': md.mesh.x[surface_centerline_indices],
-                        'vel_surf': vel_full[surface_centerline_indices],
-                        'x_base': md.mesh.x[basal_centerline_indices],
-                        'vel_base': vel_full[basal_centerline_indices],
+                        'x_surf': md.mesh.x[surface_centreline_indices],
+                        'vel_surf': vel_full[surface_centreline_indices],
+                        'x_base': md.mesh.x[basal_centreline_indices],
+                        'vel_base': vel_full[basal_centreline_indices],
                         'times': tsol.variables['time'][:] / SECONDS_PER_YEAR,
                         'max_vel_series': np.max(vel_series, axis=1)
                     }
@@ -149,7 +149,7 @@ class ConvergenceAnalyzer:
         ref_x_sorted = ref['x_surf'][ref_sort_idx]
 
         for res, data in self.results.items():
-            # If data is empty for this resolution (due to centerline failure), skip it
+            # If data is empty for this resolution (due to centreline failure), skip it
             if len(data['x_surf']) == 0:
                 print(f"  Skipping interpolation for res={res} as no data was loaded.")
                 data['vel_surf_interp'] = []
