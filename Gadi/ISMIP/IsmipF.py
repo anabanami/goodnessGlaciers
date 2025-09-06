@@ -64,7 +64,7 @@ print('   Set boundary conditions')
 
 #Set the default boundary conditions for an ice-sheet
 # #help SetIceSheetBC
-md = SetIceSheetBC(md) #<<<<<<< IS THIS CONFLICTING WITH MY OTHER BCS???? THINGS DON"T RUN WITHOUT IT
+md = SetIceSheetBC(md)
 
 print('   Initializing velocity and pressure')
 

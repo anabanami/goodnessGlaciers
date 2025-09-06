@@ -1,6 +1,6 @@
 # batch_convert.py
 
-Batch converter for ISSM .outbin files to NetCDF format.
+Batch converter for ISSM `.outbin` files to NetCDF format.
 
 ## Overview
 
@@ -12,14 +12,12 @@ This script automatically finds all `.outbin` files in the current directory and
 python batch_convert.py [--layout grouped|flat] [--skip-existing] [--parallel] [--max-workers N]
 ```
 
-### Command Line Arguments
+### Command Line Options
 
-| Argument | Type | Default | Description |
-|----------|------|---------|-------------|
-| `--layout` | choice | `grouped` | NetCDF layout format (`grouped` or `flat`) |
-| `--skip-existing` | flag | `false` | Skip files where `.nc` already exists |
-| `--parallel` | flag | `false` | Use parallel processing for faster conversion |
-| `--max-workers` | int | CPU count | Maximum number of parallel workers |
+- `--layout {grouped|flat}` - NetCDF layout format (default: grouped)
+- `--skip-existing` - Skip files where corresponding .nc file already exists
+- `--parallel` - Enable parallel processing for faster conversion
+- `--max-workers N` - Maximum number of parallel workers (default: number of CPUs)
 
 ### Examples
 
@@ -32,64 +30,32 @@ python batch_convert.py --layout flat --skip-existing
 
 # Use parallel processing with 4 workers
 python batch_convert.py --parallel --max-workers 4
-
-# Full options example
-python batch_convert.py --layout grouped --skip-existing --parallel
 ```
 
 ## Functionality
 
-### Core Features
+### Core Functions
 
-1. **Automatic File Discovery**: Finds all `.outbin` files in the current directory
-2. **Batch Processing**: Converts multiple files in sequence or parallel
-3. **Flexible Layouts**: Supports both grouped and flat NetCDF layouts
-4. **Skip Existing**: Option to skip files that have already been converted
-5. **Parallel Processing**: Multi-threaded conversion for improved performance
-6. **Comprehensive Reporting**: Detailed summary of conversion results
+- **`find_outbin_files(directory=".")`** - Discovers all `.outbin` files in the specified directory
+- **`convert_single_file(input_file, layout="grouped", skip_existing=False)`** - Converts a single `.outbin` file to `.nc`
+- **`batch_convert(layout="grouped", skip_existing=False, parallel=False, max_workers=None)`** - Main conversion function
 
-### Processing Modes
+### Features
 
-#### Sequential Processing (Default)
-- Processes files one at a time
-- Shows progress for each file
-- Safer for large files or limited memory
-
-#### Parallel Processing (`--parallel`)
-- Uses ThreadPoolExecutor for concurrent conversion
-- Default worker count equals number of CPU cores
-- Significantly faster for multiple small-to-medium files
+- **Automatic file discovery** - Finds all `.outbin` files in current directory
+- **Skip existing files** - Optional flag to avoid re-converting files
+- **Parallel processing** - Multi-threaded conversion for improved performance
+- **Progress tracking** - Shows conversion progress and detailed summary
+- **Error handling** - Captures and reports conversion errors per file
 
 ### Output
 
-The script provides detailed feedback including:
-- List of files found for conversion
-- Progress updates during processing
-- Comprehensive summary with:
-  - Total files processed
-  - Successfully converted files
-  - Skipped files (if using `--skip-existing`)
-  - Error details for failed conversions
+The script provides:
+- List of files to be converted
+- Real-time conversion progress
+- Comprehensive summary with success/skip/error counts
+- Detailed results for each file
 
 ### Dependencies
 
-- Requires `convert_to_nc.py` module in the same directory
-- Uses standard Python libraries: `os`, `argparse`, `glob`, `concurrent.futures`
-
-### Error Handling
-
-- Gracefully handles conversion errors
-- Continues processing remaining files if individual conversions fail
-- Reports all errors in the final summary
-- Returns detailed error information for debugging
-
-## Function Reference
-
-### `find_outbin_files(directory=".")`
-Finds all .outbin files in the specified directory.
-
-### `convert_single_file(input_file, layout="grouped", skip_existing=False)`
-Converts a single .outbin file to .nc format with error handling.
-
-### `batch_convert(layout="grouped", skip_existing=False, parallel=False, max_workers=None)`
-Main function that orchestrates the batch conversion process.
+Requires `convert_to_nc.py` module with `create_netcdf_from_outbin` function.

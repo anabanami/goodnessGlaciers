@@ -19,7 +19,6 @@ sys.path.append('/home/ana/pyISSM/src')
 import pyissm as issm
 from pyissm import plot as iplt
 
-# ParamFile = 'IsmipA_ISSM_sol.py'
 
 ParamFile = 'IsmipF.py'
 # ParamFile = 'IsmipF_500.py'
@@ -29,15 +28,21 @@ ParamFile = 'IsmipF.py'
 filename = os.path.splitext(ParamFile)[0] 
 print(filename)
 
-
 steps = [1, 2, 3, 4, 5, 6, 7, 8]
 x_max = 100000
 y_max = 100000
 
-resolution_factor = 0.5
+h_resolution_factor = 1
+v_resolution_factor = 1
 
-x_nodes = int(30 * resolution_factor)
-y_nodes = int(30 * resolution_factor)
+# Baseline number of layers
+base_vertical_layers = 5
+
+x_nodes = int(30 * h_resolution_factor)
+y_nodes = int(30 * h_resolution_factor)
+
+num_layers = int(base_vertical_layers * v_resolution_factor)
+
 
 ## EXPERIMENT
 # No sliding
@@ -50,11 +55,19 @@ timestep = 1/12
 final_time = 300
 output_frequency = 100
 
-
 print("\n============================================================")
-print(f"\nRunning {Scenario} with {filename} and {resolution_factor = }")
+print(f"\nRunning {Scenario} with {filename}")
+print(f"\n{h_resolution_factor = } and {v_resolution_factor}")
 print(f"\nNumber of nodes is {x_nodes} × {y_nodes} = {x_nodes * y_nodes}")
+print(f"\nNumber of vertical layers: {num_layers}")
+print(f"\nTRANSIENT RUN for {final_time} yrs with {timestep = } yrs and {output_frequency = }")
 print("\n============================================================")
+
+
+# Construct the new filename string
+# Example: IsmipF_S1_1.0_1.0-Mesh_generation.nc
+file_prefix = f"{filename}_{Scenario}_{h_resolution_factor}_{v_resolution_factor}"
+
 
 #Mesh Generation #1
 if 1 in steps:
@@ -62,28 +75,25 @@ if 1 in steps:
     #initialize md as a new model help(model)
     md = model()
 
-    # generate a squaremesh help(squaremesh)
-    # if ParamFile == 'IsmipA_ISSM_sol.py':
-    #     md = squaremesh(md, 80000, 80000, 20, 20)
-
     if ParamFile == 'IsmipF.py':
         md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
+        print(md.mesh.numberofelements)
 
-    elif ParamFile == 'IsmipF_500.py':
-        md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
+    # elif ParamFile == 'IsmipF_500.py':
+    #     md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
 
-    elif ParamFile == 'single_wave.py':
-        md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
+    # elif ParamFile == 'single_wave.py':
+    #     md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
 
-    elif ParamFile == 'flat_bed.py':
-        md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
+    # elif ParamFile == 'flat_bed.py':
+    #     md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
 
 
     print("\n===== Plotting mesh =====")
     md_mesh, md_x, md_y, md_elements, md_is3d = issm.model.mesh.process_mesh(md)
     iplt.plot_mesh2d(md_mesh, show_nodes = True)
     plt.title("Full mesh") 
-    plt.savefig(f"{filename}_mesh.png")
+    plt.savefig(f"{file_prefix}_mesh.png")
     plt.close()
     # plt.show()
 
@@ -97,18 +107,18 @@ if 1 in steps:
     plt.scatter(x_boundaries, y_boundaries, label='boundaries')
     plt.legend()
     plt.title("Mesh boundaries") 
-    plt.savefig(f"{filename}_mesh_boundaries.png")
+    plt.savefig(f"{file_prefix}_mesh_boundaries.png")
     plt.close()
     # plt.show()
 
-    Path(f"{filename}_{Scenario}_{resolution_factor}-Mesh_generation.nc").unlink(missing_ok=True)
-    export_netCDF(md, f"{filename}_{Scenario}_{resolution_factor}-Mesh_generation.nc")
+    Path(f"{file_prefix}-Mesh_generation.nc").unlink(missing_ok=True)
+    export_netCDF(md, f"{file_prefix}-Mesh_generation.nc")
 
 
 #Masks #2
 if 2 in steps:
     print("\n===== Setting the masks =====")
-    md = loadmodel(f"{filename}_{Scenario}_{resolution_factor}-Mesh_generation.nc")
+    md = loadmodel(f"{file_prefix}-Mesh_generation.nc")
     
     nv, ne = md.mesh.numberofvertices, md.mesh.numberofelements
 
@@ -129,38 +139,38 @@ if 2 in steps:
     )
 
     plt.title("Set mask - grounded ice elements") 
-    plt.savefig(f"{filename}_grounded_ice_elements.png")
+    plt.savefig(f"{file_prefix}_grounded_ice_elements.png")
     plt.close()
     # plt.show()
 
-    Path(f"{filename}_{Scenario}_{resolution_factor}-SetMask.nc").unlink(missing_ok=True)
-    export_netCDF(md, f"{filename}_{Scenario}_{resolution_factor}-SetMask.nc")
+    Path(f"{file_prefix}-SetMask.nc").unlink(missing_ok=True)
+    export_netCDF(md, f"{file_prefix}-SetMask.nc")
 
 
 #Parameterisation #3
 if 3 in steps:
     print("\n===== Parameterising =====")
-    md = loadmodel(f"{filename}_{Scenario}_{resolution_factor}-SetMask.nc")
+    md = loadmodel(f"{file_prefix}-SetMask.nc")
 
     md = parameterize(md, ParamFile)
 
     iplt.plot_model_field(md, md.geometry.thickness, show_cbar = True)
     plt.title("Ice thickness") 
-    plt.savefig(f"{filename}_thickness_geometry_2D.png")
+    plt.savefig(f"{file_prefix}_thickness_geometry_2D.png")
     plt.close()
     # plt.show()
     
-    Path(f"{filename}_{Scenario}_{resolution_factor}-Parameterisation.nc").unlink(missing_ok=True)
-    export_netCDF(md, f"{filename}_{Scenario}_{resolution_factor}-Parameterisation.nc")
+    Path(f"{file_prefix}-Parameterisation.nc").unlink(missing_ok=True)
+    export_netCDF(md, f"{file_prefix}-Parameterisation.nc")
 
 
 #Extrusion #4
 if 4 in steps:
     print("\n===== Extruding =====")
-    md = loadmodel(f"{filename}_{Scenario}_{resolution_factor}-Parameterisation.nc")
+    md = loadmodel(f"{file_prefix}-Parameterisation.nc")
     # vertically extrude the preceding mesh #help extrude
     # only 5 layers exponent 1
-    md = md.extrude(5, 1)
+    md = md.extrude(num_layers, 1)
 
     print("\n===== Plotting base geometry =====")
     ## 3D plot
@@ -171,36 +181,36 @@ if 4 in steps:
     )
 
     plt.title("3D model geometry") 
-    plt.savefig(f"{filename}_geometry_3D.png")
+    plt.savefig(f"{file_prefix}_geometry_3D.png")
     plt.close()
     # plt.show()
 
     # 2D plot
     iplt.plot_model_field(md, md.geometry.base, layer=1, show_cbar = True)
     plt.title("Base geometry") 
-    plt.savefig(f"{filename}_base_geometry_2D.png")
+    plt.savefig(f"{file_prefix}_base_geometry_2D.png")
     plt.close()
     # plt.show()
 
-    Path(f"{filename}_{Scenario}_{resolution_factor}-Extrusion.nc").unlink(missing_ok=True)
-    export_netCDF(md, f"{filename}_{Scenario}_{resolution_factor}-Extrusion.nc")
+    Path(f"{file_prefix}-Extrusion.nc").unlink(missing_ok=True)
+    export_netCDF(md, f"{file_prefix}-Extrusion.nc")
 
 
 #Set the flow computing method #5
 if 5 in steps:
     print("\n===== Setting flow approximation: HO =====")
-    md = loadmodel(f"{filename}_{Scenario}_{resolution_factor}-Extrusion.nc")
+    md = loadmodel(f"{file_prefix}-Extrusion.nc")
 
     md = setflowequation(md, 'HO', 'all')
 
-    Path(f"{filename}_{Scenario}_{resolution_factor}-SetFlow.nc").unlink(missing_ok=True)
-    export_netCDF(md, f"{filename}_{Scenario}_{resolution_factor}-SetFlow.nc")
+    Path(f"{file_prefix}-SetFlow.nc").unlink(missing_ok=True)
+    export_netCDF(md, f"{file_prefix}-SetFlow.nc")
 
 
 #Set Boundary Conditions #6
 if 6 in steps:
     print("\n===== Setting boundary conditions =====")
-    md = loadmodel(f"{filename}_{Scenario}_{resolution_factor}-SetFlow.nc")
+    md = loadmodel(f"{file_prefix}-SetFlow.nc")
 
     # ice frozen to the base, no velocity
     # SPCs are initialized at NaN one value per vertex
@@ -239,13 +249,13 @@ if 6 in steps:
         md.masstransport.vertex_pairing = md.stressbalance.vertex_pairing
 
     # save the given model
-    Path(f"{filename}_{Scenario}_{resolution_factor}-BoundaryCondition.nc").unlink(missing_ok=True)
-    export_netCDF(md, f"{filename}_{Scenario}_{resolution_factor}-BoundaryCondition.nc")
+    Path(f"{file_prefix}-BoundaryCondition.nc").unlink(missing_ok=True)
+    export_netCDF(md, f"{file_prefix}-BoundaryCondition.nc")
 
 #Solving #7
 if 7 in steps:
     print("\n===== Running Stressbalance Solver =====")
-    md = loadmodel(f"{filename}_{Scenario}_{resolution_factor}-BoundaryCondition.nc")
+    md = loadmodel(f"{file_prefix}-BoundaryCondition.nc")
     ## Set which control message you want to see #help verbose
     ## md.verbose = verbose('convergence', True)
     md = solve(md, 'Stressbalance')
@@ -259,6 +269,7 @@ if 7 in steps:
     vx_full = stress_solution.Vx
     vy_full = stress_solution.Vy
     vz_full = stress_solution.Vz
+    
     vel_full = stress_solution.Vel
 
     pressure = stress_solution.Pressure
@@ -272,7 +283,6 @@ if 7 in steps:
     vx_surface = vx_full[surface_idx]
     vy_surface = vy_full[surface_idx]
     vz_surface = vz_full[surface_idx]
-
 
     # ------------------------------------------------------------------
     # Quick print‑outs
@@ -289,6 +299,7 @@ if 7 in steps:
         f"  vy_basal: [{vy_basal.min():.5f}, {vy_basal.max():.5f}]\n"
         f"  vz_basal: [{vz_basal.min():.5f}, {vz_basal.max():.5f}]"
     )
+
     print(
         "Vel ranges (m a⁻¹):\n"
         f"  vel: [{vel_full.min():.5f}, {vel_full.max():.5f}]"
@@ -298,19 +309,24 @@ if 7 in steps:
     print("\n============================================================")
 
     # save the given model
-    Path(f"{filename}_{Scenario}_{resolution_factor}-StressBalance.nc").unlink(missing_ok=True)
-    export_netCDF(md, f"{filename}_{Scenario}_{resolution_factor}-StressBalance.nc")
+    Path(f"{file_prefix}-StressBalance.nc").unlink(missing_ok=True)
+    export_netCDF(md, f"{file_prefix}-StressBalance.nc")
     # plot the surface velocities #plotdoc
     plotmodel(md, 'data', md.results.StressbalanceSolution.Vel, 'figure', 4)
-    plt.savefig(f"{filename}_stress_solution_Vel.png")
+    plt.savefig(f"{file_prefix}_stress_solution_Vel.png")
     plt.close()
     # plt.show()
 
+    plt.quiver(md.mesh.x, md.mesh.y, md.results.StressbalanceSolution.Vx, md.results.StressbalanceSolution.Vy)
+    plt.savefig("quiver_Vx_Vy.png")
+    plt.close()
+    # plt.show()
 
+breakpoint()
 #Solving #8
 if 8 in steps:
     print("\n===== Running Transient Solver =====")
-    md = loadmodel(f"{filename}_{Scenario}_{resolution_factor}-BoundaryCondition.nc")
+    md = loadmodel(f"{file_prefix}-BoundaryCondition.nc")
     ## Set which control message you want to see #help verbose
     # md.verbose = verbose('convergence', True)
 
@@ -322,26 +338,30 @@ if 8 in steps:
     md.transient.issmb = 0
 
     ####################################################################
+    # Scale timestep by the most restrictive (largest) resolution factor
+    combined_res_factor = max(h_resolution_factor, v_resolution_factor)
+
     ##  define the timestepping scheme
-    md.timestepping.time_step = timestep / resolution_factor # length of a single step
+    md.timestepping.time_step = timestep / combined_res_factor # length of a single step
 
     # ~* MY LOGIC *~
-    # If resolution_factor doubles (finer mesh), timestep must halve.
-    # resolution_factor = 2 => timestep / 2 = 0.5 * timestep
-    # If resolution_factor halves (coarser mesh), timestep can double.
-    # resolution_factor = 0.5 => timestep / 0.5 = 2 * timestep
-    ####################################################################
+    # If combined_res_factor doubles (finer mesh), timestep must halve.
+    # combined_res_factor = 2 => timestep / 2 = 0.5 * timestep
+    # If combined_res_factor halves (coarser mesh), timestep can double.
+    # combined_res_factor = 0.5 => timestep / 0.5 = 2 * timestep
 
     md.timestepping.final_time = final_time
-    md.settings.output_frequency = output_frequency * resolution_factor
+    md.settings.output_frequency = int(output_frequency * combined_res_factor)
+    ####################################################################
+
 
     md = solve(md, 'Transient')
 
-    Path(f"{filename}_{Scenario}_{resolution_factor}-Transient.nc").unlink(missing_ok=True)
-    export_netCDF(md, f"{filename}_{Scenario}_{resolution_factor}-Transient.nc")
+    Path(f"{file_prefix}-Transient.nc").unlink(missing_ok=True)
+    export_netCDF(md, f"{file_prefix}-Transient.nc")
     # plot the surface velocities #plotdoc
     plotmodel(md, 'data', md.results.TransientSolution[-1].Vel, 'layer', 5, 'figure', 5)
-    plt.savefig(f"{filename}_transient_solution_Vel_layer5_last_timestep.png")
+    plt.savefig(f"{file_prefix}_transient_solution_Vel_layer5_last_timestep.png")
     plt.close()
     # plt.show()
 
@@ -354,14 +374,15 @@ if 8 in steps:
     vx_full_transient = transient_solution.Vx
     vy_full_transient = transient_solution.Vy
     vz_full_transient = transient_solution.Vz
+
     vel_full_transient = transient_solution.Vel
 
     pressure_transient = transient_solution.Pressure
 
     basal_idx = np.where(md.mesh.vertexonbase == 1)[0]
-    vx_basal_transient = vx_full[basal_idx]
-    vy_basal_transient = vy_full[basal_idx]
-    vz_basal_transient = vz_full[basal_idx]
+    vx_basal_transient = vx_full_transient[basal_idx]
+    vy_basal_transient = vy_full_transient[basal_idx]
+    vz_basal_transient = vz_full_transient[basal_idx]
 
     surface_idx = np.where(md.mesh.vertexonsurface == 1)[0]
     vx_surface_transient = vx_full_transient[surface_idx]
@@ -397,7 +418,7 @@ if 8 in steps:
     # plt.show()
 
     print("\n============================================================")
-    print(f"\nFINISHED {Scenario} with {filename} and {resolution_factor = }")
+    print(f"\nFINISHED {Scenario} with {file_prefix} and {h_resolution_factor = }")
     print(f"\nNumber of nodes is {x_nodes} × {y_nodes} = {x_nodes * y_nodes}")
     print(f"\n{final_time = } and {timestep = }")
     print("\n============================================================")

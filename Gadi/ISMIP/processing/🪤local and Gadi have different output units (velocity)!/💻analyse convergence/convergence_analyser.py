@@ -126,11 +126,11 @@ class ConvergenceAnalyzer:
 
                     self.results[res_factor] = {
                         'x_surf': md.mesh.x[surface_centreline_indices],
-                        'vel_surf': vel_full[surface_centreline_indices] * SECONDS_PER_YEAR,
+                        'vel_surf': vel_full[surface_centreline_indices],
                         'x_base': md.mesh.x[basal_centreline_indices],
-                        'vel_base': vel_full[basal_centreline_indices] * SECONDS_PER_YEAR,
+                        'vel_base': vel_full[basal_centreline_indices],
                         'times': tsol.variables['time'][:] / SECONDS_PER_YEAR,
-                        'max_vel_series': np.max(vel_series, axis=1) * SECONDS_PER_YEAR
+                        'max_vel_series': np.max(vel_series, axis=1)
                     }
                     
             except Exception as e:
