@@ -1,344 +1,126 @@
-# Grid Convergence Analyser Documentation
+The script automates the process of analyzing the results from multiple transient ice flow simulations that were run at different grid resolutions. Its goal is to determine if the model's solution (specifically ice velocity) "converges," meaning the results become stable and stop changing significantly as the mesh resolution increases. This is a critical step in verifying the numerical accuracy of a model setup.
 
-## Overview
+The script performs the following main tasks:
 
-The `convergence_analyser.py` script is a specialized tool for performing grid convergence studies on ISSM (Ice Sheet System Model) 2D/3D transient simulations. It automates the process of analyzing multiple simulation results at different mesh resolutions to assess numerical convergence and determine appropriate grid resolution for ice flow modeling.
+    Parses a list of NetCDF result files, identifying the resolution of each.
 
-## Table of Contents
+    Reconstructs the model mesh for each simulation based on filename conventions.
 
-1. [Theory and Background](#theory-and-background)
-2. [Usage](#usage)
-3. [Input Requirements](#input-requirements)
-4. [Output Products](#output-products)
-5. [Functionality Breakdown](#functionality-breakdown)
-6. [Examples](#examples)
-7. [Troubleshooting](#troubleshooting)
-8. [Technical Details](#technical-details)
+    Extracts final-state velocity data along a central flowline for both the surface and the base of the ice.
 
-## Theory and Background
+    Interpolates all results onto a common high-resolution grid for comparison.
 
-### Grid Convergence Studies
+    Calculates the L2 error norm for each lower-resolution result against a high-resolution reference solution.
 
-Grid convergence analysis is a fundamental verification technique in computational modeling that ensures numerical solutions are approaching the true solution as mesh resolution increases. The key principle is that as the grid is refined (smaller elements, more nodes), the numerical error should decrease systematically.
+    Generates a 2x2 summary plot and a Markdown report summarizing the convergence results.
 
-### Mathematical Foundation
+2. How to Use
 
-The script computes **L2 norm errors** between solutions at different resolutions:
+This is a command-line script. You would run it from the terminal, providing the paths to the NetCDF output files as arguments. The script expects the files to be in the same directory.
 
-- **Relative L2 Error** (when reference norm > 10⁻⁶):
-  ```
-  L2_relative = ||u_ref - u_coarse|| / ||u_ref|| × 100%
-  ```
+Example Usage:
+Bash
 
-- **Absolute L2 Error** (when reference norm ≈ 0):
-  ```
-  L2_absolute = ||u_ref - u_coarse|| (in m/year)
-  ```
+python convergence_analyzer.py MyExperiment_Scenario1_*.nc
 
-Where:
-- `u_ref` is the velocity field at reference resolution (finest mesh)
-- `u_coarse` is the velocity field at coarser resolution
-- `||·||` denotes the L2 norm
+or
+Bash
 
-### Convergence Criteria
+python convergence_analyzer.py MyExperiment_Scenario1_1.0-Transient.nc MyExperiment_Scenario1_1.5-Transient.nc MyExperiment_Scenario1_2.0-Transient.nc
 
-A simulation is considered converged when the relative L2 error falls below a specified tolerance (default: 1%). This indicates that further mesh refinement yields negligible improvement in solution accuracy.
+3. Key Components and Workflow
 
+a. File Parsing and Setup (_load_results)
 
-### ISSM Environment
-The script expects:
-- pyISSM installed at `/home/ana/pyISSM/src` (configurable in script)
-- Access to ISSM model generation functions (`squaremesh`, `parameterize`)
-- Parameter files in the parent directory
+    The script uses a regular expression to parse the filenames. It expects a specific format:
+    [ParamFile]_[Scenario]_[ResolutionFactor]-Transient.nc
 
-## Place the script:
-   Put `convergence_analyser.py` in a subdirectory of your simulation outputs:
-   ```
-   project/
-   ├── parameter_file.py
-   ├── results/
-   │   ├── convergence_analyser.py
-   │   └── *.nc files
-   ```
+        ParamFile: The base name of the ISSM parameter file (e.g., IsmipF).
 
-## Usage
+        Scenario: The experiment name (e.g., S1).
 
-### Command Line Interface
+        ResolutionFactor: A float representing the mesh resolution multiplier (e.g., 1.0, 1.5, 2.0).
 
-```bash
-python convergence_analyser.py <file1.nc> <file2.nc> ... <fileN.nc>
-```
+    It identifies one simulation as the reference solution. This is hardcoded to be the one with resolution_factor=2.0. All other simulations will be compared against this one.
 
-Or using wildcards:
-```bash
-python convergence_analyser.py IsmipF_S1_*-Transient.nc
-```
+b. Mesh Reconstruction (reconstruct_mesh)
 
-### File Naming Convention
+    This is a crucial and assumption-heavy step. The script does not read the mesh from the output files. Instead, it recreates it from scratch.
 
-Input files must follow this strict naming pattern:
-```
-<ParameterFile>_<Scenario>_<ResolutionFactor>-Transient.nc
-```
+    It assumes the model domain is a square of size 100textkmtimes100textkm.
 
-Examples:
-- `IsmipF_S1_1.0-Transient.nc` (reference resolution)
-- `IsmipF_S1_0.5-Transient.nc` (coarser mesh)
-- `IsmipF_S1_2.0-Transient.nc` (finer mesh)
+    It creates a 2D squaremesh where the number of nodes is scaled by the resolution_factor (e.g., 30 * resolution_factor).
 
-Where:
-- **ParameterFile**: Base name of the parameter script (e.g., `IsmipF`)
-- **Scenario**: Scenario identifier (e.g., `S1`, `S2`)
-- **ResolutionFactor**: Mesh resolution multiplier (1.0 = reference)
+    It parameterizes the model using the corresponding .py parameter file (e.g., IsmipF.py), which it assumes is in the parent directory.
 
-## Input Requirements
+    Finally, it extrudes the 2D mesh into a 3D mesh with 5 layers.
 
-### NetCDF File Structure
+c. Data Extraction (_load_results)
 
-The script expects ISSM-generated NetCDF files with:
-```
-results/
-├── TransientSolution/
-│   ├── time[:]         # Time steps in seconds
-│   ├── Vel[time, nodes] # Velocity magnitude array
-│   └── ... other variables
-```
+    For each file, it opens the NetCDF dataset.
 
-### Parameter Files
+    It focuses on the last time step of the transient solution.
 
-A corresponding parameter file (`<ParameterFile>.py`) must exist in the parent directory containing model configuration parameters.
+    Centerline Extraction: It extracts data along a central profile of the model domain. It does this by:
 
-### Mesh Configuration
+        Defining a geometric centerline at y=50000 m.
 
-The script reconstructs 3D meshes assuming:
-- Square domain: 100km × 100km
-- Base resolution: 30 × 30 nodes (at resolution_factor=1.0)
-- 5 vertical layers with 1:1 extrusion ratio
+        Finding the actual y-coordinate in the mesh that is closest to this geometric center.
 
-## Output Products
+        Selecting all surface and basal nodes that lie on this identified mesh centerline.
 
-The script generates three types of outputs:
+    It stores the x-coordinates and corresponding velocities (converted to m/yr) for the surface and base, along with the time series of the maximum velocity across the whole domain.
 
-### 1. Summary Plot (`*_convergence_summary.png`)
+d. Interpolation (_interpolate_to_common_grid)
 
-A 2×2 subplot figure containing:
-- **Top Left**: Surface velocity profiles along centerline
-- **Top Right**: Basal velocity profiles along centerline
-- **Bottom Left**: L2 error bar chart comparing resolutions
-- **Bottom Right**: Maximum velocity evolution over time
+    To compare results from different grids, they must be evaluated at the same points.
 
-### 2. Markdown Report (`*_convergence_report.md`)
-
-A formatted table showing:
-- Resolution factors tested
-- L2 errors for surface and basal velocities
-- Convergence status (✓/✗) based on tolerance
-
-Example output:
-```markdown
-| Resolution Factor | Surface Vel L2 Error | Basal Vel L2 Error | Overall Status |
-|:---:|:---:|:---:|:---:|
-| 0.5 | 4.52% | 3.21% | **✗ NOT CONVERGED** |
-| 2.0 | 0.87% | 0.62% | **✓ CONVERGED** |
-```
-
-### 3. Console Output
-
-Real-time progress updates and error messages during analysis.
+    This function takes the sorted x-coordinates from the high-resolution reference grid.
 
-## Functionality Breakdown
-
-### Core Components
-
-#### 1. `reconstruct_mesh(filename, resolution_factor)`
-Reconstructs the 3D finite element mesh based on resolution factor:
-```python
-x_nodes = int(30 * resolution_factor)
-y_nodes = int(30 * resolution_factor)
-```
+    It then uses 1D linear interpolation (numpy.interp) to resample the velocity profiles from all other resolutions onto this common reference grid.
 
-#### 2. `ConvergenceAnalyzer` Class
+e. Error Calculation (_calculate_convergence_metrics)
 
-Main analysis workflow with methods:
+    The script calculates the L2 error norm, which is a standard way to measure the difference between two datasets. For a reference solution vector u_ref and a comparison solution vector u_comp (both on the same grid), the relative L2 error is:
+    EL2​=∥uref​∥2​∥uref​−ucomp​∥2​​
 
-##### `_load_results()`
-- Parses filenames using regex pattern
-- Loads NetCDF data for final time step
-- Extracts centerline velocities (at y=50km)
-- Handles multiple resolution factors
 
-##### `_interpolate_to_common_grid()`
-- Interpolates all solutions onto reference grid
-- Ensures consistent comparison points
-- Uses 1D linear interpolation along centerline
+    where ∣cdot∣_2 is the Euclidean norm.
 
-##### `_calculate_convergence_metrics()`
-- Computes L2 norms for velocity fields
-- Intelligently switches between relative/absolute errors
-- Stores metrics for each resolution
+    The script includes a smart feature: if the norm of the reference solution is very small (less than 0.1, e.g., for basal velocity in a frozen-bed region), it reports the absolute error (∣u_ref−u_comp∣_2) instead of the relative error to avoid division by zero or near-zero.
 
-##### `_create_comparison_plots()`
-- Generates comprehensive 4-panel figure
-- Visualizes spatial profiles and temporal evolution
-- Includes error bars with convergence threshold
+f. Outputs (_create_comparison_plots, _generate_report)
 
-##### `_generate_report()`
-- Creates markdown-formatted convergence table
-- Applies convergence criteria (default: 1% tolerance)
-- Provides clear pass/fail assessment
+The script generates two primary output files:
 
-### Centerline Extraction Algorithm
+    A PNG Image (*_convergence_summary.png): A 2x2 plot containing:
 
-The script uses a robust method to extract centerline data:
+        Top-Left: Surface velocity profiles for all resolutions.
 
-1. Identifies all unique y-coordinates in the mesh
-2. Finds the y-coordinate closest to domain center (50km)
-3. Selects all nodes lying on this centerline
-4. Applies to both surface and basal layers
+        Top-Right: Basal velocity profiles for all resolutions.
 
-This approach handles irregular meshes and ensures consistent centerline selection across resolutions.
+        Bottom-Left: A bar chart showing the calculated L2 errors.
 
-## Examples
+        Bottom-Right: The time evolution of the maximum velocity in the domain for each simulation, showing how the solutions converge over time.
 
-### Example 1: Basic Convergence Study
+    A Markdown Report (*_convergence_report.md): A text file with a formatted table summarizing the L2 errors and stating whether each resolution has "CONVERGED" based on a 1% relative error tolerance.
 
-```bash
-# Run analysis on three resolutions
-python convergence_analyser.py IsmipF_S1_0.5-Transient.nc \
-                               IsmipF_S1_1.0-Transient.nc \
-                               IsmipF_S1_2.0-Transient.nc
-```
+4. Dependencies and Limitations
 
-Expected output:
-```
-Found 3 result files to process...
-Detected configuration: IsmipF, Scenario: S1
-  - Loading IsmipF_S1_0.5-Transient.nc (resolution factor: 0.5)
-    Found mesh centerline at y=50000.0m
-    Found 15 surface nodes and 15 basal nodes along centerline.
-  - Loading IsmipF_S1_1.0-Transient.nc (resolution factor: 1.0)
-    Found mesh centerline at y=50000.0m
-    Found 30 surface nodes and 30 basal nodes along centerline.
-  - Loading IsmipF_S1_2.0-Transient.nc (resolution factor: 2.0)
-    Found mesh centerline at y=50000.0m
-    Found 60 surface nodes and 60 basal nodes along centerline.
+    Dependencies: The script requires numpy, matplotlib, and netCDF4. Most importantly, it has a critical dependency on pyISSM, the Python interface for ISSM.
 
-Successfully loaded 3 datasets.
-Interpolating results onto reference grid (res=1.0)...
-Calculating Convergence Metrics (vs. res=1.0)...
-  res=0.5: Surface Vel L2 (relative)=4.523, Basal Vel L2 (relative)=3.214
-  res=2.0: Surface Vel L2 (relative)=0.872, Basal Vel L2 (relative)=0.621
-Creating summary plot...
-  Saved plot: IsmipF_S1_convergence_summary.png
-Generating analysis report...
-  Saved report: IsmipF_S1_convergence_report.md
+    Hardcoded pyISSM Path: The line sys.path.append('/home/ana/pyISSM/src') is a hardcoded path specific to a user named "ana". To run this script, you would need to change this to the location of the pyISSM/src directory.
 
-Analysis complete.
-```
+    Hardcoded Assumptions: The script is not general-purpose. It is tailored for a specific experimental setup and makes several hardcoded assumptions:
 
-### Example 2: Using Wildcards
+        Domain size is 100textkmtimes100textkm.
 
-```bash
-# Analyze all transient files in directory
-python convergence_analyser.py *-Transient.nc
-```
+        The base mesh resolution is 30times30 elements.
 
-### Example 3: Custom Tolerance
+        The mesh is extruded to 5 layers.
 
-To modify convergence tolerance, edit line in `_generate_report()`:
-```python
-def _generate_report(self, tolerance=0.5):  # 0.5% instead of 1%
-```
+        The reference resolution factor is 2.0.
 
-## Troubleshooting
+        The centerline is at y=50000 m.
 
-### Common Issues and Solutions
-
-#### 1. "Parameter file not found"
-**Problem**: Script cannot locate the parameter file.
-**Solution**: Ensure parameter file exists in parent directory with correct naming.
-
-#### 2. "Could not find any centerline nodes"
-**Problem**: Mesh doesn't have nodes at expected centerline location.
-**Solution**: Check mesh generation parameters or adjust centerline detection tolerance.
-
-#### 3. "Reference solution (res=1.0) not found"
-**Problem**: No file with resolution_factor=1.0 provided.
-**Solution**: Include reference resolution file in input list.
-
-#### 4. Import errors for pyISSM
-**Problem**: ISSM Python modules not found.
-**Solution**: Update the path in line 21 to your pyISSM installation.
-
-#### 5. Empty interpolation arrays
-**Problem**: Centerline extraction failed for some resolutions.
-**Solution**: Check mesh consistency across resolutions; verify domain dimensions.
-
-### Debug Mode
-
-To enable verbose debugging, add print statements in key methods:
-```python
-print(f"Debug: x_surf shape = {data['x_surf'].shape}")
-print(f"Debug: vel_surf range = [{np.min(vel_surf)}, {np.max(vel_surf)}]")
-```
-
-## Technical Details
-
-### Performance Considerations
-
-- **Memory Usage**: Scales with mesh size and time steps
-- **Computation Time**: O(n log n) for sorting, O(n) for interpolation
-- **File I/O**: NetCDF4 lazy loading minimizes memory footprint
-
-### Numerical Precision
-
-- Centerline tolerance: 1e-6 meters
-- Near-zero threshold: 1e-6 for norm calculations
-- Interpolation: Linear (1st order accurate)
-
-### Assumptions and Limitations
-
-1. **Structured Mesh**: Assumes regular quadrilateral elements
-2. **Domain Geometry**: Fixed 100km × 100km square domain
-3. **Centerline Location**: Fixed at y=50km (domain center)
-4. **Time Step**: Uses only final time step for spatial analysis
-5. **2D Interpolation**: Performs 1D interpolation along centerline only
-
-### Extending the Script
-
-To adapt for different use cases:
-
-#### Custom Domain Size
-```python
-# In reconstruct_mesh()
-x_max, y_max = 200000, 150000  # 200km × 150km
-```
-
-#### Different Base Resolution
-```python
-# In reconstruct_mesh()
-x_nodes = int(50 * resolution_factor)  # Base: 50×50 instead of 30×30
-```
-
-#### Multiple Centerlines
-```python
-# Add multiple y-coordinates for analysis
-centerlines = [25000, 50000, 75000]  # Quarter points
-for y_center in centerlines:
-    # Extract and analyze each centerline
-```
-
-#### Alternative Error Metrics
-```python
-# Add L-infinity norm
-l_inf_error = np.max(np.abs(ref_data - comp_data))
-```
-
-## References
-
-- ISSM Documentation: [https://issm.jpl.nasa.gov/](https://issm.jpl.nasa.gov/)
-- Grid Convergence Theory: Roache, P.J. (1998). *Verification and Validation in Computational Science and Engineering*
-- L2 Norm: Burden, R.L. & Faires, J.D. (2010). *Numerical Analysis*
-
-
-
+    Filename Convention: The script will fail if the NetCDF files do not strictly adhere to the ParamFile_Scenario_ResolutionFactor-Transient.nc naming convention.

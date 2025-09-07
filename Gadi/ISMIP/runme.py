@@ -32,8 +32,8 @@ steps = [1, 2, 3, 4, 5, 6, 7, 8]
 x_max = 100000
 y_max = 100000
 
-h_resolution_factor = 1
-v_resolution_factor = 1
+h_resolution_factor = 2
+v_resolution_factor = 2
 
 # Baseline number of layers
 base_vertical_layers = 5
@@ -60,7 +60,6 @@ print(f"\nRunning {Scenario} with {filename}")
 print(f"\n{h_resolution_factor = } and {v_resolution_factor}")
 print(f"\nNumber of nodes is {x_nodes} × {y_nodes} = {x_nodes * y_nodes}")
 print(f"\nNumber of vertical layers: {num_layers}")
-print(f"\nTRANSIENT RUN for {final_time} yrs with {timestep = } yrs and {output_frequency = }")
 print("\n============================================================")
 
 

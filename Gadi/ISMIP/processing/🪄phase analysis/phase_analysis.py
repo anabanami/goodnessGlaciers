@@ -57,27 +57,30 @@ SECONDS_PER_YEAR = 31556926.0
 def parse_filename(filename):
     """
     Parses the input NetCDF filename to extract simulation parameters.
-    Example: 'IsmipF_S1_30-Transient.nc' -> ('IsmipF', 'S1', 30.0)
+    Example: 'IsmipF_S1_2_2-Transient.nc' -> ('IsmipF', 'S1', 2.0, 2.0)
     """
     base_name = os.path.splitext(os.path.basename(filename))[0]
     parts = base_name.split('_')
     
-    if len(parts) < 3:
-        raise ValueError(f"Filename '{filename}' does not match the expected format 'NAME_SCENARIO_RESOLUTION-TYPE.nc'")
+    if len(parts) < 4:
+        raise ValueError(f"Filename '{filename}' does not match the expected format 'NAME_SCENARIO_HRES_VRES-TYPE.nc'")
 
     param_profile = parts[0]
     scenario = parts[1]
     try:
-        resolution_factor = float(parts[2].split('-')[0])
+        h_resolution_factor = float(parts[2])
+        # The vertical resolution factor is the first part of the last segment
+        v_resolution_factor = float(parts[3].split('-')[0])
     except (ValueError, IndexError):
-        print(f"Warning: Could not determine resolution factor from '{base_name}'. Defaulting to 1.0.")
-        resolution_factor = 1.0
+        print(f"Warning: Could not determine resolution factors from '{base_name}'. Defaulting to 1.0.")
+        h_resolution_factor = 2
+        v_resolution_factor = 2
         
-    print(f"✅ Parsed Filename: Profile='{param_profile}', Scenario='{scenario}', Resolution='{resolution_factor}'")
-    return param_profile, scenario, resolution_factor
+    print(f"✅ Parsed Filename: Profile='{param_profile}', Scenario='{scenario}', H-Res='{h_resolution_factor}', V-Res='{v_resolution_factor}'")
+    return param_profile, scenario, h_resolution_factor, v_resolution_factor
 
 
-def reconstruct_mesh(param_profile, resolution_factor):
+def reconstruct_mesh(param_profile, h_res_factor, v_res_factor):
     """
     Reconstructs the 3D model mesh based on the filename parameters
     by replicating the setup process from the 'runme.py' script.
@@ -94,18 +97,24 @@ def reconstruct_mesh(param_profile, resolution_factor):
     if not os.path.exists(param_file_path):
         raise FileNotFoundError(f"Could not find parameter file at '{param_file_path}'!")
 
-    # Replicate the meshing steps from runme.py
+    # Replicate the meshing and extrusion steps from runme.py
     md = model()
     x_max = 100000
     y_max = 100000
-    x_nodes = int(30 * resolution_factor)
-    y_nodes = int(30 * resolution_factor)
+    
+    # Calculate nodes based on horizontal resolution factor
+    x_nodes = int(30 * h_res_factor)
+    y_nodes = int(30 * h_res_factor)
     
     md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
     md = parameterize(md, param_file_path)
-    md = md.extrude(5, 1)
+    
+    # Calculate layers based on vertical resolution factor
+    base_vertical_layers = 5
+    num_layers = int(base_vertical_layers * v_res_factor)
+    md = md.extrude(num_layers, 1)
 
-    print(f"✅ Mesh reconstructed successfully ({md.mesh.numberofvertices} vertices).")
+    print(f"✅ Mesh reconstructed successfully ({md.mesh.numberofvertices} vertices, {num_layers} layers).")
     return md
 
 
@@ -386,7 +395,7 @@ def analyse_phase_evolution(md, dataset, wavelength, output_dir, axis, position,
     return results
     
 
-def write_summary_file(output_dir, nc_file, param_profile, scenario, resolution, wavelength, results, axis, position):
+def write_summary_file(output_dir, nc_file, param_profile, scenario, h_resolution, v_resolution, wavelength, results, axis, position):
     """Writes a text file summarizing the analysis results."""
     summary_path = os.path.join(output_dir, 'summary.txt')
     other_axis = 'Y' if axis == 'x' else 'X'
@@ -400,7 +409,8 @@ def write_summary_file(output_dir, nc_file, param_profile, scenario, resolution,
         f.write("-- Simulation Parameters --\n")
         f.write(f"  Parameter Profile: {param_profile}\n")
         f.write(f"  Scenario: {scenario}\n")
-        f.write(f"  Resolution Factor: {resolution}\n")
+        f.write(f"  Horizontal Resolution Factor: {h_resolution}\n")
+        f.write(f"  Vertical Resolution Factor: {v_resolution}\n")
         f.write(f"  Bedrock Wavelength (sigma): {wavelength/1000:.2f} km\n\n")
         f.write("-- Analysis Profile --\n")
         f.write(f"  Profile Axis: {axis.upper()}\n")
@@ -442,13 +452,13 @@ def main():
     print(f"\n{'='*60}\nStarting Phase Analysis for: {os.path.basename(args.nc_file)}\n{'='*60}")
 
     try:
-        param_profile, scenario, resolution = parse_filename(args.nc_file)
+        param_profile, scenario, h_res, v_res = parse_filename(args.nc_file)
 
         output_dir_name = f"{os.path.splitext(os.path.basename(args.nc_file))[0]}_phase_analysis"
         os.makedirs(output_dir_name, exist_ok=True)
         print(f"Results will be saved in: '{output_dir_name}'")
 
-        md = reconstruct_mesh(param_profile, resolution)
+        md = reconstruct_mesh(param_profile, h_res, v_res)
         config, wavelength = load_config_by_parsing(param_profile)
         
         requested_position = args.position
@@ -477,7 +487,7 @@ def main():
         with nc.Dataset(args.nc_file, 'r') as dataset:
             results = analyse_phase_evolution(md, dataset, wavelength, output_dir_name, args.axis, analysis_position, config)
 
-        write_summary_file(output_dir_name, args.nc_file, param_profile, scenario, resolution, wavelength, results, args.axis, analysis_position)
+        write_summary_file(output_dir_name, args.nc_file, param_profile, scenario, h_res, v_res, wavelength, results, args.axis, analysis_position)
         
     except Exception as e:
         print(f"\n❌ An error occurred during analysis: {e}")
