@@ -47,18 +47,24 @@ def reconstruct_mesh(filename):
     
     param_filename = parts[0] + ".py"
     try:
-        # --- FIX: Changed int() to float() to handle decimal resolutions ---
-        resolution_factor = float(parts[2].split('-')[0])
+        # This logic assumes the name will always have 4 parts.
+        # parts[2] is the X factor, parts[3] is the Y factor.
+        h_resolution_factor = float(parts[2])
+        v_resolution_factor = float(parts[3].split('-')[0])
     except (ValueError, IndexError):
-        print(f"Warning: Could not determine resolution factor from '{base}'. Defaulting to 1.0.")
-        resolution_factor = 1.0
+        print(f"Warning: Could not determine resolution factors from '{base}'.")
+        print("         This script expects 4 parts in the name (e.g., IsmipF_S3_0.5_1.5-Transient).")
+        print("         Defaulting to 1.0 for both factors.")
+        h_resolution_factor = 1.0
+        v_resolution_factor = 1.0
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     parent_dir = os.path.dirname(script_dir)
     param_file_path = os.path.join(parent_dir, param_filename)
     
     print(f"  Using Parameter File: '{param_file_path}'")
-    print(f"  Using Resolution Factor: {resolution_factor}")
+    print(f"  Using Resolution Factor X: {h_resolution_factor}")
+    print(f"  Using Resolution Factor Y: {v_resolution_factor}")
     
     if not os.path.exists(param_file_path):
         raise FileNotFoundError(f"parameterize error message: file '{param_filename}' not found at expected location '{param_file_path}'!")
@@ -67,12 +73,17 @@ def reconstruct_mesh(filename):
     md = model()
     x_max = 100000
     y_max = 100000
+
     # The number of nodes must be an integer
-    x_nodes = int(30 * resolution_factor)
-    y_nodes = int(30 * resolution_factor)
+    x_nodes = int(30 * h_resolution_factor)
+    y_nodes = int(30 * h_resolution_factor)
+
+    base_vertical_layers = 5
+    num_layers = int(base_vertical_layers * v_resolution_factor)
+
     md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
     md = parameterize(md, param_file_path)
-    md = md.extrude(5, 1)
+    md = md.extrude(num_layers, 1)
 
     print(f"✅ Mesh reconstructed successfully ({md.mesh.numberofvertices} vertices, {md.mesh.numberofelements} elements).")
     return md

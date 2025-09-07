@@ -217,16 +217,16 @@ class ConvergenceAnalyzer:
         """Create the 2x2 summary plot."""
         print("Creating summary plot...")
 
-        # --- NEW: Generate a list of unique colors for the plots ---
+        # Generate a list of unique colors for the plots ---
         num_plots = len(self.results)
         # Options: 'tab20', 'viridis', 'plasma', 'inferno'
-        # 'tab20' is designed for this and extends the style you like.
-        colors = cm.tab20(np.linspace(0, 1, num_plots))
+        # 'tab20b' is designed for this and extends the style you like.
+        colors = cm.tab20b(np.linspace(0.5 / 20, 1- (0.5 / 20), 20))
         
         fig, axs = plt.subplots(2, 2, figsize=(14, 10))
         fig.suptitle(f"Grid Convergence: {self.config['ParamFile']} - {self.config['Scenario']}", fontsize=15)
         
-        # --- MODIFIED LOOP: Use enumerate to access colors by index ---
+        # Use enumerate to access colors by index ---
         for i, (res, data) in enumerate(sorted(self.results.items())):
             if len(data['x_surf']) == 0: continue # Don't plot if no data
 
@@ -239,9 +239,17 @@ class ConvergenceAnalyzer:
 
             axs[1, 1].plot(data['times'], data['max_vel_series'], label=f'{res[0]}x{res[1]}', color=colors[i])
 
-        axs[0, 0].set(title='Final Surface Velocity', xlabel='Distance (km)', ylabel='Vel Mag (m/yr)'); axs[0, 0].legend(); axs[0, 0].grid(True, ls=':')
-        axs[0, 1].set(title='Final Basal Velocity', xlabel='Distance (km)', ylabel='Vel Mag (m/yr)'); axs[0, 1].legend(); axs[0, 1].grid(True, ls=':')
-        axs[1, 1].set(title='Maximum Velocity Convergence', xlabel='Time (years)', ylabel='Max Vel (m/yr)'); axs[1, 1].legend(); axs[1, 1].grid(True, ls=':')
+        axs[0, 0].set(title='Final Surface Velocity', xlabel='Distance (km)', ylabel='Vel Mag (m/yr)')
+        axs[0, 0].legend(ncol=2)
+        axs[0, 0].grid(True, ls=':')
+        
+        axs[0, 1].set(title='Final Basal Velocity', xlabel='Distance (km)', ylabel='Vel Mag (m/yr)')
+        axs[0, 1].legend(ncol=2)
+        axs[0, 1].grid(True, ls=':')
+        
+        axs[1, 1].set(title='Maximum Velocity Convergence', xlabel='Time (years)', ylabel='Max Vel (m/yr)')
+        axs[1, 1].legend(ncol=2)
+        axs[1, 1].grid(True, ls=':')
         
         ax3 = axs[1, 0]
         # Filter out resolutions that might have failed to load
