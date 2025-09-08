@@ -26,7 +26,7 @@ ParamFile = 'IsmipF.py'
 # ParamFile = 'single_wave.py'
 
 filename = os.path.splitext(ParamFile)[0] 
-print(filename)
+print(f"{filename = }")
 
 steps = [1, 2, 3, 4, 5, 6, 7, 8]
 x_max = 100000
@@ -45,10 +45,15 @@ num_layers = int(base_vertical_layers * v_resolution_factor)
 
 
 ## EXPERIMENT
-# No sliding
-Scenario = "S1"
+# # No sliding + linear rheology
+# Scenario = "S1"
+# # No sliding + non-linear rheology
+# Scenario = "S2"
 # # sliding
 # Scenario = "S3"
+# sliding + non-linear rheology
+Scenario = "S4"
+
 
 # TIME
 timestep = 1/12
@@ -76,7 +81,7 @@ if 1 in steps:
 
     if ParamFile == 'IsmipF.py':
         md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
-        print(md.mesh.numberofelements)
+        print(f"{md.mesh.numberofelements = }")
 
     # elif ParamFile == 'IsmipF_500.py':
     #     md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
@@ -110,14 +115,14 @@ if 1 in steps:
     plt.close()
     # plt.show()
 
-    Path(f"{file_prefix}-Mesh_generation.nc").unlink(missing_ok=True)
-    export_netCDF(md, f"{file_prefix}-Mesh_generation.nc")
+    # Path(f"{file_prefix}-Mesh_generation.nc").unlink(missing_ok=True)
+    # export_netCDF(md, f"{file_prefix}-Mesh_generation.nc")
 
 
 #Masks #2
 if 2 in steps:
     print("\n===== Setting the masks =====")
-    md = loadmodel(f"{file_prefix}-Mesh_generation.nc")
+    # md = loadmodel(f"{file_prefix}-Mesh_generation.nc")
     
     nv, ne = md.mesh.numberofvertices, md.mesh.numberofelements
 
@@ -142,16 +147,20 @@ if 2 in steps:
     plt.close()
     # plt.show()
 
-    Path(f"{file_prefix}-SetMask.nc").unlink(missing_ok=True)
-    export_netCDF(md, f"{file_prefix}-SetMask.nc")
+    # Path(f"{file_prefix}-SetMask.nc").unlink(missing_ok=True)
+    # export_netCDF(md, f"{file_prefix}-SetMask.nc")
 
 
 #Parameterisation #3
 if 3 in steps:
     print("\n===== Parameterising =====")
-    md = loadmodel(f"{file_prefix}-SetMask.nc")
+    # md = loadmodel(f"{file_prefix}-SetMask.nc")
+
+    # make scenario available to Paramfile
+    md.miscellaneous.scenario = Scenario
 
     md = parameterize(md, ParamFile)
+    print(f"\nn = {md.materials.rheology_n[0]}")
 
     iplt.plot_model_field(md, md.geometry.thickness, show_cbar = True)
     plt.title("Ice thickness") 
@@ -159,14 +168,14 @@ if 3 in steps:
     plt.close()
     # plt.show()
     
-    Path(f"{file_prefix}-Parameterisation.nc").unlink(missing_ok=True)
-    export_netCDF(md, f"{file_prefix}-Parameterisation.nc")
+    # Path(f"{file_prefix}-Parameterisation.nc").unlink(missing_ok=True)
+    # export_netCDF(md, f"{file_prefix}-Parameterisation.nc")
 
 
 #Extrusion #4
 if 4 in steps:
     print("\n===== Extruding =====")
-    md = loadmodel(f"{file_prefix}-Parameterisation.nc")
+    # md = loadmodel(f"{file_prefix}-Parameterisation.nc")
     # vertically extrude the preceding mesh #help extrude
     # only 5 layers exponent 1
     md = md.extrude(num_layers, 1)
@@ -191,25 +200,25 @@ if 4 in steps:
     plt.close()
     # plt.show()
 
-    Path(f"{file_prefix}-Extrusion.nc").unlink(missing_ok=True)
-    export_netCDF(md, f"{file_prefix}-Extrusion.nc")
+    # Path(f"{file_prefix}-Extrusion.nc").unlink(missing_ok=True)
+    # export_netCDF(md, f"{file_prefix}-Extrusion.nc")
 
 
 #Set the flow computing method #5
 if 5 in steps:
     print("\n===== Setting flow approximation: HO =====")
-    md = loadmodel(f"{file_prefix}-Extrusion.nc")
+    # md = loadmodel(f"{file_prefix}-Extrusion.nc")
 
     md = setflowequation(md, 'HO', 'all')
 
-    Path(f"{file_prefix}-SetFlow.nc").unlink(missing_ok=True)
-    export_netCDF(md, f"{file_prefix}-SetFlow.nc")
+    # Path(f"{file_prefix}-SetFlow.nc").unlink(missing_ok=True)
+    # export_netCDF(md, f"{file_prefix}-SetFlow.nc")
 
 
 #Set Boundary Conditions #6
 if 6 in steps:
     print("\n===== Setting boundary conditions =====")
-    md = loadmodel(f"{file_prefix}-SetFlow.nc")
+    # md = loadmodel(f"{file_prefix}-SetFlow.nc")
 
     # ice frozen to the base, no velocity
     # SPCs are initialized at NaN one value per vertex
@@ -217,7 +226,7 @@ if 6 in steps:
     md.stressbalance.spcvy = np.nan * np.ones((md.mesh.numberofvertices))
     md.stressbalance.spcvz = np.nan * np.ones((md.mesh.numberofvertices))
 
-    if Scenario == "S1":
+    if Scenario in ("S1", "S2"):
         # extract the nodenumbers at the base #md.mesh.vertexonbase
         basalnodes = np.nonzero(md.mesh.vertexonbase)
         # set the sliding to zero on the bed (Vx and Vy)
@@ -251,77 +260,78 @@ if 6 in steps:
     Path(f"{file_prefix}-BoundaryCondition.nc").unlink(missing_ok=True)
     export_netCDF(md, f"{file_prefix}-BoundaryCondition.nc")
 
-#Solving #7
-if 7 in steps:
-    print("\n===== Running Stressbalance Solver =====")
-    md = loadmodel(f"{file_prefix}-BoundaryCondition.nc")
-    ## Set which control message you want to see #help verbose
-    ## md.verbose = verbose('convergence', True)
-    md = solve(md, 'Stressbalance')
+# #Solving #7
+# if 7 in steps:
+#     print("\n===== Running Stressbalance Solver =====")
+#     md = loadmodel(f"{file_prefix}-BoundaryCondition.nc")
+#     ## Set which control message you want to see #help verbose
+#     ## md.verbose = verbose('convergence', True)
+#     md = solve(md, 'Stressbalance')
 
-    print("\n============================================================")
+#     print("\n============================================================")
 
-    print("\nAvailable results in md.results.StressbalanceSolution:")
-    stress_solution = md.results.StressbalanceSolution
-    # print(stress_solution)
+#     print("\nAvailable results in md.results.StressbalanceSolution:")
+#     stress_solution = md.results.StressbalanceSolution
+#     # print(stress_solution)
 
-    vx_full = stress_solution.Vx
-    vy_full = stress_solution.Vy
-    vz_full = stress_solution.Vz
+#     vx_full = stress_solution.Vx
+#     vy_full = stress_solution.Vy
+#     vz_full = stress_solution.Vz
     
-    vel_full = stress_solution.Vel
+#     vel_full = stress_solution.Vel
 
-    pressure = stress_solution.Pressure
+#     pressure = stress_solution.Pressure
 
-    basal_idx = np.where(md.mesh.vertexonbase == 1)[0]
-    vx_basal = vx_full[basal_idx]
-    vy_basal = vy_full[basal_idx]
-    vz_basal = vz_full[basal_idx]
+#     basal_idx = np.where(md.mesh.vertexonbase == 1)[0]
+#     vx_basal = vx_full[basal_idx]
+#     vy_basal = vy_full[basal_idx]
+#     vz_basal = vz_full[basal_idx]
 
-    surface_idx = np.where(md.mesh.vertexonsurface == 1)[0]
-    vx_surface = vx_full[surface_idx]
-    vy_surface = vy_full[surface_idx]
-    vz_surface = vz_full[surface_idx]
+#     surface_idx = np.where(md.mesh.vertexonsurface == 1)[0]
+#     vx_surface = vx_full[surface_idx]
+#     vy_surface = vy_full[surface_idx]
+#     vz_surface = vz_full[surface_idx]
 
-    # ------------------------------------------------------------------
-    # Quick print‑outs
-    # ------------------------------------------------------------------
-    print(
-        f"Surface velocity ranges (m a⁻¹):\n"
-        f"  vx_surface: [{vx_surface.min():.5f}, {vx_surface.max():.5f}]\n"
-        f"  vy_surface: [{vy_surface.min():.5f}, {vy_surface.max():.5f}]\n"
-        f"  vz_surface: [{vz_surface.min():.5f}, {vz_surface.max():.5f}]"
-    )
-    print(
-        "Basal velocity ranges (m a⁻¹):\n"
-        f"  vx_basal: [{vx_basal.min():.5f}, {vx_basal.max():.5f}]\n"
-        f"  vy_basal: [{vy_basal.min():.5f}, {vy_basal.max():.5f}]\n"
-        f"  vz_basal: [{vz_basal.min():.5f}, {vz_basal.max():.5f}]"
-    )
+#     # ------------------------------------------------------------------
+#     # Quick print‑outs
+#     # ------------------------------------------------------------------
+#     print(
+#         f"Surface velocity ranges (m a⁻¹):\n"
+#         f"  vx_surface: [{vx_surface.min():.5f}, {vx_surface.max():.5f}]\n"
+#         f"  vy_surface: [{vy_surface.min():.5f}, {vy_surface.max():.5f}]\n"
+#         f"  vz_surface: [{vz_surface.min():.5f}, {vz_surface.max():.5f}]"
+#     )
+#     print(
+#         "Basal velocity ranges (m a⁻¹):\n"
+#         f"  vx_basal: [{vx_basal.min():.5f}, {vx_basal.max():.5f}]\n"
+#         f"  vy_basal: [{vy_basal.min():.5f}, {vy_basal.max():.5f}]\n"
+#         f"  vz_basal: [{vz_basal.min():.5f}, {vz_basal.max():.5f}]"
+#     )
 
-    print(
-        "Vel ranges (m a⁻¹):\n"
-        f"  vel: [{vel_full.min():.5f}, {vel_full.max():.5f}]"
-    )
-    print(f"Pressure ranges (Pa): [{pressure.min():.5f}, {pressure.max():.5f}]\n")
+#     print(
+#         "Vel ranges (m a⁻¹):\n"
+#         f"  vel: [{vel_full.min():.5f}, {vel_full.max():.5f}]"
+#     )
+#     print(f"Pressure ranges (Pa): [{pressure.min():.5f}, {pressure.max():.5f}]\n")
 
-    print("\n============================================================")
+#     print("\n============================================================")
 
-    # save the given model
-    Path(f"{file_prefix}-StressBalance.nc").unlink(missing_ok=True)
-    export_netCDF(md, f"{file_prefix}-StressBalance.nc")
-    # plot the surface velocities #plotdoc
-    plotmodel(md, 'data', md.results.StressbalanceSolution.Vel, 'figure', 4)
-    plt.savefig(f"{file_prefix}_stress_solution_Vel.png")
-    plt.close()
-    # plt.show()
+#     # # save the given model
+#     # Path(f"{file_prefix}-StressBalance.nc").unlink(missing_ok=True)
+#     # export_netCDF(md, f"{file_prefix}-StressBalance.nc")
+#     # plot the surface velocities #plotdoc
+#     plotmodel(md, 'data', md.results.StressbalanceSolution.Vel, 'figure', 4)
+#     plt.savefig(f"{file_prefix}_stress_solution_Vel.png")
+#     plt.close()
+#     # plt.show()
 
-    plt.quiver(md.mesh.x, md.mesh.y, md.results.StressbalanceSolution.Vx, md.results.StressbalanceSolution.Vy)
-    plt.savefig("quiver_Vx_Vy.png")
-    plt.close()
-    # plt.show()
+#     plt.quiver(md.mesh.x, md.mesh.y, md.results.StressbalanceSolution.Vx, md.results.StressbalanceSolution.Vy)
+#     plt.savefig("quiver_Vx_Vy.png")
+#     plt.close()
+#     # plt.show()
 
-breakpoint()
+# breakpoint()
+
 #Solving #8
 if 8 in steps:
     print("\n===== Running Transient Solver =====")
