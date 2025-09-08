@@ -50,9 +50,6 @@ from squaremesh import squaremesh
 from parameterize import parameterize
 from SetIceSheetBC import SetIceSheetBC
 
-# Define physical and conversion constants
-SECONDS_PER_YEAR = 31556926.0
-
 
 def parse_filename(filename):
     """
@@ -182,7 +179,7 @@ def get_profile_data(md, dataset, time_step_index, axis, position, config):
     and calculates the analytical unperturbed baseline.
     """
     tsol = dataset['results/TransientSolution']
-    time_val = tsol['time'][time_step_index] / SECONDS_PER_YEAR
+    time_val = tsol['time'][time_step_index]
     
     surface_full = np.squeeze(tsol['Surface'][time_step_index, :])
     base_full = np.squeeze(tsol['Base'][time_step_index, :])

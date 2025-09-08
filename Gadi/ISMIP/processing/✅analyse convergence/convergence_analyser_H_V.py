@@ -23,8 +23,6 @@ from model import model
 from squaremesh import squaremesh
 from parameterize import parameterize
 
-# Define constant for time conversion
-SECONDS_PER_YEAR = 31556926.0
 
 def reconstruct_mesh(filename, h_resolution_factor, v_resolution_factor):
     """
@@ -137,11 +135,11 @@ class ConvergenceAnalyzer:
 
                     self.results[res_key] = {
                         'x_surf': md.mesh.x[surface_centreline_indices],
-                        'vel_surf': vel_full[surface_centreline_indices] * SECONDS_PER_YEAR,
+                        'vel_surf': vel_full[surface_centreline_indices],
                         'x_base': md.mesh.x[basal_centreline_indices],
-                        'vel_base': vel_full[basal_centreline_indices] * SECONDS_PER_YEAR,
-                        'times': tsol.variables['time'][:] / SECONDS_PER_YEAR,
-                        'max_vel_series': np.max(vel_series, axis=1) * SECONDS_PER_YEAR
+                        'vel_base': vel_full[basal_centreline_indices],
+                        'times': tsol.variables['time'][:],
+                        'max_vel_series': np.max(vel_series, axis=1)
                     }
                     
             except Exception as e:

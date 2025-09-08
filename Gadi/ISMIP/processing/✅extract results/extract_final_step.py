@@ -32,9 +32,6 @@ from squaremesh import squaremesh
 from parameterize import parameterize
 from pyissm import plot as iplt
 
-# Define constant for time conversion
-SECONDS_PER_YEAR = 31556926.0
-
 def reconstruct_mesh(filename):
     """
     Reconstructs the 3D model and mesh based on the filename conventions
@@ -93,7 +90,7 @@ def plot_velocity_evolution(times_in_years, vel_data, out_dir):
     print("  Generating max velocity evolution plot...")
     try:
         # Calculate max velocity at each time step (axis=1 targets the spatial dimension)
-        max_velocities = np.max(vel_data * SECONDS_PER_YEAR, axis=1)
+        max_velocities = np.max(vel_data, axis=1)
 
         plt.figure(figsize=(10, 6))
         plt.plot(times_in_years, max_velocities)
@@ -126,8 +123,7 @@ def visualise_final_step(results_file):
         print("Reading transient solution data...")
         ds = nc.Dataset(results_file, 'r')
         tsol_group = ds['results/TransientSolution']
-        times_in_seconds = tsol_group.variables['time'][:]
-        times_in_years = times_in_seconds / SECONDS_PER_YEAR
+        times_in_years = tsol_group.variables['time'][:]
         n_steps = len(times_in_years)
         print(f"✅ Found transient solution with {n_steps} time steps.")
     except Exception as e:
@@ -172,7 +168,7 @@ def visualise_final_step(results_file):
 
         # Convert data from meters/second to meters/year for plotting
         if field_name in ['Vx', 'Vy', 'Vz', 'Vel']:
-            data_for_final_step = data_for_final_step * SECONDS_PER_YEAR
+            data_for_final_step = data_for_final_step
         
         # Additional check for shape mismatch before plotting
         if data_for_final_step.shape[0] != md.mesh.numberofvertices:

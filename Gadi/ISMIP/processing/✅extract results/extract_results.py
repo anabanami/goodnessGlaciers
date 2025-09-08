@@ -33,8 +33,6 @@ from squaremesh import squaremesh
 from parameterize import parameterize
 from pyissm import plot as iplt
 
-# Define constant for time conversion
-SECONDS_PER_YEAR = 31556926.0
 
 def reconstruct_mesh(filename):
     """
@@ -106,10 +104,7 @@ def visualise_file(results_file):
         print("Reading transient solution data...")
         ds = nc.Dataset(results_file, 'r')
         tsol_group = ds['results/TransientSolution']
-        times_in_seconds = tsol_group.variables['time'][:]
-        
-        times_in_years = times_in_seconds / SECONDS_PER_YEAR
-        
+        times_in_years = tsol_group.variables['time'][:]       
         n_steps = len(times_in_years)
         print(f"✅ Found transient solution with {n_steps} time steps.")
     except Exception as e:
@@ -152,7 +147,7 @@ def visualise_file(results_file):
             data_for_step = np.squeeze(tsol_group.variables[field_name][i, :])
 
             if field_name in ['Vx', 'Vy', 'Vz', 'Vel']:
-                data_for_step = data_for_step * SECONDS_PER_YEAR
+                data_for_step = data_for_step
             
             # Additional check for shape mismatch before plotting
             if data_for_step.shape[0] != md.mesh.numberofvertices:

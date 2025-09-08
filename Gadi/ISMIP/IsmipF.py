@@ -53,38 +53,45 @@ md.friction.p = np.ones((md.mesh.numberofelements))
 md.friction.q = np.zeros((md.mesh.numberofelements))
 
 print('   Construct ice rheological properties')
-# Experimental Scenario
-Scenario = md.miscellaneous.scenario
 
 #The rheology parameters sit in the material section #md.materials
 # B_1 has one value per vertex
 rheology_B_1 = (1 / A_seconds) * np.ones((md.mesh.numberofvertices))
 #n has one value per element
 linear_rheology_n = np.ones((md.mesh.numberofelements))
-# OR
-non_linear_rheology_n = 4 * np.ones((md.mesh.numberofelements))
 
-if Scenario in ("S1", "S3"):
-	md.materials.rheology_B = rheology_B_1
-	#n has one value per element
-	md.materials.rheology_n = linear_rheology_n
+md.materials.rheology_B = rheology_B_1
+#n has one value per element
+md.materials.rheology_n = linear_rheology_n
 
-# SCALING B following Getraer and Morlihem (2025).
-elif Scenario == "S2":
-	epsilon_S1 = 0.10275 # units: a⁻¹
-	# for internal unit consistency
-	epsilon_S1_seconds = epsilon_S1 / md.constants.yts  # units: s⁻¹
-    # SCALING B following Getraer and Morlihem (2025).
-	md.materials.rheology_B = rheology_B_1 * epsilon_S1_seconds**(3/4) # units: Pa a⁽¹/⁴⁾
-	md.materials.rheology_n = non_linear_rheology_n
+# #########################################################################################
+# ##### TURN OFF when PROCESSING ALREADY-MADE S1 AND S3 (JUST FOR NOW)
+# # Experimental Scenario
+# Scenario = md.miscellaneous.scenario
 
-else: #Scenario == "S4"
-	epsilon_S3 = 0.20509 # units: a⁻¹
-	# for internal unit consistency
-	epsilon_S3_seconds = epsilon_S3 / md.constants.yts # units: s⁻¹
-	md.materials.rheology_B = rheology_B_1 * epsilon_S3_seconds**(3/4) # units: Pa a⁽¹/⁴⁾
-	md.materials.rheology_n = non_linear_rheology_n
+# if Scenario in ("S1", "S3"):
+# 	md.materials.rheology_B = rheology_B_1
+# 	#n has one value per element
+# 	md.materials.rheology_n = linear_rheology_n
 
+# # SCALING B following Getraer and Morlihem (2025).
+# non_linear_rheology_n = 4 * np.ones((md.mesh.numberofelements))
+
+# elif Scenario == "S2":
+# 	epsilon_S1 = 0.10275 # units: a⁻¹
+# 	# for internal unit consistency
+# 	epsilon_S1_seconds = epsilon_S1 / md.constants.yts  # units: s⁻¹
+#     # SCALING B following Getraer and Morlihem (2025).
+# 	md.materials.rheology_B = rheology_B_1 * epsilon_S1_seconds**(3/4) # units: Pa a⁽¹/⁴⁾
+# 	md.materials.rheology_n = non_linear_rheology_n
+
+# else: #Scenario == "S4"
+# 	epsilon_S3 = 0.20509 # units: a⁻¹
+# 	# for internal unit consistency
+# 	epsilon_S3_seconds = epsilon_S3 / md.constants.yts # units: s⁻¹
+# 	md.materials.rheology_B = rheology_B_1 * epsilon_S3_seconds**(3/4) # units: Pa a⁽¹/⁴⁾
+# 	md.materials.rheology_n = non_linear_rheology_n
+# #########################################################################################
 
 print('   Set boundary conditions')
 
