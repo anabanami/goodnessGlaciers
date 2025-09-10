@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Batch processing script for extract_final_step.py
 

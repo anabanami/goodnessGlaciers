@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Grid Convergence Study Analysis Script for ISSM Models
 
@@ -24,12 +23,13 @@ from squaremesh import squaremesh
 from parameterize import parameterize
 
 
-def reconstruct_mesh(filename, h_resolution_factor, v_resolution_factor):
+def reconstruct_mesh(filename, scenario, h_resolution_factor, v_resolution_factor):
     """
     Reconstructs the 3D model and mesh based on the filename conventions.
     """
     base = os.path.splitext(os.path.basename(filename))[0]
-    param_filename = base.split('_')[0] + ".py"
+    parts = base.split('_')
+    param_filename = parts[0] + ".py"
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     parent_dir = os.path.dirname(script_dir)
@@ -47,6 +47,13 @@ def reconstruct_mesh(filename, h_resolution_factor, v_resolution_factor):
     num_layers = int(base_vertical_layers * v_resolution_factor)
 
     md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
+
+    # Set the required miscellaneous attributes before parameterization
+    md.miscellaneous.filename = parts[0]  # "IsmipF" from filename
+    md.miscellaneous.scenario = scenario
+    md.miscellaneous.h_resolution_factor = h_resolution_factor
+    md.miscellaneous.v_resolution_factor = v_resolution_factor
+
     md = parameterize(md, param_file_path)
     md = md.extrude(num_layers, 1)
     return md
@@ -96,7 +103,8 @@ class ConvergenceAnalyzer:
             print(f"  - Loading {filename} (h_res={h_res_factor}, v_res={v_res_factor})")
             
             try:
-                md = reconstruct_mesh(file_path, h_res_factor, v_res_factor)
+                md = reconstruct_mesh(file_path, scenario, h_res_factor, v_res_factor)
+
                 with nc.Dataset(file_path, 'r') as ds:
                     tsol = ds['results']['TransientSolution']
                     last_step_idx = len(tsol.variables['time'][:]) - 1

@@ -49,7 +49,7 @@ num_layers = int(base_vertical_layers * v_resolution_factor)
 # Scenario = "S1"
 # # No sliding + non-linear rheology
 # Scenario = "S2"
-# # sliding
+# # sliding + linear rheology
 # Scenario = "S3"
 # sliding + non-linear rheology
 Scenario = "S4"
@@ -62,7 +62,7 @@ output_frequency = 100
 
 print("\n============================================================")
 print(f"\nRunning {Scenario} with {filename}")
-print(f"\n{h_resolution_factor = } and {v_resolution_factor}")
+print(f"\n{h_resolution_factor = } and {v_resolution_factor = }")
 print(f"\nNumber of nodes is {x_nodes} × {y_nodes} = {x_nodes * y_nodes}")
 print(f"\nNumber of vertical layers: {num_layers}")
 print("\n============================================================")
@@ -95,11 +95,11 @@ if 1 in steps:
 
     print("\n===== Plotting mesh =====")
     md_mesh, md_x, md_y, md_elements, md_is3d = issm.model.mesh.process_mesh(md)
-    iplt.plot_mesh2d(md_mesh, show_nodes = True)
-    plt.title("Full mesh") 
-    plt.savefig(f"{file_prefix}_mesh.png")
-    plt.close()
-    # plt.show()
+    # iplt.plot_mesh2d(md_mesh, show_nodes = True)
+    # plt.title("Full mesh") 
+    # plt.savefig(f"{file_prefix}_mesh.png")
+    # plt.close()
+    # # plt.show()
 
     # convert the vertex on boundary array into boolean
     boundary_mask = md.mesh.vertexonboundary.astype(bool)
@@ -107,13 +107,13 @@ if 1 in steps:
     y_boundaries = md.mesh.y[boundary_mask]
 
     print("\n===== Plotting mesh and highlighting vertex boundaries =====")
-    iplt.plot_mesh2d(md_mesh, show_nodes = True)
-    plt.scatter(x_boundaries, y_boundaries, label='boundaries')
-    plt.legend()
-    plt.title("Mesh boundaries") 
-    plt.savefig(f"{file_prefix}_mesh_boundaries.png")
-    plt.close()
-    # plt.show()
+    # iplt.plot_mesh2d(md_mesh, show_nodes = True)
+    # plt.scatter(x_boundaries, y_boundaries, label='boundaries')
+    # plt.legend()
+    # plt.title("Mesh boundaries") 
+    # plt.savefig(f"{file_prefix}_mesh_boundaries.png")
+    # plt.close()
+    # # plt.show()
 
     # Path(f"{file_prefix}-Mesh_generation.nc").unlink(missing_ok=True)
     # export_netCDF(md, f"{file_prefix}-Mesh_generation.nc")
@@ -133,19 +133,19 @@ if 2 in steps:
     md.mask.ice_levelset = - np.ones(nv) #Ice is present if md.mask.ice_levelset is negative
     md.mask.ocean_levelset = np.ones(nv) # grounded ice if positive (OR floating ice if negative)
 
-    # plot the given mask #md.mask to locate the field
-    fig, ax = plt.subplots(figsize = (7, 7))
-    iplt.plot_model_elements(md,
-                             md.mask.ice_levelset,
-                             md.mask.ocean_levelset, 
-                             type='grounded_ice_elements', 
-                             ax = ax
-    )
+    # # plot the given mask #md.mask to locate the field
+    # fig, ax = plt.subplots(figsize = (7, 7))
+    # iplt.plot_model_elements(md,
+    #                          md.mask.ice_levelset,
+    #                          md.mask.ocean_levelset, 
+    #                          type='grounded_ice_elements', 
+    #                          ax = ax
+    # )
 
-    plt.title("Set mask - grounded ice elements") 
-    plt.savefig(f"{file_prefix}_grounded_ice_elements.png")
-    plt.close()
-    # plt.show()
+    # plt.title("Set mask - grounded ice elements") 
+    # plt.savefig(f"{file_prefix}_grounded_ice_elements.png")
+    # plt.close()
+    # # plt.show()
 
     # Path(f"{file_prefix}-SetMask.nc").unlink(missing_ok=True)
     # export_netCDF(md, f"{file_prefix}-SetMask.nc")
@@ -156,17 +156,25 @@ if 3 in steps:
     print("\n===== Parameterising =====")
     # md = loadmodel(f"{file_prefix}-SetMask.nc")
 
-    # make scenario available to Paramfile
+    # make naming variables available to Paramfile
+    md.miscellaneous.filename = filename
+    md.miscellaneous.h_resolution_factor = h_resolution_factor
+    md.miscellaneous.v_resolution_factor = v_resolution_factor
     md.miscellaneous.scenario = Scenario
 
     md = parameterize(md, ParamFile)
+    
+    print(f"\n{md.miscellaneous.filename = }")
+    print(f"\n{md.miscellaneous.h_resolution_factor = }")
+    print(f"\n{md.miscellaneous.v_resolution_factor = }")
+    print(f"\n{md.miscellaneous.scenario = }")
     print(f"\nn = {md.materials.rheology_n[0]}")
 
-    iplt.plot_model_field(md, md.geometry.thickness, show_cbar = True)
-    plt.title("Ice thickness") 
-    plt.savefig(f"{file_prefix}_thickness_geometry_2D.png")
-    plt.close()
-    # plt.show()
+    # iplt.plot_model_field(md, md.geometry.thickness, show_cbar = True)
+    # plt.title("Ice thickness") 
+    # plt.savefig(f"{file_prefix}_thickness_geometry_2D.png")
+    # plt.close()
+    # # plt.show()
     
     # Path(f"{file_prefix}-Parameterisation.nc").unlink(missing_ok=True)
     # export_netCDF(md, f"{file_prefix}-Parameterisation.nc")
@@ -181,24 +189,24 @@ if 4 in steps:
     md = md.extrude(num_layers, 1)
 
     print("\n===== Plotting base geometry =====")
-    ## 3D plot
-    plotmodel(md, 'data', md.geometry.base, 'figure', 4,
-            'figsize', [12, 12],
-            'xlabel', 'x (m)',
-            'ylabel', 'y (m)',
-    )
+    # ## 3D plot
+    # plotmodel(md, 'data', md.geometry.base, 'figure', 4,
+    #         'figsize', [12, 12],
+    #         'xlabel', 'x (m)',
+    #         'ylabel', 'y (m)',
+    # )
 
-    plt.title("3D model geometry") 
-    plt.savefig(f"{file_prefix}_geometry_3D.png")
-    plt.close()
-    # plt.show()
+    # plt.title("3D model geometry") 
+    # plt.savefig(f"{file_prefix}_geometry_3D.png")
+    # plt.close()
+    # # plt.show()
 
-    # 2D plot
-    iplt.plot_model_field(md, md.geometry.base, layer=1, show_cbar = True)
-    plt.title("Base geometry") 
-    plt.savefig(f"{file_prefix}_base_geometry_2D.png")
-    plt.close()
-    # plt.show()
+    # # 2D plot
+    # iplt.plot_model_field(md, md.geometry.base, layer=1, show_cbar = True)
+    # plt.title("Base geometry") 
+    # plt.savefig(f"{file_prefix}_base_geometry_2D.png")
+    # plt.close()
+    # # plt.show()
 
     # Path(f"{file_prefix}-Extrusion.nc").unlink(missing_ok=True)
     # export_netCDF(md, f"{file_prefix}-Extrusion.nc")
@@ -421,10 +429,10 @@ if 8 in steps:
 
     print("\n============================================================")
 
-    plt.quiver(md.mesh.x, md.mesh.y, md.results.TransientSolution[-1].Vx, md.results.TransientSolution[-1].Vy)
-    plt.savefig("quiver_Vx_Vy.png")
-    plt.close()
-    # plt.show()
+    # plt.quiver(md.mesh.x, md.mesh.y, md.results.TransientSolution[-1].Vx, md.results.TransientSolution[-1].Vy)
+    # plt.savefig("quiver_Vx_Vy.png")
+    # plt.close()
+    # # plt.show()
 
     print("\n============================================================")
     print(f"\nFINISHED {Scenario} with {file_prefix} and {h_resolution_factor = }")

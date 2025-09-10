@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """
 Phase Analysis Script for ISSM Simulation Output
 
@@ -77,7 +76,7 @@ def parse_filename(filename):
     return param_profile, scenario, h_resolution_factor, v_resolution_factor
 
 
-def reconstruct_mesh(param_profile, h_res_factor, v_res_factor):
+def reconstruct_mesh(param_profile, scenario, h_res_factor, v_res_factor):
     """
     Reconstructs the 3D model mesh based on the filename parameters
     by replicating the setup process from the 'runme.py' script.
@@ -104,6 +103,13 @@ def reconstruct_mesh(param_profile, h_res_factor, v_res_factor):
     y_nodes = int(30 * h_res_factor)
     
     md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
+    
+    # Set the required miscellaneous attributes before parameterization
+    md.miscellaneous.filename = param_profile
+    md.miscellaneous.scenario = scenario
+    md.miscellaneous.h_resolution_factor = h_res_factor
+    md.miscellaneous.v_resolution_factor = v_res_factor
+    
     md = parameterize(md, param_file_path)
     
     # Calculate layers based on vertical resolution factor
@@ -455,7 +461,7 @@ def main():
         os.makedirs(output_dir_name, exist_ok=True)
         print(f"Results will be saved in: '{output_dir_name}'")
 
-        md = reconstruct_mesh(param_profile, h_res, v_res)
+        md = reconstruct_mesh(param_profile, scenario, h_res, v_res)
         config, wavelength = load_config_by_parsing(param_profile)
         
         requested_position = args.position

@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """
 Usage:
 
@@ -78,6 +77,13 @@ def reconstruct_mesh(filename):
     num_layers = int(base_vertical_layers * v_resolution_factor)
 
     md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
+
+    # Set the required miscellaneous attributes before parameterization
+    md.miscellaneous.filename = parts[0]  # "IsmipF" from filename
+    md.miscellaneous.scenario = parts[1]   # "S?" from filename
+    md.miscellaneous.h_resolution_factor = h_resolution_factor
+    md.miscellaneous.v_resolution_factor = v_resolution_factor
+
     md = parameterize(md, param_file_path)
     md = md.extrude(num_layers, 1)
 
@@ -176,7 +182,7 @@ def visualise_final_step(results_file):
             ds.close()
             return
 
-        fig, ax = plt.subplots(figsize=(12, 6), constrained_layout=True)
+        fig, ax = plt.subplots(figsize=(8, 8), constrained_layout=True)
         
         plot_kwargs = {'show_cbar': True}
         if field_name in ['Vx', 'Vy', 'Vz']: plot_kwargs['cmap'] = 'coolwarm'
