@@ -45,7 +45,7 @@ def reconstruct_mesh(filename):
     param_filename = parts[0] + ".py"
     try:
         # This logic assumes the name will always have 4 parts.
-        # parts[2] is the X factor, parts[3] is the Y factor.
+        # parts[2] is the X factor, parts[3] is the Z factor.
         h_resolution_factor = float(parts[2])
         v_resolution_factor = float(parts[3].split('-')[0])
     except (ValueError, IndexError):
@@ -61,7 +61,7 @@ def reconstruct_mesh(filename):
     
     print(f"  Using Parameter File: '{param_file_path}'")
     print(f"  Using Resolution Factor X: {h_resolution_factor}")
-    print(f"  Using Resolution Factor Y: {v_resolution_factor}")
+    print(f"  Using Resolution Factor Z: {v_resolution_factor}")
     
     if not os.path.exists(param_file_path):
         raise FileNotFoundError(f"parameterize error message: file '{param_filename}' not found at expected location '{param_file_path}'!")

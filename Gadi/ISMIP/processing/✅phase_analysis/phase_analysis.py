@@ -237,7 +237,7 @@ def phase_shift_analysis(x, base_signal, surface_signal, wavelength, time_val=No
     bed_norm = (base_signal - np.mean(base_signal)) / np.std(base_signal)
     surface_norm = (surface_signal - np.mean(surface_signal)) / np.std(surface_signal)
     
-    xcorr = correlate(bed_norm, surface_norm, mode='full')
+    xcorr = correlate(surface_norm, bed_norm, mode='full')
     
     max_corr_idx = np.argmax(xcorr)
     center_idx = len(xcorr) // 2
@@ -294,8 +294,8 @@ def plot_cross_correlation(x, base_signal, surface_signal, wavelength, time_val,
     bed_norm = (base_signal - np.mean(base_signal)) / np.std(base_signal)
     surface_norm = (surface_signal - np.mean(surface_signal)) / np.std(surface_signal)
     
-    xcorr = correlate(bed_norm, surface_norm, mode='full')
-    lags = np.arange(-(bed_norm.size - 1), bed_norm.size)
+    xcorr = correlate(surface_norm, bed_norm, mode='full')
+    lags = np.arange(-(surface_norm.size - 1), surface_norm.size)
     lag_distances = lags * dx
     
     max_corr_idx = np.argmax(xcorr)

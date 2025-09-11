@@ -9,27 +9,29 @@ These two scripts automate the visualization of the final results from Ice Sheet
 In-Depth Analysis
 1. extract_final_step.py (The Worker)
 
-This script is the core engine for plotting the final-state results. When run, it performs the following steps for a single input file (e.g., IsmipF_S1_1-Transient.nc):
+This script is the core engine for plotting the final-state results. When run, it performs the following steps for a single input file (e.g., IsmipF_S1_0.5_1.5-Transient.nc):
 
     Mesh Reconstruction: The script cannot plot the data without the model's grid (the mesh). It cleverly reconstructs this mesh by:
 
-        Parsing the input filename to infer the original parameter file (e.g., IsmipF.py) and the mesh resolution.
+        Parsing the input filename to infer the original parameter file (e.g., IsmipF.py) and both horizontal and vertical resolution factors.
+        The filename parsing expects 4 parts: ParamFile_Scenario_H-Res_V-Res-Transient.nc (e.g., IsmipF_S3_0.5_1.5-Transient.nc)
 
         Using the pyISSM library to programmatically repeat the steps that created the original mesh (squaremesh, parameterize, extrude).
+        Sets required miscellaneous attributes (filename, scenario, h_resolution_factor, v_resolution_factor) before parameterization.
 
     Data Loading: It opens the NetCDF file and reads the full transient solution data, including all time steps and results for different variables.
 
     Plot Generation:
 
-        Final Step Plots: It jumps directly to the last time step in the results. For this final step, it plots a predefined list of fields: Vx, Vy, Vz (velocity components), Vel (velocity magnitude), and Pressure. It generates separate plots for the ice 'Surface' and 'Basal' layers.
+        Final Step Plots: It jumps directly to the last time step in the results (skipping files with only one time step). For this final step, it plots a predefined list of fields: Vx, Vy, Vz (velocity components), Vel (velocity magnitude), and Pressure. It generates separate plots for the ice 'Surface' and 'Basal' layers.
 
-        Summary Plot: Before finishing, it processes the entire time series for the Vel field to generate a 2D plot of maximum velocity vs. time, providing a concise summary of the simulation's stability and evolution.
+        Summary Plot: Before plotting the final step, it processes the entire time series for the Vel field to generate a 2D plot of maximum velocity vs. time, providing a concise summary of the simulation's stability and evolution.
 
         A critical safety check ensures that the number of data points matches the number of mesh vertices before plotting.
 
-    Output: The generated plots are saved into a structured directory hierarchy with a _FINAL suffix. For an input file named IsmipF_S1_1-Transient.nc, the output would look like this:
+    Output: The generated plots are saved into a structured directory hierarchy with a _FINAL suffix. For an input file named IsmipF_S1_0.5_1.5-Transient.nc, the output would look like this:
 
-    IsmipF_S1_1-Transient_FINAL/
+    IsmipF_S1_0.5_1.5-Transient_FINAL/
     ├── velocity_evolution.png  <-- Summary Plot
     ├── Base/
     │   ├── Pressure/
@@ -52,7 +54,7 @@ This script makes the visualization process scalable and reliable. It does not p
 
     Robust Job Management: This is the script's strongest feature.
 
-        Skip Existing (--skip-existing): It can check if an output directory (with the _FINAL suffix) already exists and skip it, saving time on reruns.
+        Skip Existing (--skip-existing): It can check if an output directory (with the _FINAL suffix) already exists and contains PNG files, then skip it, saving time on reruns.
 
         Resume (--resume): If a large batch job is interrupted, this feature allows it to resume from where it left off.
 
@@ -73,6 +75,8 @@ How to Use the Scripts
         sys.path.append('/home/ana/pyISSM/src')
 
         You must change /home/ana/pyISSM/src to the correct path on your system.
+
+        Note: The script can now handle multiple files passed as arguments or glob patterns (e.g., *.nc).
 
     File Placement:
 
@@ -95,7 +99,7 @@ How to Use the Scripts
 
         To process only a specific subset of experiments (e.g., all S4 runs):
 
-        python batch_extract_final_step.py --parallel --pattern="*_S4_*.nc"
+        python batch_extract_final_step.py --parallel --pattern="*_S4_*"
 
         To resume an interrupted job:
 

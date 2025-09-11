@@ -22,7 +22,7 @@ This is a command-line script. You would run it from the terminal, providing the
 
 Example Usage:
 
-python convergence_analyser_H_V.py MyExperiment_Scenario1_*.nc
+python convergence_analyser_H_V.py MyExperiment_Scenario1_*_*-Transient.nc
 
 or
 
@@ -42,15 +42,17 @@ a. File Parsing and Setup (_load_results)
 
         V_ResolutionFactor: A float representing the vertical mesh resolution multiplier (e.g., 1.0, 2.0).
 
-    It identifies one simulation as the reference solution. This is hardcoded as a tuple, for instance (2.0, 2.0), representing the highest resolution run for both horizontal and vertical factors.
+    It identifies one simulation as the reference solution. This is hardcoded as a tuple, for instance (2, 2), representing the highest resolution run for both horizontal and vertical factors (note: now uses integer values).
 
 b. Mesh Reconstruction (reconstruct_mesh)
 
     This is a crucial and assumption-heavy step. The script does not read the mesh from the output files. Instead, it recreates it from scratch.
 
-    It assumes the model domain is a square of size 100textkmtimes100textkm.
+    It assumes the model domain is a square of size 100km×100km.
 
     It creates a 2D squaremesh where the number of horizontal nodes is scaled by the h_resolution_factor (e.g., 30 * h_resolution_factor).
+
+    It sets required miscellaneous attributes (filename, scenario, h_resolution_factor, v_resolution_factor) before parameterization.
 
     It parameterizes the model using the corresponding .py parameter file (e.g., IsmipF.py), which it assumes is in the parent directory.
 
@@ -68,12 +70,11 @@ e. Error Calculation (_calculate_convergence_metrics)
 
     The script calculates the L2 error norm to measure the difference between each result and the reference solution. For a reference solution vector u_ref and a comparison solution vector u_comp, the relative L2 error is:
 
-    EL2​=∥uref​∥2​∥uref​−ucomp​∥2​​
+    E_L2 = (||u_ref - u_comp||_2 / ||u_ref||_2) × 100
 
+    where ||·||_2 is the Euclidean norm.
 
-    where ∣cdot∣_2 is the Euclidean norm.
-
-    The script intelligently reports the absolute error if the norm of the reference solution is near zero to avoid division errors.
+    The script intelligently reports the absolute error if the norm of the reference solution is near zero (< 0.1) to avoid division errors.
 
 f. Outputs (_create_comparison_plots, _generate_report)
 
@@ -81,15 +82,15 @@ The script generates two primary output files:
 
     A PNG Image (*_convergence_summary.png): A 2x2 plot containing:
 
-        Top-Left: Surface velocity profiles for all resolutions.
+        Top-Left: Surface velocity profiles for all resolutions along the centerline.
 
-        Top-Right: Basal velocity profiles for all resolutions.
+        Top-Right: Basal velocity profiles for all resolutions along the centerline.
 
-        Bottom-Left: A bar chart showing the calculated L2 errors for each resolution combination.
+        Bottom-Left: A bar chart showing the calculated L2 errors for each resolution combination, with separate bars for surface and basal velocity errors.
 
         Bottom-Right: The time evolution of the maximum velocity in the domain for each simulation.
 
-    A Markdown Report (*_convergence_report.md): A text file with a formatted table summarizing the L2 errors and stating whether each resolution has "CONVERGED" based on a 1% relative error tolerance. The resolution is reported as a tuple (H, V).
+    A Markdown Report (*_convergence_report.md): A text file with a formatted table summarizing the L2 errors for both surface and basal velocities, stating whether each resolution has "CONVERGED" based on a 1% relative error tolerance. The resolution is reported as a tuple (H, V).
 
 4. Dependencies and Limitations
 
@@ -99,14 +100,14 @@ The script generates two primary output files:
 
     Hardcoded Assumptions: The script is not general-purpose. It is tailored for a specific experimental setup and makes several hardcoded assumptions:
 
-        Domain size is 100textkmtimes100textkm.
+        Domain size is 100km×100km.
 
-        The base horizontal mesh resolution is 30times30 elements.
+        The base horizontal mesh resolution is 30×30 elements.
 
         The base number of vertical layers is 5.
 
-        The reference resolution is the tuple (2.0, 2.0).
+        The reference resolution is the tuple (2, 2).
 
-        The centerline is at y=50000 m.
+        The centerline is at y=50000 m (automatically detected from mesh).
 
-    Filename Convention: The script will fail if the NetCDF files do not strictly adhere to the ParamFile_Scenario_H-Res_V-Res-Transient.nc naming convention.
+    Filename Convention: The script will fail if the NetCDF files do not strictly adhere to the ParamFile_Scenario_H-Res_V-Res-Transient.nc naming convention. It now uses a more robust regular expression for parsing filenames.

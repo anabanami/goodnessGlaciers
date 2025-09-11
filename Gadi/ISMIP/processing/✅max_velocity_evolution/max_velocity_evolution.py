@@ -1,21 +1,3 @@
-"""
-Usage:
-
-python extract_final_step.py <transient_results.nc>
-
-This script processes a single transient NetCDF output file from ISSM. It:
-1.  Infers the Parameter File (e.g., 'IsmipF.py') and resolution_factor
-    from the input filename.
-2.  Reconstructs the original 3D model mesh by replicating the meshing
-    and extrusion steps from the 'runme.py' script.
-3.  Opens the .nc file and processes ONLY THE FINAL TIME STEP.
-4.  Plots both surface and basal layers for velocity fields and basal for pressure.
-5.  Saves final-state plots to a directory structure separated by layer.
-6.  Additionally, it creates a summary plot of max velocity over time.
-
-Example:
-python extract_final_step.py IsmipF_S1_1-Transient.nc
-"""
 import os
 import sys
 import time
@@ -43,7 +25,7 @@ def reconstruct_mesh(filename):
     param_filename = parts[0] + ".py"
     try:
         # This logic assumes the name will always have 4 parts.
-        # parts[2] is the X factor, parts[3] is the Y factor.
+        # parts[2] is the X factor, parts[3] is the Z factor.
         h_resolution_factor = float(parts[2])
         v_resolution_factor = float(parts[3].split('-')[0])
     except (ValueError, IndexError):
@@ -59,7 +41,7 @@ def reconstruct_mesh(filename):
     
     print(f"  Using Parameter File: '{param_file_path}'")
     print(f"  Using Resolution Factor X: {h_resolution_factor}")
-    print(f"  Using Resolution Factor Y: {v_resolution_factor}")
+    print(f"  Using Resolution Factor Z: {v_resolution_factor}")
     
     if not os.path.exists(param_file_path):
         raise FileNotFoundError(f"parameterize error message: file '{param_filename}' not found at expected location '{param_file_path}'!")
@@ -91,7 +73,7 @@ def reconstruct_mesh(filename):
     return md
 
 
-def plot_velocity_evolution(times_in_years, vel_data, out_dir):
+def plot_velocity_evolution(times_in_years, vel_data):
     """Plots the evolution of maximum velocity over the whole simulation."""
     print("  Generating max velocity evolution plot...")
     try:
@@ -104,14 +86,14 @@ def plot_velocity_evolution(times_in_years, vel_data, out_dir):
         plt.ylabel('Maximum Velocity (m/yr)')
         plt.title('Evolution of Maximum Velocity')
         plt.grid(linestyle=':', alpha=0.7)
-        plt.savefig(os.path.join(out_dir, "velocity_evolution.png"), dpi=200, bbox_inches='tight')
+        plt.savefig("velocity_evolution.png", dpi=200, bbox_inches='tight')
         plt.close()
         print("    ✓ Max velocity evolution plot saved.")
 
     except Exception as e:
         print(f"    ✗ An error occurred while plotting max velocity: {e}")
 
-def visualise_final_step(results_file):
+def visualise_final_step_velocity(results_file):
     """
     Reconstructs a model mesh and plots the final transient step from a file.
     """
@@ -143,72 +125,11 @@ def visualise_final_step(results_file):
         return
 
     # --- PLOT VELOCITY EVOLUTION (SUMMARY PLOT) ---
-    out_dir_base = os.path.splitext(os.path.basename(results_file))[0] + '_FINAL'
-    os.makedirs(out_dir_base, exist_ok=True)
     if 'Vel' in tsol_group.variables:
         vel_all_steps = tsol_group.variables['Vel'][:]
-        plot_velocity_evolution(times_in_years, vel_all_steps, out_dir_base)
-
-    # --- PLOT FINAL STEP FOR ALL FIELDS AND LAYERS ---
-    fields_and_layers_to_plot = [
-        ('Vx', 'Surface'), ('Vx', 'Basal'),
-        ('Vy', 'Surface'), ('Vy', 'Basal'),
-        ('Vz', 'Surface'), ('Vz', 'Basal'),
-        ('Vel', 'Surface'), ('Vel', 'Basal'),
-        ('Pressure', 'Basal')
-    ]
-    
-    last_step_index = n_steps - 1
-    final_time_in_years = times_in_years[last_step_index]
-
-    print(f"🚀 Generating plots for final time step (t={final_time_in_years:.2f} years)...")
-    
-    for field_name, layer_name in fields_and_layers_to_plot:
-        if field_name not in tsol_group.variables:
-            print(f"⚠️ Warning: Field '{field_name}' not found. Skipping.")
-            continue
-
-        print(f"  Plotting final state for {field_name} ({layer_name})...")
-        
-        data_for_final_step = np.squeeze(tsol_group.variables[field_name][last_step_index, :])
-
-        # Convert data from meters/second to meters/year for plotting
-        if field_name in ['Vx', 'Vy', 'Vz', 'Vel']:
-            data_for_final_step = data_for_final_step
-        
-        # Additional check for shape mismatch before plotting
-        if data_for_final_step.shape[0] != md.mesh.numberofvertices:
-            print(f"\n❌ Mismatch Error: Data for '{field_name}' has {data_for_final_step.shape[0]} points, but reconstructed mesh has {md.mesh.numberofvertices} vertices. Skipping file.")
-            ds.close()
-            return
-
-        fig, ax = plt.subplots(figsize=(8, 8), constrained_layout=True)
-        
-        plot_kwargs = {'show_cbar': True}
-        if field_name in ['Vx', 'Vy', 'Vz']: plot_kwargs['cmap'] = 'coolwarm'
-        elif field_name == 'Vel': plot_kwargs['cmap'] = 'viridis'
-        elif field_name == 'Pressure': plot_kwargs['cmap'] = 'plasma'
-        
-        if layer_name == 'Basal':
-            plot_kwargs['layer'] = 1
-            layer_label = "Base"
-        else:
-            layer_label = "Surface"
-            
-        title = f"{field_name} at {final_time_in_years:.4f} years ({layer_label}, Final Step)"
-
-        iplt.plot_model_field(md, data_for_final_step, ax=ax, **plot_kwargs)
-        ax.set_title(title, fontsize=14)
-        
-        out_dir_final = os.path.join(out_dir_base, layer_label, field_name)
-        os.makedirs(out_dir_final, exist_ok=True)
-        out_path = os.path.join(out_dir_final, f"final_{field_name}.png")
-        
-        fig.savefig(out_path, dpi=200)
-        plt.close(fig)
+        plot_velocity_evolution(times_in_years, vel_all_steps)
 
     ds.close()
-    print(f"\n🎉 All plots for final step completed.")
     print(f"⏱️  Total time for {results_file}: {time.time() - start_time:.2f}s")
 
 if __name__ == "__main__":
@@ -226,6 +147,6 @@ if __name__ == "__main__":
         sys.exit(1)
 
     for results_file in files_to_process:
-        visualise_final_step(results_file)
+        visualise_final_step_velocity(results_file)
 
     print("\nAll files processed.")

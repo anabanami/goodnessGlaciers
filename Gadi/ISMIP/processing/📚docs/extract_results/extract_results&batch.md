@@ -12,28 +12,30 @@ These two scripts automate the visualization of simulation results from the Ice 
 
 #### 1\. `extract_results.py` (The Worker)
 
-This script is the core engine for plotting. When run, it performs the following steps for a single input file (e.g., `IsmipF_S1_1-Transient.nc`):
+This script is the core engine for plotting. When run, it performs the following steps for a single input file (e.g., `IsmipF_S1_0.5_1.5-Transient.nc`):
 
   * **Mesh Reconstruction**: The script cannot plot the data without the model's grid (the mesh). It cleverly reconstructs this mesh by:
 
-      * Parsing the input filename to infer the original parameter file (e.g., `IsmipF.py`) and the mesh resolution.
+      * Parsing the input filename to infer the original parameter file (e.g., `IsmipF.py`) and both horizontal and vertical resolution factors.
+      * The filename parsing now expects 4 parts: `ParamFile_Scenario_H-Res_V-Res-Transient.nc` (e.g., `IsmipF_S3_0.5_1.5-Transient.nc`)
       * Using the `pyISSM` library to programmatically repeat the steps that created the original mesh (`squaremesh`, `parameterize`, `extrude`).
-      * **Note**: It contains a fix `float(parts[2].split('-')[0])` to correctly handle non-integer resolution factors.
+      * Sets required miscellaneous attributes (`filename`, `scenario`, `h_resolution_factor`, `v_resolution_factor`) before parameterization.
 
   * **Data Loading**: It opens the NetCDF file and reads the transient solution data, including the time steps and the results for different variables.
 
   * **Plot Generation**:
 
-      * It iterates through each time step in the results.
+      * It iterates through each time step in the results (skipping the first time step, starting from step 1).
       * For each step, it plots a predefined list of fields: `Vx`, `Vy`, `Vz` (velocity components), `Vel` (velocity magnitude), and `Pressure`.
       * It generates separate plots for the ice 'Surface' and 'Basal' layers.
-      * It converts velocity units from meters per second ($m/s$) to a more intuitive meters per year ($m/yr$) for the plots.
+      * Velocity data is plotted directly without unit conversion (assumed to already be in appropriate units).
       * A critical safety check ensures that the number of data points in the results file matches the number of vertices in the reconstructed mesh before attempting to plot.
+      * Files with only one time step are automatically skipped with an informative message.
 
-  * **Output**: The generated plots are saved into a structured directory hierarchy. For an input file named `IsmipF_S1_1-Transient.nc`, the output would look like this:
+  * **Output**: The generated plots are saved into a structured directory hierarchy. For an input file named `IsmipF_S1_0.5_1.5-Transient.nc`, the output would look like this:
 
     ```
-    IsmipF_S1_1-Transient/
+    IsmipF_S1_0.5_1.5-Transient/
     ├── Base/
     │   ├── Pressure/
     │   │   ├── Pressure_step001.png
@@ -75,7 +77,7 @@ This script makes the visualization process scalable and reliable. It does not p
         ```python
         sys.path.append('/home/ana/pyISSM/src')
         ```
-        You **must** change `/home/ana/pyISSM/src` to the correct path on the system.
+        You **must** change `/home/ana/pyISSM/src` to the correct path on your system.
 
 2.  **File Placement**:
 
@@ -101,7 +103,7 @@ This script makes the visualization process scalable and reliable. It does not p
       * **To process only a specific subset of experiments (e.g., all S4 runs)**:
 
         ```bash
-        python batch_extract_results.py --parallel --pattern="*_S4_*.nc"
+        python batch_extract_results.py --parallel --pattern="*_S4_*"
         ```
 
       * **To resume an interrupted job**:

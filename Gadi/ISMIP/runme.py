@@ -20,13 +20,12 @@ import pyissm as issm
 from pyissm import plot as iplt
 
 
-ParamFile = 'IsmipF.py'
-# ParamFile = 'IsmipF_500.py'
-# ParamFile = 'flat_bed.py'
+# ParamFile = 'IsmipF.py'
+ParamFile = 'flat_bed.py'
 # ParamFile = 'single_wave.py'
 
 filename = os.path.splitext(ParamFile)[0] 
-print(f"{filename = }")
+# print(f"{filename = }")
 
 steps = [1, 2, 3, 4, 5, 6, 7, 8]
 x_max = 100000
@@ -79,18 +78,21 @@ if 1 in steps:
     #initialize md as a new model help(model)
     md = model()
 
-    if ParamFile == 'IsmipF.py':
+    # if ParamFile == 'IsmipF.py':
+    #     md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
+    #     print(f"{md.mesh.numberofelements = }")
+
+    if ParamFile == 'flat_bed.py':
         md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
         print(f"{md.mesh.numberofelements = }")
-
-    # elif ParamFile == 'IsmipF_500.py':
-    #     md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
+        print(f" Total bed area: {x_max} × {y_max} = {x_max * y_max}")
+        print(f" mean element area = {(x_max * y_max) / md.mesh.numberofelements}")
 
     # elif ParamFile == 'single_wave.py':
     #     md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
+        # print(f"{md.mesh.numberofelements = }")
 
-    # elif ParamFile == 'flat_bed.py':
-    #     md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
+
 
 
     print("\n===== Plotting mesh =====")

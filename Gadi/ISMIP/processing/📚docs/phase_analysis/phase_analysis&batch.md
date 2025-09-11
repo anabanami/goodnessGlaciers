@@ -12,15 +12,15 @@ Purpose
 To perform a time-dependent phase shift analysis between bedrock topography and ice surface elevation for a single ISSM transient simulation output file.
 Key Features
 
-    Automatic Parameter Detection: Parses the input filename (e.g., IsmipF_S1_2_2-Transient.nc) to extract simulation parameters like the experiment profile, scenario, and resolution.
+    Automatic Parameter Detection: Parses the input filename (e.g., IsmipF_S1_2_2-Transient.nc) to extract simulation parameters like the experiment profile, scenario, horizontal resolution factor, and vertical resolution factor.
 
-    Mesh Reconstruction: Reconstructs the original ISSM model mesh using the pyISSM library to correctly map data in space.
+    Mesh Reconstruction: Reconstructs the original ISSM model mesh using the pyISSM library, properly setting miscellaneous attributes before parameterization.
 
-    Profile Extraction: Extracts 1D data profiles for bedrock and ice surface elevation along a specified x or y coordinate.
+    Profile Extraction: Extracts 1D data profiles for bedrock and ice surface elevation along a specified x or y coordinate, with automatic calculation of analytical unperturbed baselines.
 
-    Signal Processing: Uses SciPy to perform a cross-correlation between the two profiles, accurately calculating the spatial lag and phase shift for each time step.
+    Signal Processing: Uses SciPy to perform a cross-correlation between the isolated signals (after removing unperturbed baselines), accurately calculating the spatial lag and phase shift for each time step.
 
-    Comprehensive Output: Generates detailed plots and a text-based summary of the results.
+    Comprehensive Output: Generates detailed plots and a text-based summary of the results, including offset surface plots for better visualization.
 
 Usage
 
@@ -64,7 +64,7 @@ Domain Center
 Example:
 
 # Analyze a profile along the y-axis at x = 40000 meters
-python phase_analysis.py IsmipF_S1_30-Transient.nc --axis y --position 40000
+python phase_analysis.py IsmipF_S1_2_2-Transient.nc --axis y --position 40000
 
 Input Requirements
 
@@ -72,7 +72,7 @@ Input Requirements
 
     pyISSM: The path to the pyISSM source directory must be correctly set within the script.
 
-    Filename Convention: The script expects filenames to follow the pattern Profile_Scenario_Hres_Vres-Transient.nc. For example: IsmipF_S1_2_2-Transient.nc.
+    Filename Convention: The script expects filenames to follow the pattern Profile_Scenario_Hres_Vres-Transient.nc. For example: IsmipF_S1_2_2-Transient.nc. The parsing logic now properly handles both horizontal and vertical resolution factors with improved error handling.
 
 Output Structure
 
@@ -80,7 +80,7 @@ For an input file named MyExperiment.nc, the script will create a directory name
 
     summary.txt: A detailed report including simulation parameters and a table of phase shifts and lag distances for every time step.
 
-    1_Signals/: A folder containing plots of the isolated bedrock and surface signals for each time step (signals_t_XXXX.png).
+    1_Signals/: A folder containing plots of the isolated bedrock and surface signals for each time step (signals_t_XXXX.png). The surface signal is vertically offset by the reference ice thickness H_0 for clarity.
 
     2_Cross_Correlation/: A folder containing plots of the cross-correlation function for each time step (correlation_t_XXXX.png).
 
@@ -230,7 +230,7 @@ Typical Workflow
 
         Run the core analysis script on a single file to ensure everything is working correctly.
 
-    python phase_analysis.py MyExperiment.nc
+    python phase_analysis.py MyExperiment_S1_2_2-Transient.nc
 
     Batch Processing:
 
@@ -247,4 +247,4 @@ Typical Workflow
 
         For any failed files, the summary will provide error details.
 
-        Dive into the individual output directories (e.g., MyExperiment_phase_analysis/) to view the detailed plots and summary.txt reports.
+        Dive into the individual output directories (e.g., MyExperiment_S1_2_2-Transient_phase_analysis/) to view the detailed plots and summary.txt reports.

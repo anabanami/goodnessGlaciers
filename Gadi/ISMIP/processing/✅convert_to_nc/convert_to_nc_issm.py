@@ -19,11 +19,16 @@ input_file = args.input_file
 
 print(f"Input file: {input_file}")
 
-# Parse scenario and resolution from input filename
-match = re.match(r'IsmipF_(S\d)_(\d+\.?\d*)_(\d+\.?\d*)-Transient\.outbin', os.path.basename(input_file))
+# # Parse scenario and resolution from input filename
+# match = re.match(r'IsmipF_(S\d)_(\d+\.?\d*)_(\d+\.?\d*)-Transient\.outbin', os.path.basename(input_file))
+pattern = r'([a-zA-Z0-9_]+)_(S\d+)_(\d+\.?\d*)_(\d+\.?\d*)-Transient\.outbin'
+match = re.match(pattern, os.path.basename(input_file))
+
 if match:
-    scenario, h_res, v_res = match.groups()
-    bc_file = f"Boundary_conditions/{scenario}_F/IsmipF_{scenario}_{h_res}_{v_res}-BoundaryCondition.nc"
+    profile, scenario, h_res, v_res = match.groups()
+    # bc_file = f"Boundary_conditions/{scenario}_F/IsmipF_{scenario}_{h_res}_{v_res}-BoundaryCondition.nc"
+    bc_file = f"Boundary_conditions/{profile}/{profile}_{scenario}_{h_res}_{v_res}-BoundaryCondition.nc"
+
     if os.path.exists(bc_file):
         print(f"Loading model from: {bc_file}")
         md = loadmodel(bc_file)
@@ -34,9 +39,10 @@ md = loadresultsfromdisk(md, input_file)
 output_file = input_file.replace('.outbin', '.nc')
 print(f"{input_file} -> {output_file}")
 
-
-sol_type = md.private.solution
-    
-print(f"{sol_type}")
-
 export_netCDF(md, output_file)
+
+
+
+
+
+

@@ -4,17 +4,26 @@ from SetIceSheetBC import SetIceSheetBC
 #Parameterization for ISMIP F experiment
 
 #Set the Simulation generic name #md.miscellaneous
-md.miscellaneous.name = 'IsmipF_500'
+filename = md.miscellaneous.filename
+Scenario = md.miscellaneous.scenario
+h_res = md.miscellaneous.h_resolution_factor
+v_res = md.miscellaneous.v_resolution_factor
+
+# Construct the file_prefix string
+file_prefix = f"{filename}_{Scenario}_{h_res}_{v_res}"
+
+md.miscellaneous.name = file_prefix + "-Transient"
+
 
 A = 2.140373 * 1e-7 # ice-flow parameter, units: Pa⁻¹ a⁻¹
 n = 1 # flow law exponent
 alpha = - 3.0 # mean surface slope (max in x zero in y), units: ◦
 
-H_0 =1e3 # ice thickness, units: m
+H_0 = 1e3 # ice thickness, units: m
 
 # perturbation parameters
 sigma = 10 * H_0 # gaussian bump width, units: m
-amplitude_0 = 0.5 * H_0 # gaussian bump amplitude(500m), units: m
+amplitude_0 = 0.1 * H_0 # gaussian bump amplitude(500m), units: m
 
 #Geometry
 print('   Constructing Geometry')
@@ -27,7 +36,7 @@ md.geometry.surface = md.mesh.x * np.tan(alpha * np.pi / 180.0)
 L = np.nanmax(md.mesh.x) - np.nanmin(md.mesh.x)
 
 # should this be the bed not the base???? if using bed then model is not consistent
-md.geometry.base = md.geometry.surface - 1000.0 + amplitude_0 * np.exp(-((md.mesh.x - L / 2.0)**2.0 + (md.mesh.y - L / 2.0)**2.0) / (sigma**2.0))
+md.geometry.base = md.geometry.surface - 1000.0
 
 md.geometry.thickness = md.geometry.surface - md.geometry.base
 
@@ -37,7 +46,6 @@ md.geometry.thickness = md.geometry.surface - md.geometry.base
 print('   Defining friction parameters')
 
 #conversion form year to seconds with #md.constants.yts
-
 # md.friction.coefficient = np.sqrt(md.constants.yts / (1000 * A)) * np.ones((md.mesh.numberofvertices)) << this is the website version?
 
 # I think that this is the correct version based on Pattyn 2008
@@ -55,10 +63,38 @@ md.friction.q = np.zeros((md.mesh.numberofelements))
 print('   Construct ice rheological properties')
 
 #The rheology parameters sit in the material section #md.materials
-#B has one value per vertex
-md.materials.rheology_B = (1 / A_seconds) * np.ones((md.mesh.numberofvertices))
+# B_1 has one value per vertex
+rheology_B_1 = (1 / A_seconds) * np.ones((md.mesh.numberofvertices))
 #n has one value per element
-md.materials.rheology_n = np.ones((md.mesh.numberofelements))
+linear_rheology_n = np.ones((md.mesh.numberofelements))
+
+md.materials.rheology_B = rheology_B_1
+#n has one value per element
+md.materials.rheology_n = linear_rheology_n
+
+# SCALING B following Getraer and Morlihem (2025).
+non_linear_rheology_n = 4 * np.ones((md.mesh.numberofelements))
+
+# Experimental Scenario
+if Scenario in ("S1", "S3"):
+	md.materials.rheology_B = rheology_B_1
+	#n has one value per element
+	md.materials.rheology_n = linear_rheology_n
+
+elif Scenario == "S2":
+	epsilon_S1 = 0.10275 # units: a⁻¹
+	# for internal unit consistency
+	epsilon_S1_seconds = epsilon_S1 / md.constants.yts  # units: s⁻¹
+    # SCALING B following Getraer and Morlihem (2025).
+	md.materials.rheology_B = rheology_B_1 * epsilon_S1_seconds**(3/4) # units: Pa a⁽¹/⁴⁾
+	md.materials.rheology_n = non_linear_rheology_n
+
+else: #Scenario == "S4"
+	epsilon_S3 = 0.20509 # units: a⁻¹
+	# for internal unit consistency
+	epsilon_S3_seconds = epsilon_S3 / md.constants.yts # units: s⁻¹
+	md.materials.rheology_B = rheology_B_1 * epsilon_S3_seconds**(3/4) # units: Pa a⁽¹/⁴⁾
+	md.materials.rheology_n = non_linear_rheology_n
 
 print('   Set boundary conditions')
 
