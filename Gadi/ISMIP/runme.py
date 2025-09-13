@@ -21,8 +21,8 @@ from pyissm import plot as iplt
 
 
 # ParamFile = 'IsmipF.py'
-ParamFile = 'flat_bed.py'
-# ParamFile = 'single_wave.py'
+# ParamFile = 'flat.py'
+ParamFile = 'singlewave.py'
 
 filename = os.path.splitext(ParamFile)[0] 
 # print(f"{filename = }")
@@ -44,14 +44,14 @@ num_layers = int(base_vertical_layers * v_resolution_factor)
 
 
 ## EXPERIMENT
-# # No sliding + linear rheology
-# Scenario = "S1"
+# No sliding + linear rheology
+Scenario = "S1"
 # # No sliding + non-linear rheology
 # Scenario = "S2"
 # # sliding + linear rheology
 # Scenario = "S3"
-# sliding + non-linear rheology
-Scenario = "S4"
+# # sliding + non-linear rheology
+# Scenario = "S4"
 
 
 # TIME
@@ -78,21 +78,21 @@ if 1 in steps:
     #initialize md as a new model help(model)
     md = model()
 
-    # if ParamFile == 'IsmipF.py':
-    #     md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
-    #     print(f"{md.mesh.numberofelements = }")
-
-    if ParamFile == 'flat_bed.py':
+    if ParamFile == 'IsmipF.py':
         md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
         print(f"{md.mesh.numberofelements = }")
         print(f" Total bed area: {x_max} × {y_max} = {x_max * y_max}")
         print(f" mean element area = {(x_max * y_max) / md.mesh.numberofelements}")
 
-    # elif ParamFile == 'single_wave.py':
-    #     md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
-        # print(f"{md.mesh.numberofelements = }")
+    elif ParamFile == 'flat.py':
+        md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
+        print(f"{md.mesh.numberofelements = }")
+        print(f" Total bed area: {x_max} × {y_max} = {x_max * y_max}")
+        print(f" mean element area = {(x_max * y_max) / md.mesh.numberofelements}")
 
-
+    elif ParamFile == 'singlewave.py':
+        md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
+        print(f"{md.mesh.numberofelements = }")
 
 
     print("\n===== Plotting mesh =====")
