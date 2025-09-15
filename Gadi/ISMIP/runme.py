@@ -22,7 +22,8 @@ from pyissm import plot as iplt
 
 # ParamFile = 'IsmipF.py'
 # ParamFile = 'flat.py'
-ParamFile = 'singlewave.py'
+# ParamFile = 'singlewave.py'
+ParamFile = 'coswave.py'
 
 filename = os.path.splitext(ParamFile)[0] 
 # print(f"{filename = }")
@@ -44,20 +45,20 @@ num_layers = int(base_vertical_layers * v_resolution_factor)
 
 
 ## EXPERIMENT
-# No sliding + linear rheology
-Scenario = "S1"
+# # No sliding + linear rheology
+# Scenario = "S1"
 # # No sliding + non-linear rheology
 # Scenario = "S2"
 # # sliding + linear rheology
 # Scenario = "S3"
-# # sliding + non-linear rheology
-# Scenario = "S4"
+# sliding + non-linear rheology
+Scenario = "S4"
 
 
 # TIME
-timestep = 1/12
+timestep = 1/48
 final_time = 300
-output_frequency = 100
+output_frequency = 400
 
 print("\n============================================================")
 print(f"\nRunning {Scenario} with {filename}")
@@ -93,6 +94,15 @@ if 1 in steps:
     elif ParamFile == 'singlewave.py':
         md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
         print(f"{md.mesh.numberofelements = }")
+        print(f" Total bed area: {x_max} × {y_max} = {x_max * y_max}")
+        print(f" mean element area = {(x_max * y_max) / md.mesh.numberofelements}")
+
+    elif ParamFile == 'coswave.py':
+        md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
+        print(f"{md.mesh.numberofelements = }")
+        print(f" Total bed area: {x_max} × {y_max} = {x_max * y_max}")
+        print(f" mean element area = {(x_max * y_max) / md.mesh.numberofelements}")
+
 
 
     print("\n===== Plotting mesh =====")
@@ -191,7 +201,7 @@ if 4 in steps:
     md = md.extrude(num_layers, 1)
 
     print("\n===== Plotting base geometry =====")
-    # ## 3D plot
+    ## 3D plot
     # plotmodel(md, 'data', md.geometry.base, 'figure', 4,
     #         'figsize', [12, 12],
     #         'xlabel', 'x (m)',
