@@ -16,7 +16,6 @@ md.miscellaneous.name = file_prefix + "-Transient"
 
 
 A = 2.140373 * 1e-7 # ice-flow parameter, units: Pa⁻¹ a⁻¹
-n = 1 # flow law exponent
 alpha = - 3.0 # mean surface slope (max in x zero in y), units: ◦
 
 H_0 = 1e3 # ice thickness, units: m

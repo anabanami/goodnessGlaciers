@@ -57,9 +57,9 @@ for res_dir in "${BASE_DIR}"/'key_res_factor='*','*'/'; do
 #PBS -S /bin/bash
 #PBS -P au88
 #PBS -q normal
-#PBS -l ncpus=12
+#PBS -l ncpus=24
 #PBS -l walltime=48:00:00
-#PBS -l mem=48gb
+#PBS -l mem=12gb
 #PBS -M ana.fabelahinojosa@monash.edu
 #PBS -o ${OUT_LOG_NAME}
 #PBS -e ${ERR_LOG_NAME}
@@ -75,7 +75,12 @@ module load openmpi/4.1.7
 source /home/565/ah3716/spack/0.22/spack-config/spack-enable.bash
 
 # Load spack issm module
-spack load issm@ana-local-version-allocation-bugfix %gcc@13
+spack load issm@ana-local-version-allocation-bugfix %gcc@13 +debug
+
+# Wait until the /scratch mount point appears - there may be a race condition in mounting
+while ! grep -qs /scratch /proc/mounts; do
+  sleep 1
+done
 
 # Run simulation for transient solve
 # The job's working directory is set to the submission directory by "#PBS -l wd".

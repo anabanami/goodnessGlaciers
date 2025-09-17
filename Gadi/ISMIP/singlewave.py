@@ -14,24 +14,54 @@ file_prefix = f"{filename}_{Scenario}_{h_res}_{v_res}"
 
 md.miscellaneous.name = file_prefix + "-Transient"
 
+
 A = 2.140373 * 1e-7 # ice-flow parameter, units: Pa⁻¹ a⁻¹
 alpha = - 3 # mean surface slope (max in x zero in y), units: ◦
+# alpha = - 0.1 # mean surface slope (max in x zero in y), units: ◦
 
 H_0 = 1e3 # ice thickness, units: m
 
 # perturbation parameters
-wavelength = 10 * H_0 # units: m
-amplitude_0 = 0.1 * H_0 # amplitude(500m), units: m
+sigma = 10 * H_0 # gaussian bump width, units: m
+amplitude_0 = 0.1 * H_0 # gaussian bump amplitude(500m), units: m
 
-omega = 2 * np.pi / wavelength
+# --- Define the 2D Feature Parameters ---
+# Define the center of the domain for the feature
+x_min = np.nanmin(md.mesh.x)
+x_max = np.nanmax(md.mesh.x)
+x_center = (x_max + x_min) / 2.0
+
+y_min = np.nanmin(md.mesh.y)
+y_max = np.nanmax(md.mesh.y)
+y_center = (y_max + y_min) / 2.0
+
+# For a circular feature, we'll set them to be the same
+sigma_x = sigma
+sigma_y = sigma
 
 # --- Construct Geometry ---
 print('   Constructing Geometry')
-md.geometry.surface = md.mesh.x * np.tan(alpha * np.pi / 180.0) # -0.00174 slope
+md.geometry.surface = md.mesh.x * np.tan(alpha * np.pi / 180.0)
 
-bed_perturbation = amplitude_0 * np.cos(md.mesh.x * omega)
-## XY pattern
-# bed_perturbation = amplitude_0 * np.cos(md.mesh.x * omega) * np.cos(md.mesh.y * omega)
+# --- Create the 2D heap-and-trough perturbation ---
+# 1. Calculate shifted coordinates
+x_shifted = md.mesh.x - x_center
+y_shifted = md.mesh.y - y_center
+
+# 2. Calculate the 2D Gaussian envelope
+gaussian_2d = np.exp( -((x_shifted**2) / (2 * sigma_x**2) + (y_shifted**2) / (2 * sigma_y**2)) )
+
+# 3. Calculate the un-normalized derivative with respect to x
+raw_perturbation = -x_shifted * gaussian_2d
+
+# 4. Normalize so the peak magnitude is 1.0
+if np.nanmax(np.abs(raw_perturbation)) > 0:
+	normalized_perturbation = raw_perturbation / np.nanmax(np.abs(raw_perturbation))
+else:
+	normalized_perturbation = np.zeros_like(raw_perturbation)
+
+# 5. Scale by the desired amplitude
+bed_perturbation = amplitude_0 * normalized_perturbation
 
 # Add the localized 2D perturbation to the base
 md.geometry.base = md.geometry.surface - 1000.0 + bed_perturbation
@@ -41,11 +71,6 @@ md.geometry.thickness = md.geometry.surface - md.geometry.base
 # plotmodel(md, 'data', md.geometry.thickness)
 
 print('   Defining friction parameters')
-
-#conversion form year to seconds with #md.constants.yts
-# md.friction.coefficient = np.sqrt(md.constants.yts / (1000 * A)) * np.ones((md.mesh.numberofvertices)) << this is the website version?
-
-# I think that this is the correct version based on Pattyn 2008
 # convert to ISSM units:
 A_seconds =  A / md.constants.yts
 c = 1.0
