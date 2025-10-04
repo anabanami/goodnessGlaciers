@@ -22,7 +22,7 @@ H_0 = 1e3 # ice thickness, units: m
 
 # perturbation parameters
 sigma = 10 * H_0 # gaussian bump width, units: m
-amplitude_0 = 0.1 * H_0 # gaussian bump amplitude(500m), units: m
+amplitude_0 = 0.1 * H_0 # gaussian bump amplitude(100m), units: m
 
 #Geometry
 print('   Constructing Geometry')

@@ -8,6 +8,7 @@ from setmask import setmask
 from parameterize import parameterize
 from setflowequation import setflowequation
 from socket import gethostname
+from generic import generic
 from solve import solve
 from plotdoc import plotdoc
 
@@ -32,7 +33,7 @@ steps = [1, 2, 3, 4, 5, 6, 7, 8]
 x_max = 100000
 y_max = 100000
 
-if filename == 'coswave'
+if filename == 'coswave':
     h_resolution_factor = 5
     v_resolution_factor = 5
 else:
@@ -50,14 +51,14 @@ num_layers = int(base_vertical_layers * v_resolution_factor)
 
 
 ## EXPERIMENT
-# # No sliding + linear rheology
-# Scenario = "S1"
+# No sliding + linear rheology
+Scenario = "S1"
 # # No sliding + non-linear rheology
 # Scenario = "S2"
 # # sliding + linear rheology
 # Scenario = "S3"
-# sliding + non-linear rheology
-Scenario = "S4"
+# # sliding + non-linear rheology
+# Scenario = "S4"
 
 
 # TIME
@@ -285,12 +286,13 @@ if 6 in steps:
     Path(f"{file_prefix}-BoundaryCondition.nc").unlink(missing_ok=True)
     export_netCDF(md, f"{file_prefix}-BoundaryCondition.nc")
 
-# #Solving #7
+# # Solving #7
 # if 7 in steps:
 #     print("\n===== Running Stressbalance Solver =====")
 #     md = loadmodel(f"{file_prefix}-BoundaryCondition.nc")
 #     ## Set which control message you want to see #help verbose
 #     ## md.verbose = verbose('convergence', True)
+#     md.cluster=generic('name', gethostname(), 'np', 4)
 #     md = solve(md, 'Stressbalance')
 
 #     print("\n============================================================")
@@ -350,12 +352,12 @@ if 6 in steps:
 #     plt.close()
 #     # plt.show()
 
-#     plt.quiver(md.mesh.x, md.mesh.y, md.results.StressbalanceSolution.Vx, md.results.StressbalanceSolution.Vy)
-#     plt.savefig("quiver_Vx_Vy.png")
-#     plt.close()
-#     # plt.show()
+# #     plt.quiver(md.mesh.x, md.mesh.y, md.results.StressbalanceSolution.Vx, md.results.StressbalanceSolution.Vy)
+# #     plt.savefig("quiver_Vx_Vy.png")
+# #     plt.close()
+# #     # plt.show()
 
-# breakpoint()
+# # breakpoint()
 
 #Solving #8
 if 8 in steps:
@@ -363,6 +365,7 @@ if 8 in steps:
     md = loadmodel(f"{file_prefix}-BoundaryCondition.nc")
     ## Set which control message you want to see #help verbose
     # md.verbose = verbose('convergence', True)
+    md.cluster=generic('name', gethostname(), 'np', 4)
 
     md.transient.deactivateall()
     md.settings.sb_coupling_frequency = 1 # run stress balance every timestep #????
@@ -370,6 +373,8 @@ if 8 in steps:
     md.transient.ismasstransport = 1
     md.transient.isthermal = 0
     md.transient.issmb = 0
+
+    # breakpoint()
 
     ####################################################################
     # Scale timestep by the most restrictive (largest) resolution factor
@@ -446,10 +451,10 @@ if 8 in steps:
 
     print("\n============================================================")
 
-    # plt.quiver(md.mesh.x, md.mesh.y, md.results.TransientSolution[-1].Vx, md.results.TransientSolution[-1].Vy)
-    # plt.savefig("quiver_Vx_Vy.png")
-    # plt.close()
-    # # plt.show()
+    plt.quiver(md.mesh.x, md.mesh.y, md.results.TransientSolution[-1].Vx, md.results.TransientSolution[-1].Vy)
+    plt.savefig("quiver_Vx_Vy.png")
+    plt.close()
+    # plt.show()
 
     print("\n============================================================")
     print(f"\nFINISHED {Scenario} with {file_prefix} and {h_resolution_factor = }")

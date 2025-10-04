@@ -144,7 +144,7 @@ def load_config_by_parsing(param_profile):
         lines = f.readlines()
 
     # We now need alpha and H_0 to reconstruct the baseline
-    target_vars = ['H_0', 'sigma', 'amplitude_0', 'alpha']
+    target_vars = ['H_0', 'sigma', 'wavelength', 'amplitude_0', 'alpha']
     
     for line in lines:
         if line.strip().startswith('#'):
@@ -162,20 +162,29 @@ def load_config_by_parsing(param_profile):
                     pass
 
 
+    # Prioritize 'sigma', but fall back to 'wavelength'.
+    if 'sigma' in local_vars:
+        wavelength = local_vars['sigma']
+        print(f"  Found 'sigma', using it as characteristic wavelength: {wavelength} m")
+    elif 'wavelength' in local_vars:
+        wavelength = local_vars['wavelength']
+        print(f"  Found 'wavelength', using it as characteristic wavelength: {wavelength} m")
+    else:
+        # If neither is found, raise an informative error.
+        raise ValueError(
+            f"Could not parse a characteristic length ('sigma' or 'wavelength') from '{param_file_path}'. "
+            "Ensure one of these is defined as a simple numerical assignment."
+        )
+
     config = {
         'H_0': local_vars.get('H_0', 1000),
-        'sigma': local_vars.get('sigma', 10000),
+        'sigma': local_vars.get('sigma', wavelength), # Store the found length under 'sigma' for consistency
+        'wavelength': local_vars.get('wavelength', wavelength), # And also under 'wavelength'
         'amplitude_0': local_vars.get('amplitude_0', 100),
         'alpha': local_vars.get('alpha', -3.0) # degrees
     }
     
-    if 'sigma' not in local_vars:
-        raise ValueError(f"Could not parse 'sigma' from '{param_file_path}'. Ensure it is defined as a simple numerical assignment.")
-
-    # The characteristic "wavelength" is assumed to be the Gaussian width 'sigma'.
-    wavelength = config['sigma']
-    
-    print(f"✅ Config loaded: Wavelength (sigma) = {wavelength} m, Slope (alpha) = {config['alpha']} deg")
+    print(f"✅ Config loaded: Wavelength = {wavelength} m, Slope (alpha) = {config['alpha']} deg")
     return config, wavelength
 
 

@@ -21,11 +21,11 @@ print(f"Input file: {input_file}")
 
 # # Parse scenario and resolution from input filename
 # match = re.match(r'IsmipF_(S\d)_(\d+\.?\d*)_(\d+\.?\d*)-Transient\.outbin', os.path.basename(input_file))
-pattern = r'([a-zA-Z0-9_]+)_(S\d+)_(\d+\.?\d*)_(\d+\.?\d*)-Transient\.outbin'
+pattern = r'([a-zA-Z0-9_]+)_(S\d+)_(\d+\.?\d*)_(\d+\.?\d*)-(.+)\.outbin'
 match = re.match(pattern, os.path.basename(input_file))
 
 if match:
-    profile, scenario, h_res, v_res = match.groups()
+    profile, scenario, h_res, v_res, sol_type = match.groups()
     # bc_file = f"Boundary_conditions/{scenario}_F/IsmipF_{scenario}_{h_res}_{v_res}-BoundaryCondition.nc"
     bc_file = f"Boundary_conditions/{profile}/{profile}_{scenario}_{h_res}_{v_res}-BoundaryCondition.nc"
 
