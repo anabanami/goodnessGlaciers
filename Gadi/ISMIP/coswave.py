@@ -14,7 +14,7 @@ v_res = md.miscellaneous.v_resolution_factor
 # Construct the file_prefix string
 file_prefix = f"{filename}_{Scenario}_{h_res}_{v_res}"
 
-md.miscellaneous.name = file_prefix + '-Transient'
+md.miscellaneous.name = file_prefix #+ '-Transient'
 
 A = 2.140373 * 1e-7 # ice-flow parameter, units: Pa⁻¹ a⁻¹
 alpha = - 3 # mean surface slope (max in x zero in y), units: ◦

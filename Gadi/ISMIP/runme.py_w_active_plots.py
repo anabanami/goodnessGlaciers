@@ -311,10 +311,9 @@ if 6 in steps:
     # set the node that should be paired together, minX with maxX and minY with maxY
     # #md.stressbalance.vertex_pairing
     md.stressbalance.vertex_pairing = np.hstack((np.vstack((minX + 1, maxX + 1)), np.vstack((minY + 1, maxY + 1)))).T
-    
-    if ParamFile == 'IsmipF.py':
-        # if we are dealing with IsmipF the solution is in masstransport
-        md.masstransport.vertex_pairing = md.stressbalance.vertex_pairing
+
+    # set mass transport pairing for periodic boundaries
+    md.masstransport.vertex_pairing = md.stressbalance.vertex_pairing
 
     # save the given model
     Path(f"{file_prefix}-BoundaryCondition.nc").unlink(missing_ok=True)
