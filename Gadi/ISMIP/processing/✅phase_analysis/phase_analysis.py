@@ -41,6 +41,17 @@ import netCDF4 as nc
 from scipy import signal
 from scipy.signal import correlate
 
+# Set font sizes
+plt.rcParams.update({
+    'font.size': 12,          # Default font size
+    'axes.titlesize': 16,     # Title font size
+    'axes.labelsize': 14,     # Axis label font size
+    'xtick.labelsize': 12,    # X-axis tick label size
+    'ytick.labelsize': 12,    # Y-axis tick label size
+    'legend.fontsize': 12,    # Legend font size
+    'figure.titlesize': 16    # Figure title font size
+})
+
 # Add ISSM/pyISSM to the Python path.
 # Please ensure this path is correct for your system.
 sys.path.append('/home/ana/pyISSM/src')
@@ -262,10 +273,15 @@ def phase_shift_analysis(x, base_signal, surface_signal, wavelength, time_val=No
     return phase_shift_deg, lag_distance
 
 
-def plot_signals(x, base_signal, surface_signal, time_val, wavelength, output_path, axis, position, config):
+def plot_signals(x, base_signal, surface_signal, time_val, wavelength, output_path, axis, position, config, y_limits=None):
+
     """
     Plots the isolated bed and surface signals, with the surface vertically
     offset by the reference ice thickness H_0 for clarity.
+    
+    parameters:
+    y_limits: tuple , optional
+        Fixed (y_min, y_max) limits for the y-axis. If None, auto-scales.
     """
     fig, ax = plt.subplots(figsize=(12, 6))
     other_axis = 'Y' if axis == 'x' else 'X'
@@ -286,9 +302,13 @@ def plot_signals(x, base_signal, surface_signal, time_val, wavelength, output_pa
     # Set x-limits to show the entire profile domain.
     if len(x) > 0:
         ax.set_xlim(x.min() / 1000, x.max() / 1000)
+
+    # Set y-limits if provided
+    if y_limits is not None:
+        ax.set_ylim(y_limits[0], y_limits[1])
     
     plt.tight_layout()
-    fig.savefig(output_path, dpi=200)
+    fig.savefig(output_path, dpi=300)
     plt.close(fig)
 
 
@@ -348,6 +368,10 @@ def analyse_phase_evolution(md, dataset, wavelength, output_dir, axis, position,
         'phase_shifts_deg': [],
         'lag_distances': []
     }
+    # First pass
+    print("Calculating global y_axis limits")
+    global_y_min = float('inf')
+    global_y_max = float('-inf')
 
     for i in range(num_steps):
         progress = (i + 1) / num_steps * 100
@@ -364,15 +388,52 @@ def analyse_phase_evolution(md, dataset, wavelength, output_dir, axis, position,
         
         base_signal = base - unperturbed_base
         surface_signal = surface - unperturbed_surface
+        H_0 = config.get('H_0', 1000)
             
         phase_deg, lag_dist = phase_shift_analysis(x, base_signal, surface_signal, wavelength, time_val)
         
+        # check both base signal and offset surface signal
+        y_min = min(base_signal.min(), (surface_signal + H_0).min())
+        y_max = max(base_signal.max(), (surface_signal + H_0).max())
+
+        global_y_min = min(global_y_min, y_min)
+        global_y_max = max(global_y_max, y_max)
+
+    # add padding
+    if global_y_min != float('inf'):
+        padding = (global_y_max - global_y_min) * 0.05
+        y_limits = (global_y_min - padding, global_y_max + padding)
+        print(f"Global y_limits {y_limits[0]:.1f} to {y_limits[1]:.1f} m")
+
+    else:
+        y_limits = None
+        print("Could not calculate global y_limits")
+
+    # Second pass: process data and generate plots with fixed y_limits
+    for i in range(num_steps):
+        progress = (i + 1) / num_steps * 100
+        print(f"\r  Processing time step {i+1}/{num_steps} [{progress:3.0f}%]", end="")
+
+        x, base, surface, time_val, unperturbed_base, unperturbed_surface = get_profile_data(md, dataset, i, axis, position, config)
+        
+        if len(x) < 2:
+            print(f"\nWarning: Not enough data points on profile for step {i}. Skipping.")
+            results['times'].append(time_val)
+            results['phase_shifts_deg'].append(np.nan)
+            results['lag_distances'].append(np.nan)
+            continue
+            
+        base_signal = base - unperturbed_base
+        surface_signal = surface - unperturbed_surface
+
+        phase_deg, lag_dist = phase_shift_analysis(x, base_signal, surface_signal, wavelength, time_val)
+
         results['times'].append(time_val)
         results['phase_shifts_deg'].append(phase_deg)
         results['lag_distances'].append(lag_dist)
 
         signal_plot_path = os.path.join(output_dir, plot_dirs['signals'], f'signals_t_{i:04d}.png')
-        plot_signals(x, base_signal, surface_signal, time_val, wavelength, signal_plot_path, axis, position, config)
+        plot_signals(x, base_signal, surface_signal, time_val, wavelength, signal_plot_path, axis, position, config, y_limits)
 
         corr_plot_path = os.path.join(output_dir, plot_dirs['correlation'], f'correlation_t_{i:04d}.png')
         plot_cross_correlation(x, base_signal, surface_signal, wavelength, time_val, corr_plot_path, axis, position)

@@ -157,10 +157,16 @@ def main():
         x_sorted = data['x_surf'][sort_surf]
         elev_detrended = detrend_elevation(data['x_surf'], data['surface_elev'])
         ax1.plot(x_sorted/1000 - 50, elev_detrended[sort_surf], label=data['filename'])
+        
+        # y-axes limits for replication of Pattyn's plot ONLY:
+        elevation_y_limits = (-30, 50)
 
-    # --- PLOT 2: SURFACE VELOCITY (DUAL AXIS) ---
-    # Create the second y-axis BEFORE the loop
-    ax2_right = ax2.twinx()
+        if data['scenario'] == "S1":
+            velocity_y_limits = (91, 100)
+        elif data['scenario'] == "S3":
+            velocity_y_limits = (186, 200)
+
+    # --- PLOT 2: SURFACE VELOCITY ---
     
     # Store plot lines and labels for a combined legend later
     lines_left, labels_left = [], []
@@ -179,50 +185,48 @@ def main():
             lines_left.append(line)
             labels_left.append(data['filename'])
         else:  # Odd index (1, 3, 5...) -> plot on right axis (ax2_right)
-            line, = ax2_right.plot(x_sorted/1000 - 50, vel_sorted, color="C1", label=data['filename'])
+            line, = ax2_right.plot(x_sorted/1000, vel_sorted, color="C1", label=data['filename'])
             lines_right.append(line)
             labels_right.append(data['filename'])
 
     # --- FORMATTING AND LABELS ---
     ax1.set(title='Final Surface Elevation (Detrended)', xlabel='Distance from centre (km)', ylabel='Elevation(m)')
-    ax1.legend(loc='best')
-    ax1.grid(True, linestyle=':')
-    # Custom x-axis ticks
-    ax1.set_xticks([min_x, -50, 0, 50])
+    # to replicate Pattyn's Plot (ONLY)
+    ax1.set_ylim(elevation_y_limits[0], elevation_y_limits[1])
     ax1.set_xlim(-50, 50)
 
+    ax1.legend(loc='best')
+    # Custom grid - horizontal lines plus vertical line at x=0
+    ax1.grid(True, axis='y', linestyle=':')
+    ax1.axvline(x=0, color='gray', linestyle=':', alpha=0.7)
+    # Custom x-axis ticks
+    ax1.set_xticks([min_x, -50, 0, 50])
+
     # Define colors for each axis to match the plot lines
-    left_axis_color = 'C0'  # Default color for the first plot on ax2
-    right_axis_color = 'C1' # Color explicitly set for ax2_right plots
+    left_axis_color = 'k'  # Default color for the first plot on ax2
 
     # Collect scenarios for axis labels
     scenarios_left = [plot_data[i]['scenario'] for i in range(len(plot_data)) if i % 2 == 0]
-    scenarios_right = [plot_data[i]['scenario'] for i in range(len(plot_data)) if i % 2 == 1]
     
     ax2.set(title='Final Surface Velocity', xlabel='Distance from centre (km)')
     
     # Create y-axis labels with scenario identifiers
     left_label = f"Vel Mag (m/yr) - {', '.join(scenarios_left)}" if scenarios_left else "Vel Mag (m/yr)"
-    right_label = f"Vel Mag (m/yr) - {', '.join(scenarios_right)}" if scenarios_right else "Vel Mag (m/yr)"
     
     ax2.set_ylabel(left_label, color=left_axis_color)
     ax2.tick_params(axis='y', labelcolor=left_axis_color)
-
-    ax2_right.set_ylabel(right_label, color=right_axis_color)
-    ax2_right.tick_params(axis='y', labelcolor=right_axis_color)
-    
-    ax2.grid(True, linestyle=':')
-    # Custom x-axis ticks
-    ax2.set_xticks([min_x, -50, 0, 50])
+    ax2.set_ylim(velocity_y_limits[0], velocity_y_limits[1])
     ax2.set_xlim(-50, 50)
     
-    # Create a single, combined legend for the dual-axis plot
-    # This avoids having two overlapping legends
-    lines_combined = lines_left + lines_right
-    labels_combined = labels_left + labels_right
-    ax2.legend(lines_combined, labels_combined, loc='best')
+    # Custom grid - horizontal lines plus vertical line at x=0
+    ax2.grid(True, axis='y', linestyle=':')
+    ax2.axvline(x=0, color='gray', linestyle=':', alpha=0.7)
+    # Custom x-axis ticks
+    ax2.set_xticks([min_x, -50, 0, 50])
+    
+    ax2.legend()
 
-    output_filename = f"combined_elevation_detrended_surface_velocity_{scenarios_left}_{scenarios_right}.png"
+    output_filename = f"combined_elevation_detrended_surface_velocity_{scenarios_left}.png"#_{scenarios_right}.png"
     plt.tight_layout()
     plt.savefig(output_filename, dpi=500)
     plt.show()

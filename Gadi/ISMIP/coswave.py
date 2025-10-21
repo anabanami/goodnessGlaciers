@@ -14,7 +14,7 @@ v_res = md.miscellaneous.v_resolution_factor
 # Construct the file_prefix string
 file_prefix = f"{filename}_{Scenario}_{h_res}_{v_res}"
 
-md.miscellaneous.name = file_prefix #+ '-Transient'
+md.miscellaneous.name = file_prefix + '-Transient'
 
 A = 2.140373 * 1e-7 # ice-flow parameter, units: Pa⁻¹ a⁻¹
 alpha = - 3 # mean surface slope (max in x zero in y), units: ◦
@@ -22,7 +22,7 @@ alpha = - 3 # mean surface slope (max in x zero in y), units: ◦
 H_0 = 1e3 # ice thickness, units: m
 
 # perturbation parameters
-amplitude_0 = 0.1 * H_0 # amplitude(100), units: m
+amplitude_0 = 0.05 * H_0 # amplitude(100), units: m
 
 # 1. Define TARGET wavelength
 # target_wavelength = 2 * H_0 # (2e3) units: m
@@ -31,13 +31,28 @@ target_wavelength = 3.3 * H_0 # (3.3e3) units: m
 
 # 2. Get the length of the domain from the mesh
 domain_length_x = np.max(md.mesh.x) - np.min(md.mesh.x)
+# Fraction of the domain should have the undulating bed.
+undulation_fraction = 0.8
+print('   Defining undulation zone...')
+# length of the undulating central section
+undulation_length = domain_length_x * undulation_fraction
+print(f'   Total domain length: {domain_length_x:.2f} m')
+print(f'   Undulation zone length: {undulation_length:.2f} m')
+
+# start and end coordinates of the undulation zone
+buffer_length = (domain_length_x - undulation_length) / 2
+x_min = np.min(md.mesh.x)
+x_max = np.max(md.mesh.x)
+x_start = x_min + buffer_length
+x_end = x_max - buffer_length
+print(f'   Wavy bed from x={x_start:.2f} m to x={x_end:.2f} m')
 
 # 3. Calculate how many target waves fit and round to the nearest integer
-num_waves_integer = np.round(domain_length_x / target_wavelength)
+num_waves_integer = np.round(undulation_length / target_wavelength)
 print(f'   Adjusting to fit {num_waves_integer} waves into the domain.')
 
 # 4. Calculate the NEW, adjusted wavelength that fits perfectly in the domain
-adjusted_wavelength = domain_length_x / num_waves_integer
+adjusted_wavelength = undulation_length / num_waves_integer
 print(f'   New adjusted wavelength: {adjusted_wavelength:.2f} m')
 
 # 5. Use this adjusted wavelength for your calculations
@@ -46,42 +61,6 @@ omega = 2 * np.pi / adjusted_wavelength
 # --- Construct Geometry ---
 print('   Constructing Geometry')
 md.geometry.surface = md.mesh.x * np.tan(alpha * np.pi / 180.0) # -0.0524 slope
-
-# --- Parameters for the Wavy/Undulating Region ---
-# Fraction of the domain should have the undulating bed.
-undulation_fraction = 0.8
-
-# start and end points for the undulation 
-print('   Defining undulation zone...')
-# 1. Get the min and max coordinates from the mesh
-x_min = np.min(md.mesh.x)
-x_max = np.max(md.mesh.x)
-domain_length_x = x_max - x_min
-
-# length of the undulating central section
-undulation_length = domain_length_x * undulation_fraction
-print(f'   Total domain length: {domain_length_x:.2f} m')
-print(f'   Undulation zone length: {undulation_length:.2f} m')
-
-# start and end coordinates of the undulation zone
-buffer_length = (domain_length_x - undulation_length) / 2
-x_start = x_min + buffer_length
-x_end = x_max - buffer_length
-print(f'   Wavy bed from x={x_start:.2f} m to x={x_end:.2f} m')
-
-#  Integer Number of Waves
-print('   Adjusting wavelength...')
-# calculate how many target waves fit in the undulation zone
-num_waves_integer = np.round(undulation_length / target_wavelength)
-
-# 5. Check if the zone is large enough for at least one wave
-if num_waves_integer < 1:
-    print('   Warning: Undulation zone is too small for the target wavelength. No waves will be generated.')
-    num_waves_integer = 0
-    adjusted_wavelength = 0
-    omega = 0
-    print("nono this is no good")
-    breakpoint()
 
 # --- Construct the Bed Perturbation ---
 print('   Constructing Bed Perturbation')
@@ -111,6 +90,29 @@ md.geometry.surface = md.mesh.x * np.tan(alpha * np.pi / 180.0)
 # Add the localized 2D perturbation to the base
 md.geometry.base = md.geometry.surface - H_0 + bed_perturbation
 md.geometry.thickness = md.geometry.surface - md.geometry.base
+
+
+
+##########################################################################################################
+# After calculating bed_perturbation, add validation:
+print(f'   Bed perturbation range: [{bed_perturbation.min():.2f}, {bed_perturbation.max():.2f}] m')
+
+# Ensure thickness is always positive
+min_thickness = md.geometry.thickness.min()
+if min_thickness <= 0:
+    print(f'   WARNING: Negative or zero thickness detected: {min_thickness:.2f} m')
+    # Add a small buffer to ensure positive thickness everywhere
+    md.geometry.thickness = np.maximum(md.geometry.thickness, 10.0)  # Minimum 10m thickness
+    md.geometry.base = md.geometry.surface - md.geometry.thickness
+    print(f'   Adjusted minimum thickness to 10 m')
+
+else:
+	print(f"    {min_thickness = }")
+
+##########################################################################################################
+
+
+
 
 print('   Defining friction parameters')
 

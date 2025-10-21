@@ -11,6 +11,7 @@ from socket import gethostname
 from generic import generic
 from solve import solve
 from plotdoc import plotdoc
+from verbose import verbose
 
 import os
 from pathlib import Path
@@ -34,8 +35,8 @@ x_max = 100000
 y_max = 100000
 
 if filename == 'coswave':
-    h_resolution_factor = 5
-    v_resolution_factor = 5
+    h_resolution_factor = 10
+    v_resolution_factor = 2
 else:
     h_resolution_factor = 2
     v_resolution_factor = 2
@@ -51,7 +52,7 @@ num_layers = int(base_vertical_layers * v_resolution_factor)
 
 
 ## EXPERIMENT
-# No sliding + linear rheology
+# # No sliding + linear rheology
 Scenario = "S1"
 # # No sliding + non-linear rheology
 # Scenario = "S2"
@@ -107,42 +108,39 @@ if 1 in steps:
         md = squaremesh(md, x_max, y_max, x_nodes, y_nodes)
 
         # ###########################################################################
-        # print("\n===== Calculating mesh element areas =====")
-        # # Get vertex coordinates and the element-to-vertex mapping
-        # x = md.mesh.x
-        # y = md.mesh.y
-        # # ISSM uses 1-based indexing, Python/NumPy use 0-based, so subtract 1
-        # elements = md.mesh.elements - 1 
+        print("\n===== Calculating mesh element areas =====")
+        # Get vertex coordinates and the element-to-vertex mapping
+        x = md.mesh.x
+        y = md.mesh.y
+        # ISSM uses 1-based indexing, Python/NumPy use 0-based, so subtract 1
+        elements = md.mesh.elements - 1 
 
-        # # Get the coordinates for each vertex of each triangle
-        # x1, x2, x3 = x[elements[:, 0]], x[elements[:, 1]], x[elements[:, 2]]
-        # y1, y2, y3 = y[elements[:, 0]], y[elements[:, 1]], y[elements[:, 2]]
+        # Get the coordinates for each vertex of each triangle
+        x1, x2, x3 = x[elements[:, 0]], x[elements[:, 1]], x[elements[:, 2]]
+        y1, y2, y3 = y[elements[:, 0]], y[elements[:, 1]], y[elements[:, 2]]
 
-        # # Calculate the area of each triangle using the Shoelace formula
-        # areas = 0.5 * abs(x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2))
+        # Calculate the area of each triangle using the Shoelace formula
+        areas = 0.5 * abs(x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2))
 
-        # # Check for degenerate elements
-        # min_area = np.min(areas)
-        # num_bad_elements = np.sum(areas < 1e-6) # Count elements with virtually zero area
+        # Check for degenerate elements
+        min_area = np.min(areas)
+        num_bad_elements = np.sum(areas < 1e-6) # Count elements with virtually zero area
 
-        # print(f"Minimum element area found: {min_area}")
-        # if num_bad_elements > 0:
-        #     print(f"WARNING: Found {num_bad_elements} elements with near-zero area.")
-        # else:
-        #     print("Mesh element areas look good.")
+        print(f"Minimum element area found: {min_area}")
+        if num_bad_elements > 0:
+            print(f"WARNING: Found {num_bad_elements} elements with near-zero area.")
+        else:
+            print("Mesh element areas look good.")
 
-        # # Plot the element areas to visually locate any problem spots
-        # plotmodel(md, 'data', areas, 'caxis', [0, np.mean(areas)*2], 'title', 'Mesh Element Area')
-        # plt.show()
-        # plt.savefig(f"{file_prefix}_mesh_area.png")
-        # plt.close()
+        # Plot the element areas to visually locate any problem spots
+        plotmodel(md, 'data', areas, 'caxis', [0, np.mean(areas)*2], 'title', 'Mesh Element Area')
+        plt.savefig(f"{file_prefix}_mesh_area.png")
+        plt.show()
+        plt.close()
         # ###########################################################################
-
-
         print(f"{md.mesh.numberofelements = }")
         print(f" Total bed area: {x_max} × {y_max} = {x_max * y_max}")
         print(f" mean element area = {(x_max * y_max) / md.mesh.numberofelements}")
-
 
 
     print("\n===== Plotting mesh =====")
@@ -150,8 +148,8 @@ if 1 in steps:
     iplt.plot_mesh2d(md_mesh, show_nodes = True, figsize = (7, 7))
     plt.title("Full mesh") 
     plt.savefig(f"{file_prefix}_mesh.png")
+    plt.show()
     plt.close()
-    # plt.show()
 
     # convert the vertex on boundary array into boolean
     boundary_mask = md.mesh.vertexonboundary.astype(bool)
@@ -164,8 +162,8 @@ if 1 in steps:
     plt.legend()
     plt.title("Mesh boundaries") 
     plt.savefig(f"{file_prefix}_mesh_boundaries.png")
+    plt.show()
     plt.close()
-    # plt.show()
 
     # Path(f"{file_prefix}-Mesh_generation.nc").unlink(missing_ok=True)
     # export_netCDF(md, f"{file_prefix}-Mesh_generation.nc")
@@ -196,8 +194,8 @@ if 2 in steps:
 
     plt.title("Set mask - grounded ice elements") 
     plt.savefig(f"{file_prefix}_grounded_ice_elements.png")
+    plt.show()
     plt.close()
-    # plt.show()
 
     # Path(f"{file_prefix}-SetMask.nc").unlink(missing_ok=True)
     # export_netCDF(md, f"{file_prefix}-SetMask.nc")
@@ -222,11 +220,11 @@ if 3 in steps:
     print(f"\n{md.miscellaneous.scenario = }")
     print(f"\nn = {md.materials.rheology_n[0]}")
 
-    iplt.plot_model_field(md, md.geometry.thickness, show_cbar = True, figsize = (7, 7))
+    iplt.plot_model_field(md, md.geometry.thickness, show_cbar = True)
     plt.title("Ice thickness") 
     plt.savefig(f"{file_prefix}_thickness_geometry_2D.png")
-    plt.close()
     plt.show()
+    plt.close()
     
     # Path(f"{file_prefix}-Parameterisation.nc").unlink(missing_ok=True)
     # export_netCDF(md, f"{file_prefix}-Parameterisation.nc")
@@ -236,8 +234,6 @@ if 3 in steps:
 if 4 in steps:
     print("\n===== Extruding =====")
     # md = loadmodel(f"{file_prefix}-Parameterisation.nc")
-    # vertically extrude the preceding mesh #help extrude
-    # only 5 layers exponent 1
     md = md.extrude(num_layers, 1)
 
     print("\n===== Plotting base geometry =====")
@@ -250,18 +246,40 @@ if 4 in steps:
 
     plt.title("3D model geometry") 
     plt.savefig(f"{file_prefix}_geometry_3D.png")
+    plt.show()
     plt.close()
-    # plt.show()
+
 
     # 2D plot
-    iplt.plot_model_field(md, md.geometry.base, layer=1, show_cbar = True, figsize = (7, 7))
+    iplt.plot_model_field(md, md.geometry.base, layer=1, show_cbar = True)
     plt.title("Base geometry") 
     plt.savefig(f"{file_prefix}_base_geometry_2D.png")
+    plt.show()
     plt.close()
-    # plt.show()
 
     # Path(f"{file_prefix}-Extrusion.nc").unlink(missing_ok=True)
     # export_netCDF(md, f"{file_prefix}-Extrusion.nc")
+
+
+    ##########################################################################################################
+
+    # Check mesh quality
+    print(f"\n===== Mesh Quality Check =====")
+    print(f"Number of 3D elements: {md.mesh.numberofelements}")
+    print(f"Number of 3D vertices: {md.mesh.numberofvertices}")
+
+    # Calculate element aspect ratios
+    dx = x_max / x_nodes
+    dy = y_max / y_nodes  
+    dz = 1000 / num_layers  # Assuming 1000m total thickness
+    aspect_ratio_xy = max(dx, dy) / min(dx, dy)
+    aspect_ratio_xz = dx / dz
+    print(f"Aspect ratios: xy={aspect_ratio_xy:.2f}, xz={aspect_ratio_xz:.2f}")
+
+    if aspect_ratio_xz > 10:
+        print("WARNING: Very high aspect ratio detected! Consider adjusting mesh resolution.")
+
+    ##########################################################################################################
 
 
 #Set the flow computing method #5
@@ -319,13 +337,27 @@ if 6 in steps:
     Path(f"{file_prefix}-BoundaryCondition.nc").unlink(missing_ok=True)
     export_netCDF(md, f"{file_prefix}-BoundaryCondition.nc")
 
+    ##########################################################################################################
+
+    # verify the pairing:
+    print(f"Vertex pairing shape: {md.stressbalance.vertex_pairing.shape}")
+    print(f"First few pairs: {md.stressbalance.vertex_pairing[:10,:]}")
+
+    # Ensure pairing indices are within bounds
+    max_idx = md.stressbalance.vertex_pairing.max()
+    if max_idx > md.mesh.numberofvertices:
+        print(f"ERROR: Vertex pairing has invalid indices! Max: {max_idx}, vertices: {md.mesh.numberofvertices}")
+
+    ##########################################################################################################
+
+
 # # Solving #7
 # if 7 in steps:
 #     print("\n===== Running Stressbalance Solver =====")
 #     md = loadmodel(f"{file_prefix}-BoundaryCondition.nc")
 #     ## Set which control message you want to see #help verbose
 #     ## md.verbose = verbose('convergence', True)
-#     md.cluster=generic('name', gethostname(), 'np', 4)
+#     md.cluster=generic('name', gethostname(), 'np', 8)
 #     md = solve(md, 'Stressbalance')
 
 #     print("\n============================================================")
@@ -382,13 +414,13 @@ if 6 in steps:
 #     # plot the surface velocities #plotdoc
 #     plotmodel(md, 'data', md.results.StressbalanceSolution.Vel, 'figure', 4)
 #     plt.savefig(f"{file_prefix}_stress_solution_Vel.png")
+#     plt.show()
 #     plt.close()
-#     # plt.show()
 
 #     plt.quiver(md.mesh.x, md.mesh.y, md.results.StressbalanceSolution.Vx, md.results.StressbalanceSolution.Vy)
 #     plt.savefig("quiver_Vx_Vy.png")
+#     plt.show()
 #     plt.close()
-#     # plt.show()
 
 # breakpoint()
 
@@ -396,9 +428,24 @@ if 6 in steps:
 if 8 in steps:
     print("\n===== Running Transient Solver =====")
     md = loadmodel(f"{file_prefix}-BoundaryCondition.nc")
-    ## Set which control message you want to see #help verbose
+
+    ##########################################################################################################
+
+    import warnings
+    warnings.filterwarnings('error')  # Turn warnings into errors
+
+    # Check for any NaN or Inf values
+    for field in ['thickness', 'surface', 'base']:
+        data = getattr(md.geometry, field)
+        if np.any(np.isnan(data)) or np.any(np.isinf(data)):
+            print(f"WARNING: NaN or Inf in geometry.{field}")
+
+    ##########################################################################################################
+
+
+    md.verbose = verbose('all') 
     # md.verbose = verbose('convergence', True)
-    md.cluster=generic('name', gethostname(), 'np', 4)
+    md.cluster=generic('name', gethostname(), 'np', 8)
 
     md.transient.deactivateall()
     md.settings.sb_coupling_frequency = 1 # run stress balance every timestep #????
@@ -409,7 +456,11 @@ if 8 in steps:
 
     # breakpoint()
 
-    ####################################################################
+    md.transient.requested_outputs = [
+    'default','Vx','Vy','Vz', 'Vel','Pressure','Thickness','Surface','Base','StrainRatexx','StrainRateyy','StrainRatexy'
+    ]
+
+    #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
     # Scale timestep by the most restrictive (largest) resolution factor
     combined_res_factor = max(h_resolution_factor, v_resolution_factor)
 
@@ -424,8 +475,28 @@ if 8 in steps:
 
     md.timestepping.final_time = final_time
     md.settings.output_frequency = int(output_frequency * combined_res_factor)
-    ####################################################################
+    #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
+    # breakpoint()
+
+    ##########################################################################################################
+    print("--- Running final sanity checks ---")
+    fields_to_check = {
+        'geometry.base': md.geometry.base,
+        'geometry.surface': md.geometry.surface,
+        'geometry.thickness': md.geometry.thickness,
+        'friction.coefficient': md.friction.coefficient,
+        'materials.rheology_B': md.materials.rheology_B
+    }
+
+    for name, field in fields_to_check.items():
+        if np.any(np.isnan(field)):
+            print(f"ERROR: NaN detected in {name}")
+        if np.any(np.isinf(field)):
+            print(f"ERROR: Inf detected in {name}")
+    print("--- Sanity checks complete ---")
+
+    ##########################################################################################################
 
     md = solve(md, 'Transient')
 
@@ -434,8 +505,8 @@ if 8 in steps:
     # plot the surface velocities #plotdoc
     plotmodel(md, 'data', md.results.TransientSolution[-1].Vel, 'layer', 5, 'figure', 5)
     plt.savefig(f"{file_prefix}_transient_solution_Vel_layer5_last_timestep.png")
+    plt.show()
     plt.close()
-    # plt.show()
 
     print("\n============================================================")
     
@@ -486,8 +557,8 @@ if 8 in steps:
 
     plt.quiver(md.mesh.x, md.mesh.y, md.results.TransientSolution[-1].Vx, md.results.TransientSolution[-1].Vy)
     plt.savefig("quiver_Vx_Vy.png")
+    plt.show()
     plt.close()
-    # plt.show()
 
     print("\n============================================================")
     print(f"\nFINISHED {Scenario} with {file_prefix} and {h_resolution_factor = }")
