@@ -11,11 +11,6 @@ Scenario = md.miscellaneous.scenario
 h_res = md.miscellaneous.h_resolution_factor
 v_res = md.miscellaneous.v_resolution_factor
 
-# Construct the file_prefix string
-file_prefix = f"{filename}_{Scenario}_{h_res}_{v_res}"
-
-md.miscellaneous.name = file_prefix + '-Transient'
-
 A = 2.140373 * 1e-7 # ice-flow parameter, units: Pa⁻¹ a⁻¹
 alpha = - 3 # mean surface slope (max in x zero in y), units: ◦
 
@@ -26,8 +21,16 @@ amplitude_0 = 0.05 * H_0 # amplitude(100), units: m
 
 # 1. Define TARGET wavelength
 # target_wavelength = 2 * H_0 # (2e3) units: m
-target_wavelength = 3.3 * H_0 # (3.3e3) units: m
-# target_wavelength = 10 * H_0 # (10e3) units: m
+# target_wavelength = 3.3 * H_0 # (3.3e3) units: m
+target_wavelength = 10 * H_0 # (10e3) units: m
+
+# Extract wavelength scaling factor for naming
+wavelength_factor = target_wavelength / H_0
+
+# Construct the file_prefix string including wavelength factor
+file_prefix = f"{filename}_{Scenario}_{h_res}_{v_res}_w{wavelength_factor:g}"
+
+md.miscellaneous.name = file_prefix + '-Transient'
 
 # 2. Get the length of the domain from the mesh
 domain_length_x = np.max(md.mesh.x) - np.min(md.mesh.x)

@@ -52,10 +52,10 @@ num_layers = int(base_vertical_layers * v_resolution_factor)
 
 
 ## EXPERIMENT
-# # No sliding + linear rheology
-Scenario = "S1"
+# # # No sliding + linear rheology
+# Scenario = "S1"
 # # No sliding + non-linear rheology
-# Scenario = "S2"
+Scenario = "S2"
 # # sliding + linear rheology
 # Scenario = "S3"
 # # sliding + non-linear rheology
@@ -77,7 +77,12 @@ print("\n============================================================")
 
 # Construct the new filename string
 # Example: IsmipF_S1_1.0_1.0-Mesh_generation.nc
-file_prefix = f"{filename}_{Scenario}_{h_resolution_factor}_{v_resolution_factor}"
+if filename == 'coswave':
+    # For coswave, we'll get the wavelength factor from the parameter file
+    # This will be updated after parameterization step
+    file_prefix = f"{filename}_{Scenario}_{h_resolution_factor}_{v_resolution_factor}"
+else:
+    file_prefix = f"{filename}_{Scenario}_{h_resolution_factor}_{v_resolution_factor}"
 
 
 #Mesh Generation #1
@@ -154,6 +159,16 @@ if 3 in steps:
     md.miscellaneous.scenario = Scenario
 
     md = parameterize(md, ParamFile)
+    
+    # Update file_prefix with wavelength info for coswave
+    if filename == 'coswave':
+        # Extract wavelength factor from the parameterized model
+        # The coswave.py file constructs the name with wavelength info
+        transient_name = md.miscellaneous.name
+        # Get the base name (everything before '-Transient')
+        base_name = transient_name.split('-Transient')[0]
+        file_prefix = base_name
+        print(f"\nUpdated file_prefix for coswave: {file_prefix}")
     
     print(f"\n{md.miscellaneous.filename = }")
     print(f"\n{md.miscellaneous.h_resolution_factor = }")
@@ -359,7 +374,7 @@ if 8 in steps:
     ##########################################################################################################
 
 
-    md.verbose = verbose('all') 
+    # md.verbose = verbose('all') 
     # md.verbose = verbose('convergence', True)
     md.cluster=generic('name', gethostname(), 'np', 8)
 
