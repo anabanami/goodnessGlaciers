@@ -35,7 +35,7 @@ x_max = 100000
 y_max = 100000
 
 if filename == 'coswave':
-    h_resolution_factor = 10
+    h_resolution_factor = 9
     v_resolution_factor = 2
 else:
     h_resolution_factor = 2
@@ -51,14 +51,14 @@ y_nodes = int(30 * h_resolution_factor)
 num_layers = int(base_vertical_layers * v_resolution_factor)
 
 
-## EXPERIMENT
-# # # No sliding + linear rheology
-# Scenario = "S1"
-# # No sliding + non-linear rheology
-Scenario = "S2"
-# # sliding + linear rheology
+# EXPERIMENT
+# # No sliding + linear rheology
+Scenario = "S1"
+# # # No sliding + non-linear rheology
+# Scenario = "S2"
+# # # # Sliding + linear rheology
 # Scenario = "S3"
-# # sliding + non-linear rheology
+# # # # Sliding + non-linear rheology
 # Scenario = "S4"
 
 
@@ -116,7 +116,6 @@ if 1 in steps:
         print(f" mean element area = {(x_max * y_max) / md.mesh.numberofelements}")
 
 
-    print("\n===== Plotting mesh =====")
     md_mesh, md_x, md_y, md_elements, md_is3d = issm.model.mesh.process_mesh(md)
 
     # convert the vertex on boundary array into boolean
@@ -124,7 +123,6 @@ if 1 in steps:
     x_boundaries = md.mesh.x[boundary_mask]
     y_boundaries = md.mesh.y[boundary_mask]
 
-    print("\n===== Plotting mesh and highlighting vertex boundaries =====")
     # Path(f"{file_prefix}-Mesh_generation.nc").unlink(missing_ok=True)
     # export_netCDF(md, f"{file_prefix}-Mesh_generation.nc")
 
@@ -136,10 +134,6 @@ if 2 in steps:
     
     nv, ne = md.mesh.numberofvertices, md.mesh.numberofelements
 
-    # # all nodes are grounded
-    # md = setmask(md, '', '')
-
-    print("\n===== Plotting mask=====")
     md.mask.ice_levelset = - np.ones(nv) #Ice is present if md.mask.ice_levelset is negative
     md.mask.ocean_levelset = np.ones(nv) # grounded ice if positive (OR floating ice if negative)
 
@@ -175,7 +169,7 @@ if 3 in steps:
     print(f"\n{md.miscellaneous.v_resolution_factor = }")
     print(f"\n{md.miscellaneous.scenario = }")
     print(f"\nn = {md.materials.rheology_n[0]}")
-    
+
     # Path(f"{file_prefix}-Parameterisation.nc").unlink(missing_ok=True)
     # export_netCDF(md, f"{file_prefix}-Parameterisation.nc")
 
@@ -185,8 +179,6 @@ if 4 in steps:
     print("\n===== Extruding =====")
     # md = loadmodel(f"{file_prefix}-Parameterisation.nc")
     md = md.extrude(num_layers, 1)
-
-    print("\n===== Plotting base geometry =====")
 
     # Path(f"{file_prefix}-Extrusion.nc").unlink(missing_ok=True)
     # export_netCDF(md, f"{file_prefix}-Extrusion.nc")
@@ -211,6 +203,37 @@ if 4 in steps:
         print("WARNING: Very high aspect ratio detected! Consider adjusting mesh resolution.")
 
     ##########################################################################################################
+    # Extract and plot bed profile along centerline (like phase_analysis.py) 
+    center_y = np.nanmax(md.mesh.y) / 2.0
+    # Find the closest actual mesh line to center
+    unique_y = np.unique(md.mesh.y)
+    closest_y_idx = np.argmin(np.abs(unique_y - center_y))
+    actual_y = unique_y[closest_y_idx]
+    tolerance = 1e-5
+    profile_indices = np.where(np.abs(md.mesh.y - actual_y) < tolerance)[0]
+    
+    print(f"Center Y: {center_y}, Actual Y: {actual_y}, Found {len(profile_indices)} profile points")
+    if len(profile_indices) == 0:
+        print(f"Y range: [{np.min(md.mesh.y)}, {np.max(md.mesh.y)}]")
+
+    if len(profile_indices) > 0:
+        print("Extracting and plotting bed profile...")
+        x_coords = md.mesh.x[profile_indices]
+        bed_coords = md.geometry.base[profile_indices]
+
+        sorted_order = np.argsort(x_coords)
+        x_profile = x_coords[sorted_order]
+        bed_profile = bed_coords[sorted_order]
+
+        plt.figure(figsize=(12, 6))
+        plt.plot(x_profile / 1000, bed_profile, 'k-', linewidth=2)
+        plt.xlabel('Distance along X-axis (km)')
+        plt.ylabel('Bed Elevation (m)')
+        plt.title(f'Bed Profile at Y = {center_y/1000:.1f} km')
+        plt.grid(True, alpha=0.3)
+        plt.savefig(f"{file_prefix}_bed_profile.png",dpi=500, bbox_inches='tight')
+        plt.show()
+        plt.close()
 
 
 #Set the flow computing method #5
@@ -342,17 +365,6 @@ if 6 in steps:
 #     # # save the given model
 #     # Path(f"{file_prefix}-StressBalance.nc").unlink(missing_ok=True)
 #     # export_netCDF(md, f"{file_prefix}-StressBalance.nc")
-#     # plot the surface velocities #plotdoc
-#     plotmodel(md, 'data', md.results.StressbalanceSolution.Vel, 'figure', 4)
-#     plt.savefig(f"{file_prefix}_stress_solution_Vel.png")
-#     plt.show()
-#     plt.close()
-
-#     plt.quiver(md.mesh.x, md.mesh.y, md.results.StressbalanceSolution.Vx, md.results.StressbalanceSolution.Vy)
-#     plt.savefig("quiver_Vx_Vy.png")
-#     plt.show()
-#     plt.close()
-
 # breakpoint()
 
 #Solving #8
@@ -406,6 +418,8 @@ if 8 in steps:
 
     md.timestepping.final_time = final_time
     md.settings.output_frequency = int(output_frequency * combined_res_factor)
+    # TO BE ABLE TO RESTART THE MODEL IF REACHING WALLTIME:
+    md.settings.checkpoint_frequency = md.settings.output_frequency
     #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
     # breakpoint()
@@ -433,11 +447,11 @@ if 8 in steps:
 
     Path(f"{file_prefix}-Transient.nc").unlink(missing_ok=True)
     export_netCDF(md, f"{file_prefix}-Transient.nc")
-    # plot the surface velocities #plotdoc
-    plotmodel(md, 'data', md.results.TransientSolution[-1].Vel, 'layer', 5, 'figure', 5)
-    plt.savefig(f"{file_prefix}_transient_solution_Vel_layer5_last_timestep.png")
-    plt.show()
-    plt.close()
+    # # plot the surface velocities #plotdoc
+    # plotmodel(md, 'data', md.results.TransientSolution[-1].Vel, 'layer', 5, 'figure', 5)
+    # plt.savefig(f"{file_prefix}_transient_solution_Vel_layer5_last_timestep.png")
+    # plt.show()
+    # plt.close()
 
     print("\n============================================================")
     
@@ -485,18 +499,11 @@ if 8 in steps:
     print(f"Pressure ranges (Pa): [{pressure_transient.min():.5f}, {pressure_transient.max():.5f}]\n")
 
     print("\n============================================================")
-
-    plt.quiver(md.mesh.x, md.mesh.y, md.results.TransientSolution[-1].Vx, md.results.TransientSolution[-1].Vy)
-    plt.savefig("quiver_Vx_Vy.png")
-    plt.show()
-    plt.close()
-
-    print("\n============================================================")
     print(f"\nFINISHED {Scenario} with {file_prefix} and {h_resolution_factor = }")
     print(f"\nNumber of nodes is {x_nodes} × {y_nodes} = {x_nodes * y_nodes}")
     print(f"\n{final_time = } and {timestep = }")
     print("\n============================================================")
 
-    breakpoint()
+    # breakpoint()
 
 

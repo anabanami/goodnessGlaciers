@@ -6,6 +6,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import netCDF4 as nc
 
+# Set font sizes to match transfer_analysis.py
+plt.rcParams.update({
+    'font.size': 12,          # Default font size
+    'axes.titlesize': 16,     # Title font size
+    'axes.labelsize': 14,     # Axis label font size
+    'xtick.labelsize': 12,    # X-axis tick label size
+    'ytick.labelsize': 12,    # Y-axis tick label size
+    'legend.fontsize': 12,    # Legend font size
+    'figure.titlesize': 16    # Figure title font size
+})
+
 # Add ISSM/pyISSM to path
 sys.path.append('/home/ana/pyISSM/src')
 from model import model

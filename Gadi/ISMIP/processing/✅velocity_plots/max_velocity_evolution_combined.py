@@ -35,9 +35,19 @@ def reconstruct_mesh(filename):
     base = os.path.splitext(os.path.basename(filename))[0]
     parts = base.split('_')
     param_filename = parts[0] + ".py"
+    wavelength_factor = None
+    
     try:
-        h_res = float(parts[2])
-        v_res = float(parts[3].split('-')[0])
+        # Check if filename has wavelength factor (new format: 5 parts with w prefix)
+        if len(parts) >= 5 and parts[4].startswith('w'):
+            # New format: profile_scenario_h_v_wX-type
+            h_res = float(parts[2])
+            v_res = float(parts[3])
+            wavelength_factor = float(parts[4][1:].split('-')[0])  # Remove 'w' prefix
+        else:
+            # Old format: profile_scenario_h_v-type
+            h_res = float(parts[2])
+            v_res = float(parts[3].split('-')[0])
     except (ValueError, IndexError):
         h_res, v_res = 1.0, 1.0
 

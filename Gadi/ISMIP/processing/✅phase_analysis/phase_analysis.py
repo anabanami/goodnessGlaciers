@@ -64,26 +64,40 @@ from SetIceSheetBC import SetIceSheetBC
 def parse_filename(filename):
     """
     Parses the input NetCDF filename to extract simulation parameters.
-    Example: 'IsmipF_S1_2_2-Transient.nc' -> ('IsmipF', 'S1', 2.0, 2.0)
+    Supports both old and new formats:
+    Old: 'IsmipF_S1_2_2-Transient.nc' -> ('IsmipF', 'S1', 2.0, 2.0)
+    New: 'coswave_S1_6_2_w10-Transient.nc' -> ('coswave', 'S1', 6.0, 2.0)
     """
     base_name = os.path.splitext(os.path.basename(filename))[0]
     parts = base_name.split('_')
     
     if len(parts) < 4:
-        raise ValueError(f"Filename '{filename}' does not match the expected format 'NAME_SCENARIO_HRES_VRES-TYPE.nc'")
+        raise ValueError(f"Filename '{filename}' does not match the expected format 'NAME_SCENARIO_HRES_VRES[-wX]-TYPE.nc'")
 
     param_profile = parts[0]
     scenario = parts[1]
+    
     try:
         h_resolution_factor = float(parts[2])
-        # The vertical resolution factor is the first part of the last segment
-        v_resolution_factor = float(parts[3].split('-')[0])
+        
+        # Check if we have wavelength factor (new format)
+        if len(parts) >= 5 and parts[4].startswith('w'):
+            # New format: profile_scenario_h_v_wX-type.nc
+            v_resolution_factor = float(parts[3])
+            wavelength_factor = float(parts[4][1:].split('-')[0])  # Extract number after 'w'
+            print(f"✅ Parsed Filename (new format): Profile='{param_profile}', Scenario='{scenario}', H-Res='{h_resolution_factor}', V-Res='{v_resolution_factor}', Wavelength='{wavelength_factor}'")
+        else:
+            # Old format: profile_scenario_h_v-type.nc
+            v_resolution_factor = float(parts[3].split('-')[0])
+            wavelength_factor = None
+            print(f"✅ Parsed Filename (old format): Profile='{param_profile}', Scenario='{scenario}', H-Res='{h_resolution_factor}', V-Res='{v_resolution_factor}'")
+            
     except (ValueError, IndexError):
-        print(f"Warning: Could not determine resolution factors from '{base_name}'. Defaulting to 1.0.")
+        print(f"Warning: Could not determine resolution factors from '{base_name}'. Defaulting to 2.0.")
         h_resolution_factor = 2
         v_resolution_factor = 2
+        wavelength_factor = None
         
-    print(f"✅ Parsed Filename: Profile='{param_profile}', Scenario='{scenario}', H-Res='{h_resolution_factor}', V-Res='{v_resolution_factor}'")
     return param_profile, scenario, h_resolution_factor, v_resolution_factor
 
 
@@ -155,7 +169,7 @@ def load_config_by_parsing(param_profile):
         lines = f.readlines()
 
     # We now need alpha and H_0 to reconstruct the baseline
-    target_vars = ['H_0', 'sigma', 'wavelength', 'amplitude_0', 'alpha']
+    target_vars = ['H_0', 'sigma', 'wavelength', 'adjusted_wavelength', 'target_wavelength', 'amplitude_0', 'alpha']
     
     for line in lines:
         if line.strip().startswith('#'):
@@ -173,17 +187,23 @@ def load_config_by_parsing(param_profile):
                     pass
 
 
-    # Prioritize 'sigma', but fall back to 'wavelength'.
+    # Prioritize 'sigma', then 'adjusted_wavelength', then 'wavelength', then 'target_wavelength'.
     if 'sigma' in local_vars:
         wavelength = local_vars['sigma']
         print(f"  Found 'sigma', using it as characteristic wavelength: {wavelength} m")
+    elif 'adjusted_wavelength' in local_vars:
+        wavelength = local_vars['adjusted_wavelength']
+        print(f"  Found 'adjusted_wavelength', using it as characteristic wavelength: {wavelength} m")
     elif 'wavelength' in local_vars:
         wavelength = local_vars['wavelength']
         print(f"  Found 'wavelength', using it as characteristic wavelength: {wavelength} m")
+    elif 'target_wavelength' in local_vars:
+        wavelength = local_vars['target_wavelength']
+        print(f"  Found 'target_wavelength', using it as characteristic wavelength: {wavelength} m")
     else:
-        # If neither is found, raise an informative error.
+        # If none are found, raise an informative error.
         raise ValueError(
-            f"Could not parse a characteristic length ('sigma' or 'wavelength') from '{param_file_path}'. "
+            f"Could not parse a characteristic length ('sigma', 'adjusted_wavelength', 'wavelength', or 'target_wavelength') from '{param_file_path}'. "
             "Ensure one of these is defined as a simple numerical assignment."
         )
 

@@ -54,14 +54,22 @@ def reconstruct_mesh(filename):
     parts = base.split('_')
     
     param_filename = parts[0] + ".py"
+    wavelength_factor = None
+    
     try:
-        # This logic assumes the name will always have 4 parts.
-        # parts[2] is the X factor, parts[3] is the Z factor.
-        h_resolution_factor = float(parts[2])
-        v_resolution_factor = float(parts[3].split('-')[0])
+        # Check if filename has wavelength factor (new format: 5 parts with w prefix)
+        if len(parts) >= 5 and parts[4].startswith('w'):
+            # New format: profile_scenario_h_v_wX-type
+            h_resolution_factor = float(parts[2])
+            v_resolution_factor = float(parts[3])
+            wavelength_factor = float(parts[4][1:].split('-')[0])  # Remove 'w' prefix
+        else:
+            # Old format: profile_scenario_h_v-type
+            h_resolution_factor = float(parts[2])
+            v_resolution_factor = float(parts[3].split('-')[0])
     except (ValueError, IndexError):
         print(f"Warning: Could not determine resolution factors from '{base}'.")
-        print("         This script expects 4 parts in the name (e.g., IsmipF_S3_0.5_1.5-Transient).")
+        print("         This script expects 4 parts in the name (e.g., IsmipF_S3_0.5_1.5-Transient) or 5 parts with wavelength (e.g., coswave_S1_10_2_w10-Transient).")
         print("         Defaulting to 1.0 for both factors.")
         h_resolution_factor = 1.0
         v_resolution_factor = 1.0

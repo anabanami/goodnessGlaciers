@@ -20,9 +20,9 @@ H_0 = 1e3 # ice thickness, units: m
 amplitude_0 = 0.05 * H_0 # amplitude(100), units: m
 
 # 1. Define TARGET wavelength
-# target_wavelength = 2 * H_0 # (2e3) units: m
+target_wavelength = 2.5 * H_0 # (2e3) units: m
 # target_wavelength = 3.3 * H_0 # (3.3e3) units: m
-target_wavelength = 10 * H_0 # (10e3) units: m
+# target_wavelength = 10 * H_0 # (10e3) units: m <<<<TODOOO NEXT
 
 # Extract wavelength scaling factor for naming
 wavelength_factor = target_wavelength / H_0

@@ -92,17 +92,27 @@ class ConvergenceAnalyzer:
     def _load_results(self):
         """Detects, parses, and loads results from NetCDF files."""
         print(f"Found {len(self.file_paths)} result files to process...")
-        file_regex = re.compile(r"([a-zA-Z0-9_]+?)_([a-zA-Z0-9]+)_(\d+\.?\d*)_(\d+\.?\d*)-Transient\.nc")
+        # Try new format first (with wavelength factor)
+        file_regex_new = re.compile(r"([a-zA-Z0-9_]+?)_([a-zA-Z0-9]+)_(\d+\.?\d*)_(\d+\.?\d*)_w(\d+\.?\d*)-Transient\.nc")
+        # Fall back to old format (without wavelength factor)
+        file_regex_old = re.compile(r"([a-zA-Z0-9_]+?)_([a-zA-Z0-9]+)_(\d+\.?\d*)_(\d+\.?\d*)-Transient\.nc")
         
         for file_path in self.file_paths:
             filename = os.path.basename(file_path)
-            match = file_regex.match(filename)
+            match = file_regex_new.match(filename)
+            wavelength_factor = None
+            
+            if match:
+                param_file, scenario, h_resolution_factor_str, v_resolution_factor_str, wavelength_factor_str = match.groups()
+                wavelength_factor = float(wavelength_factor_str)
+            else:
+                match = file_regex_old.match(filename)
+                if match:
+                    param_file, scenario, h_resolution_factor_str, v_resolution_factor_str = match.groups()
             
             if not match:
                 print(f"  - Skipping '{filename}': does not match name format.")
                 continue
-            
-            param_file, scenario, h_resolution_factor_str, v_resolution_factor_str = match.groups()
             h_res_factor = float(h_resolution_factor_str)
             v_res_factor = float(v_resolution_factor_str)
 

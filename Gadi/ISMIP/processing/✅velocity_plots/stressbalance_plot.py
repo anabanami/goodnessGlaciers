@@ -5,6 +5,17 @@ import matplotlib.colors as colors
 from scipy.signal import savgol_filter
 from loadmodel import loadmodel
 
+# Set font sizes to match transfer_analysis.py
+plt.rcParams.update({
+    'font.size': 12,          # Default font size
+    'axes.titlesize': 16,     # Title font size
+    'axes.labelsize': 14,     # Axis label font size
+    'xtick.labelsize': 12,    # X-axis tick label size
+    'ytick.labelsize': 12,    # Y-axis tick label size
+    'legend.fontsize': 12,    # Legend font size
+    'figure.titlesize': 16    # Figure title font size
+})
+
 # --- CONFIGURATION ---
 SLICE_Y_COORDINATE = 50000  # meters
 TOLERANCE = 500             # meters

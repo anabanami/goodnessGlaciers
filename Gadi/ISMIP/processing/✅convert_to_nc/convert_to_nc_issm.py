@@ -19,15 +19,33 @@ input_file = args.input_file
 
 print(f"Input file: {input_file}")
 
-# # Parse scenario and resolution from input filename
-# match = re.match(r'IsmipF_(S\d)_(\d+\.?\d*)_(\d+\.?\d*)-Transient\.outbin', os.path.basename(input_file))
-pattern = r'([a-zA-Z0-9_]+)_(S\d+)_(\d+\.?\d*)_(\d+\.?\d*)-(.+)\.outbin'
-match = re.match(pattern, os.path.basename(input_file))
+# Parse scenario and resolution from input filename
+# Support both old format: profile_scenario_h_v-type.outbin
+# and new format with wavelength: profile_scenario_h_v_wX-type.outbin
+
+# Try new format first (with wavelength factor)
+pattern_new = r'([a-zA-Z0-9_]+)_(S\d+)_(\d+\.?\d*)_(\d+\.?\d*)_w(\d+\.?\d*)-(.+)\.outbin'
+match = re.match(pattern_new, os.path.basename(input_file))
 
 if match:
-    profile, scenario, h_res, v_res, sol_type = match.groups()
+    profile, scenario, h_res, v_res, wavelength_factor, sol_type = match.groups()
+    print(f"Detected new format with wavelength factor: w{wavelength_factor}")
+else:
+    # Fall back to old format (without wavelength factor)
+    pattern_old = r'([a-zA-Z0-9_]+)_(S\d+)_(\d+\.?\d*)_(\d+\.?\d*)-(.+)\.outbin'
+    match = re.match(pattern_old, os.path.basename(input_file))
+    
+    if match:
+        profile, scenario, h_res, v_res, sol_type = match.groups()
+        wavelength_factor = None
+        print(f"Detected old format (no wavelength factor)")
+
+if match:
     # bc_file = f"Boundary_conditions/{scenario}_F/IsmipF_{scenario}_{h_res}_{v_res}-BoundaryCondition.nc"
-    bc_file = f"Boundary_conditions/{profile}/{profile}_{scenario}_{h_res}_{v_res}-BoundaryCondition.nc"
+    if wavelength_factor:
+        bc_file = f"Boundary_conditions/{profile}/{profile}_{scenario}_{h_res}_{v_res}_w{wavelength_factor}-BoundaryCondition.nc"
+    else:
+        bc_file = f"Boundary_conditions/{profile}/{profile}_{scenario}_{h_res}_{v_res}-BoundaryCondition.nc"
 
     if os.path.exists(bc_file):
         print(f"Loading model from: {bc_file}")
