@@ -42,7 +42,7 @@ def generate_anisotropic_bed(
     # Back to spatial domain
     bed = np.fft.ifftn(filtered_coeffs).real
     
-    # Normalize to target relief
+    # Normalise to target relief
     bed = (bed - bed.mean()) / (bed.std() + 1e-10)
     p_min, p_max = np.percentile(bed, [1, 99])
     current_relief = p_max - p_min
