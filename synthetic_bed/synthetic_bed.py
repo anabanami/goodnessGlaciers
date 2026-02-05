@@ -261,26 +261,45 @@ def validate_anisotropy(bed, name, resolution_m, target_beta_flow, target_beta_c
 if __name__ == "__main__":
     
     configs = {
-        'ROSS': {
-            'size_km': 400,
-            'resolution_m': 500,
-            'target_relief_m': 1100,
-            'max_slope_deg': 15.0,
-            'beta_flow': 2.5,
-            'beta_cross': 1.8,
-            'bedforms': [(10000, 60, 30), (800, 20, 90)]
+        'ASB': {
+            'size_km': 600,
+            'resolution_m': 250,
+            'target_relief_m': 2000,
+            'max_slope_deg': 25.0,
+            'beta_flow': 1.8,
+            'beta_cross': 1.3,
+            'bedforms': [(8000, 50, 0), (600, 30, 90)]
         },
         'PEL': {
-            'size_km': 200,
-            'resolution_m': 150,
-            'target_relief_m': 2000,
+            'size_km': 600,
+            'resolution_m': 200,
+            'target_relief_m': 2200,
             'max_slope_deg': 40.0,
             'beta_flow': 2.0,
             'beta_cross': 1.8,
-            'bedforms': [(500, 30, 0)]
+            'bedforms': [(10000, 80, 0), (500, 30, 0)]
+        },
+        'ROSS': {
+            'size_km': 1000,
+            'resolution_m': 500,
+            'target_relief_m': 1100,
+            'max_slope_deg': 15.0,
+            'beta_flow': 2.3,
+            'beta_cross': 2.0,
+            'bedforms': [(10000, 60, 30), (1200, 20, 90)]
+        },
+        'FAKE-ISO': {
+            'size_km': 100,
+            'resolution_m': 100,
+            'target_relief_m': 1000,
+            'max_slope_deg': 10.0,
+            'beta_flow': 3.0,
+            'beta_cross': 3.0,
+            # 'bedforms': [(10000, 10, 10)]
         }
     }
-    
+
+
     for name, cfg in configs.items():
         print(f"\n{'='*50}")
         print(f"GENERATING: {name}")

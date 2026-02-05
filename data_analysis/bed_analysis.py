@@ -3,40 +3,80 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy import signal, stats
 from pyproj import Transformer
-import pprint
 import os
 from REMA_extractor import extract_rema_elevation, extract_rema_flow_vector, calculate_ice_thickness
 
 
 def load_datasets():
-    # for convenience 
-    # Using os.path.join() for each filename:
     base_path = 'shortcut_to_culled-data'
-    # DATA LOADING (Existing hardcoded ranges as per JR's analysis)
+    all_dfs = []
     
-    filename_UTIG_2010 = os.path.join(base_path, 'UTIG_2010_ICECAP_AIR_BM3.csv')
-    header_df = pd.read_csv(filename_UTIG_2010, comment='#', nrows=0)
-    df_UTIG_2010 = pd.read_csv(filename_UTIG_2010, comment='#', skiprows=range(1, 8508113), nrows=17528, names=header_df.columns)
-    # ASB = pd.concat([df_stanford, df_UTIG_2010], ignore_index=True)
-    ASB = pd.concat([df_UTIG_2010], ignore_index=True)
-    print(f"✓ ASB loaded: {len(ASB)} rows")
+    target_files = [
+        # {
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv', 
+        #     'label': 'ASB_ICECAP',
+        #     'subset': lambda df: df.iloc[8508112 : 8508112 + 17528].copy()
+        # },
+        # {
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv', 
+        #     'label': 'ROSS_ICECAP',
+        #     'subset': lambda df: df[df['trajectory_id'].astype(str).str.contains('IR1HI2_2009033_DMC_JKB1a_WLKX10b', na=False)].copy()
+        # },
+        # {
+        #     'file': 'PRIC_2016_CHA2_AIR_BM3.csv', 
+        #     'label': 'PEL_CHA2',
+        #     # We shift the start index forward to remove the first segment
+        #     # skip the exact number of rows in 'Segment 1'
+        #     'subset': lambda df: df.iloc[410823 : 410823 + 54566].copy(),
+        #     'force_id': 'PRIC_2016_CHA2',
+        # },
 
-    filename_ROSS = os.path.join(base_path, 'UTIG_2010_ICECAP_AIR_BM3.csv')
-    df_UTIG_full = pd.read_csv(filename_ROSS, comment='#')
-    # Filter by string match
-    ROSS = df_UTIG_full[df_UTIG_full['trajectory_id'].astype(str).str.contains('IR1HI2_2009033_DMC_JKB1a_WLKX10b', na=False)]
-    print(f"✓ ROSS loaded: {len(ROSS)} rows")
+        {
+            'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
+            'label': 'Moller_Stream'
+        },    # Institute-Möller Ice Stream
+        
+        # {'file': 'BAS_2018_Thwaites_AIR_BM3.csv',  'label':'Thwaites_BAS'},   # Thwaites Glacier
+        # {'file': 'CRESIS_2009_Thwaites_AIR_BM3.csv', 'label': 'Thwaites_CR'}, # Thwaites Swath
+        # {'file': 'AWI_2018_ANIRES_AIR_BM3.csv', 'label': 'DML_AniRES'},      # Dronning Maud Land
+    ]
 
-    filename_PEL = os.path.join(base_path, 'PRIC_2016_CHA2_AIR_BM3.csv')
-    header_df = pd.read_csv(filename_PEL, comment='#', nrows=0)
-    PEL = pd.read_csv(filename_PEL, comment='#', skiprows=range(1, 410824), nrows=54566, names=header_df.columns)
-    # Assign trajectory_id
-    PEL['trajectory_id'] = 'PRIC_2016_001'
-    print(f"✓ PEL loaded: {len(PEL)} rows")
 
-    # return [ASB]
-    return [ASB, ROSS, PEL]
+    for item in target_files:
+        filename = item['file']
+        label = item['label']
+        filepath = os.path.join(base_path, filename)
+        
+        if not os.path.exists(filepath):
+            print(f" Warning: {filename} not found. Skipping.")
+            continue
 
+        try:
+            df = pd.read_csv(filepath, comment='#')
+            
+            if 'subset' in item:
+                df = item['subset'](df)
+            
+            if 'force_id' in item:
+                df['trajectory_id'] = item['force_id']
+            
+            # Cleaning Bedmap3 specific nulls (-9999) 
+            initial_len = len(df)
+            df = df[(df['bedrock_altitude (m)'] != -9999) & 
+                    (df['trajectory_id'] != -9999)].copy()
+            
+            df['trajectory_id'] = df['trajectory_id'].astype(str)
+            
+            if len(df) > 0:
+                print(f"✓ {label} loaded: {len(df)} rows (Filtered {initial_len - len(df)} nulls)")
+                all_dfs.append({'name': label, 'data': df})
+            else:
+                print(f"❌ {label} resulted in 0 rows.")
+                
+        except Exception as e:
+            print(f"❌ Error loading {label}: {e}")
+
+    return all_dfs
 
 
 def plot_raw_data_with_segmentation_check(dist, elev, segments, traj_id, gap_mask=None):
@@ -162,7 +202,6 @@ def detect_data_gaps(distance, gap_threshold=2000):
 def split_into_segments(datafile, distance, gap_threshold=2000, min_segment_length=50):
     """
     Split data into valid segments based on distance gaps.
-    Uses detect_data_gaps to ensure logical consistency.
     """
     # Use the existing function to find gap locations
     gap_mask = detect_data_gaps(distance, gap_threshold)
@@ -174,6 +213,7 @@ def split_into_segments(datafile, distance, gap_threshold=2000, min_segment_leng
     segments = []
     for start, end in zip(split_points[:-1], split_points[1:]):
         if end - start >= min_segment_length:
+            print(f"    > Segment {len(segments)+1}: Rows {start} to {end} ({end-start} points), Length: {(distance[end-1]-distance[start])/1000:.2f} km")
             segments.append((datafile.iloc[start:end].copy(), distance[start:end]))
     
     return segments
@@ -303,29 +343,24 @@ def analyse_bedrock():
     # Setup projection transformer: WGS84 (Lat/Lon) -> Antarctic Stereo (Meters)
     transformer = Transformer.from_crs("EPSG:4326", "EPSG:3031", always_xy=True)
 
-    datasets = load_datasets()
+    datasets_bundle = load_datasets()
 
-    # DEM path
+    # paths
     base_path = 'shortcut_to_culled-data/'
     dem_path = os.path.join(base_path, 'rema_mosaic_100m_v2.0_filled_cop30/rema_mosaic_100m_v2.0_filled_cop30_dem.tif')
-
-    # Loop through each bedrock dataset with a name/label
-    # Accumulate results separately for each region
-    dataset_names = ['ASB', 'ROSS', 'PEL']
-    # dataset_names = ['ASB']
 
 
     all_results = {}
 
-    for i, df in enumerate(datasets):
-        dataset_name = dataset_names[i]
+    for bundle in datasets_bundle:
+        dataset_name = bundle['name']
+        df = bundle['data']
         print(f"\nStarting analysis of {dataset_name}...")
 
         # Filter invalid data
         valid = df[(df['bedrock_altitude (m)'] != -9999) & (df['trajectory_id'] != -9999)]
         print(f"  Valid data points: {len(valid)}")
         print(f"  Unique trajectories: {len(valid['trajectory_id'].unique())}")
-        # print(f"  Sample bedrock values: {valid['bedrock_altitude (m)'].head(10).values}")
 
         results = {}
         plot_count = 0  # Counter to limit number of plots popping up
@@ -365,17 +400,16 @@ def analyse_bedrock():
             # Split into valid segments
             segments = split_into_segments(line, dist)
 
-            # Check raw data
-            plot_raw_data_with_segmentation_check(dist, elev, segments, traj_id, gap_mask)
-
             if len(segments) != 0:
-                print(f"{len(segments)} valid data segments found")
+                print(f"{len(segments)} data segments found")
             else:
                 print(f" Skipping trajectory {traj_id}: no valid segments found")
                 continue
 
             # Process each segment separately 
+            valid_segments = []
             segment_results = []
+
             for seg_idx, (segment_data, segment_distance) in enumerate(segments):
                 bedrock_segment_elev = segment_data['bedrock_altitude (m)'].values
 
@@ -385,8 +419,21 @@ def analyse_bedrock():
                 seg_lats = segment_data['latitude (degree_north)'].values
                 seg_x, seg_y = transformer.transform(seg_lons, seg_lats)
 
+                # Thickness calculation and validity check
+                surface_elevs = extract_rema_elevation(seg_x, seg_y, dem_path)
+                valid_ice_thickness = calculate_ice_thickness(surface_elevs, bedrock_segment_elev)
+                thickness_validity = np.sum(~np.isnan(valid_ice_thickness)) / len(valid_ice_thickness)
+                if thickness_validity < 0.20: # If less than 20% thickness data is valid
+                    print(f" Skipping Segment {seg_idx+1}: Insufficient thickness data (only {thickness_validity*100:.1f}% is valid)")
+                    continue
+
+                print(f" > Segment {seg_idx+1}: Valid ice thickness for count: {np.sum(~np.isnan(valid_ice_thickness))} / {len(valid_ice_thickness)}")
 
                 global_relief = bedrock_segment_elev.max() - bedrock_segment_elev.min()
+
+                # append valid segment to list 
+                valid_segments.append((segment_data, segment_distance))
+
                 # Define window parameters
                 WINDOW_SIZE = 50000
                 STEP_SIZE = 10000
@@ -422,11 +469,6 @@ def analyse_bedrock():
                     loc_of_max_relief = 0
                     avg_rms_roughness = 0
 
-                surface_elevs = extract_rema_elevation(seg_x, seg_y, dem_path)
-                # print(f"  >>>>>>>>>: Surface elevs range: {np.nanmin(surface_elevs):.1f} to {np.nanmax(surface_elevs):.1f}")
-                # print(f"  >>>>>>>>>: Bedrock elevs range: {np.min(bedrock_segment_elev):.1f} to {np.max(bedrock_segment_elev):.1f}")
-                valid_ice_thickness = calculate_ice_thickness(surface_elevs, bedrock_segment_elev)
-                print(f"  >>>>>>>>>: Valid ice thickness count: {np.sum(~np.isnan(valid_ice_thickness))} / {len(valid_ice_thickness)}")
 
                 # 1. Get Flow Direction from REMA (Smoothed)
                 vx, vy = extract_rema_flow_vector(seg_x, seg_y, dem_path, valid_ice_thickness)
@@ -445,7 +487,6 @@ def analyse_bedrock():
                 if mean_incidence < 30: flow_orientation = "Parallel"
                 elif mean_incidence > 60: flow_orientation = "Perpendicular"
                 print(f" >>>>>>>>>: {dataset_name} | {traj_id} | Segment {seg_idx+1}: {flow_orientation} (incidence: {mean_incidence:.1f})")
-
 
                 stats_dict = {
                     'elevation_range': global_relief,
@@ -530,6 +571,7 @@ def analyse_bedrock():
                         'hurst_exponent': hurst_exponent
                     })
 
+
                     # Plot the first n lines
                     if plot_count < 5:
                         plot_spectra(segment_distance, detrended, wavelengths_calc, pos_psd, fitted_psd, beta, residual_psd, traj_id, dataset_name, segment_number=seg_idx+1)
@@ -540,6 +582,9 @@ def analyse_bedrock():
 
                 segment_results.append(stats_dict)
 
+            if valid_segments:
+                plot_raw_data_with_segmentation_check(dist, elev, valid_segments, traj_id, gap_mask)
+
             if segment_results:
                 # Aggregate statistics
                 combined_stats = {}
@@ -547,7 +592,7 @@ def analyse_bedrock():
                 list_keys = ['dominant_wavelengths', 'confirmed_wavelengths', 'candidate_wavelengths']
                 
                 # Keys that are SINGLE VALUES in the segment dict, but we want to KEEP as a list 
-                list_keys_collect = ['power_law_exponent', 'flow_orientation']
+                list_keys_collect = ['power_law_exponent', 'flow_orientation', 'hurst_exponent']
 
                 for key in segment_results[0].keys():
                     # 1. Extract values for the CURRENT key immediately
@@ -628,9 +673,11 @@ def results_summary(results):
     lengths = [r['profile_length'] for r in results.values() if 'profile_length' in r]
     print(f"AVG SEGMENT LENGTH:\n  -> {format_stat(lengths, 'm')}")
 
-    # 3. Power Law Exponent
+    # 3. Power Law and Hurst Exponents
     betas = [b for r in results.values() for b in r.get('power_law_exponent', [])]
     print(f"POWER LAW EXPONENT (Beta):\n  -> {format_stat(betas)}")
+    hurst_exponents = [H_e for r in results.values() for H_e in r.get('hurst_exponent', [])]
+    print(f"HURST EXPONENT:\n  -> {format_stat(hurst_exponents)}")
     
     # 4. Ice Thickness
     thickness = [r['ice_thickness_mean'] for r in results.values() if 'ice_thickness_mean' in r and not np.isnan(r['ice_thickness_mean'])]
