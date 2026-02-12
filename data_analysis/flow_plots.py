@@ -118,12 +118,14 @@ def load_datasets():
         #     'label': 'ROSS_ICECAP',
         #     'subset': lambda df: df[df['trajectory_id'].astype(str).str.contains('IR1HI2_2009033_DMC_JKB1a_WLKX10b', na=False)].copy()
         # },
-        # {
-        #     'file': 'PRIC_2016_CHA2_AIR_BM3.csv', 
-        #     'label': 'PEL_CHA2',
-        #     'subset': lambda df: df.iloc[410823 : 410823 + 54566].copy(),
-        #     'force_id': 'PRIC_2016_CHA2',
-        # },
+        {
+            'file': 'PRIC_2016_CHA2_AIR_BM3.csv', 
+            'label': 'PEL_CHA2',
+            # We shift the start index forward to remove the first segment
+            # skip the exact number of rows in 'Segment 1'
+            'subset': lambda df: df.iloc[410823 : 410823 + 54566].copy(),
+            'force_id': 'PRIC_2016_CHA2',
+        },
         # {
         #     'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
         #     'label': 'Moller_Stream'
@@ -136,10 +138,10 @@ def load_datasets():
         #     'file': 'CRESIS_2009_Thwaites_AIR_BM3.csv',
         #     'label': 'Thwaites_CR'
         # },   # Thwaites Swath <<< NOT GREAT
-        {
-          'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
-          'label': 'DML_AniRES'
-         },   # Dronning Maud Land
+        # {
+        #   'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
+        #   'label': 'DML_AniRES'
+        #  },   # Dronning Maud Land
     ]
 
     for item in target_files:
@@ -178,27 +180,67 @@ def load_datasets():
     return all_dfs
 
 
-def detect_segments(x, y, gap_threshold=2000):
-    """Detect segments based on gaps in the flight track (same logic as bedrock analysis)."""
+def detect_segments(df, x, y, gap_threshold=2000, min_segment_length=50):
+    """
+    Detect segments based on gaps in the flight track.
+    Matches the logic in bed_analysis_15.py.
+    Returns list of tuples: (segment_df, start_idx, end_idx)
+    """
+    # Calculate distances between consecutive points
     dx = np.diff(x)
     dy = np.diff(y)
     distances = np.sqrt(dx**2 + dy**2)
     
+    # Find gaps
     gap_indices = np.where(distances > gap_threshold)[0]
     
-    segments = []
-    start = 0
+    # Build segment boundaries
+    # Gap indices mark the END of a segment (last point before gap)
+    # and the START of the next segment is gap_index + 1
+    split_points = [0]
     for gap_idx in gap_indices:
-        end = gap_idx + 1
-        if end - start >= 50:  # Minimum segment length
-            segments.append((start, end))
-        start = end
+        split_points.append(gap_idx + 1)  # End of current segment
+        split_points.append(gap_idx + 1)  # Start of next segment
+    split_points.append(len(x))
     
-    # Final segment
-    if len(x) - start >= 50:
-        segments.append((start, len(x)))
+    # Pair up start/end points
+    segments = []
+    for i in range(0, len(split_points) - 1, 2):
+        start = split_points[i]
+        end = split_points[i + 1]
+        if end - start >= min_segment_length:
+            segments.append((df.iloc[start:end].copy(), start, end))
     
     return segments
+
+
+def filter_segments_by_thickness(segments, x, y, dem_path, thickness_threshold=0.20):
+    """
+    Filter out segments with insufficient ice thickness data.
+    Matches the validation in bed_analysis_15.py.
+    """
+    valid_segments = []
+    
+    for seg_idx, (segment_df, start, end) in enumerate(segments):
+        seg_x = x[start:end]
+        seg_y = y[start:end]
+        
+        # Get surface elevation and calculate thickness
+        surface_elevs = extract_rema_elevation(seg_x, seg_y, DEM_PATH)
+        bedrock_elevs = segment_df['bedrock_altitude (m)'].values
+        ice_thickness = calculate_ice_thickness(surface_elevs, bedrock_elevs)
+        
+        # Check validity
+        thickness_validity = np.sum(~np.isnan(ice_thickness)) / len(ice_thickness)
+        
+        if thickness_validity < thickness_threshold:
+            print(f"   Skipping Segment {seg_idx+1}: Insufficient thickness data ({thickness_validity*100:.1f}% valid)")
+            continue
+        
+        valid_segments.append((segment_df, start, end, seg_idx + 1))  # Keep original segment number
+        print(f"   Segment {seg_idx+1}: Valid ({thickness_validity*100:.1f}% thickness data)")
+    
+    return valid_segments
 
 
 def get_orientation_color(angle):
@@ -223,23 +265,37 @@ def main(dataset_dict):
     x, y = transformer.transform(df['longitude (degree_east)'].values, 
                                  df['latitude (degree_north)'].values)
     
-    # Extract REMA Data
-    surf_elev = extract_rema_elevation(x, y, DEM_PATH)
-    bed_elev = df['bedrock_altitude (m)'].values
-    thickness = calculate_ice_thickness(surf_elev, bed_elev)
-    flow_x, flow_y = extract_rema_flow_vector(x, y, DEM_PATH, thickness)
+    # Detect and filter segments (matching bed_analysis_15.py logic)
+    print("   Detecting segments...")
+    raw_segments = detect_segments(df, x, y)
+    print(f"   Found {len(raw_segments)} raw segments")
     
-    # Calculate Orientation
-    incidence = calculate_incidence_angle(x, y, flow_x, flow_y)
+    print("   Filtering by ice thickness...")
+    segments = filter_segments_by_thickness(raw_segments, x, y, DEM_PATH)
     
-    # Detect segments
-    segments = detect_segments(x, y)
+    if not segments:
+        print(f"   No valid segments for {region_label}")
+        return
+    
+    print(f"   {len(segments)} valid segments after filtering")
     
     # --- Extract REMA subset for background ---
     print("   Extracting REMA hillshade...")
     bounds = (x.min(), y.min(), x.max(), y.max())
     elevation, extent = extract_rema_subset(DEM_PATH, bounds, buffer_km=10)
     hillshade = make_hillshade(elevation, extent)
+    
+    # --- Compute flow vectors PER VALID SEGMENT (not full track) ---
+    print("   Computing flow vectors...")
+    segment_flow = {}
+    for segment_df, start, end, orig_seg_num in segments:
+        seg_x, seg_y = x[start:end], y[start:end]
+        surf = extract_rema_elevation(seg_x, seg_y, DEM_PATH)
+        bed = segment_df['bedrock_altitude (m)'].values
+        thick = calculate_ice_thickness(surf, bed)
+        fx, fy = extract_rema_flow_vector(seg_x, seg_y, DEM_PATH, thick)
+        inc = calculate_incidence_angle(seg_x, seg_y, fx, fy)
+        segment_flow[orig_seg_num] = {'flow_x': fx, 'flow_y': fy, 'incidence': inc}
     
     # Convert to km for plotting
     x_km, y_km = x / 1000, y / 1000
@@ -257,25 +313,31 @@ def main(dataset_dict):
     ax.contour(elev_x, elev_y, elevation, levels=15, colors='white', linewidths=0.3, alpha=0.4)
     
     # Plot track colored by segment orientation
-    for i, (start, end) in enumerate(segments):
-        seg_incidence = incidence[start:end]
-        mean_angle = np.nanmean(seg_incidence)
+    for segment_df, start, end, orig_seg_num in segments:
+        mean_angle = np.nanmean(segment_flow[orig_seg_num]['incidence'])
         color = get_orientation_color(mean_angle)
         
         ax.plot(x_km[start:end], y_km[start:end], color=color, linewidth=3, 
                 solid_capstyle='round', zorder=3)
     
-    # Flow vectors (subsampled)
-    step = max(1, len(x) // 40)
-    quiver_scale = 30
-    ax.quiver(x_km[::step], y_km[::step], flow_x[::step], flow_y[::step],
-              color='royalblue', alpha=0.7, scale=quiver_scale, width=0.004, 
-              headwidth=4, headlength=5, zorder=2)
+    # Flow vectors (subsampled, only for valid segments)
+    for segment_df, start, end, orig_seg_num in segments:
+        seg_len = end - start
+        step = max(1, seg_len // 10)  # ~10 arrows per segment
+        
+        seg_x_km = x_km[start:end]
+        seg_y_km = y_km[start:end]
+        fx = segment_flow[orig_seg_num]['flow_x']
+        fy = segment_flow[orig_seg_num]['flow_y']
+        
+        ax.quiver(seg_x_km[::step], seg_y_km[::step], fx[::step], fy[::step],
+                  color='royalblue', alpha=0.7, scale=30, width=0.004, 
+                  headwidth=4, headlength=5, zorder=2)
     
     # Segment labels (offset perpendicular to track)
-    for i, (start, end) in enumerate(segments):
+    for segment_df, start, end, orig_seg_num in segments:
         mid_idx = (start + end) // 2
-        mean_angle = np.nanmean(incidence[start:end])
+        mean_angle = np.nanmean(segment_flow[orig_seg_num]['incidence'])
         
         # Calculate perpendicular offset direction
         # Get local track direction at midpoint
@@ -295,7 +357,7 @@ def main(dataset_dict):
         label_x = x_km[mid_idx] + perp_x * offset_km
         label_y = y_km[mid_idx] + perp_y * offset_km
         
-        ax.annotate(f'Seg {i+1}\n({mean_angle:.0f}°)', 
+        ax.annotate(f'Seg {orig_seg_num}\n({mean_angle:.0f}°)', 
                     xy=(x_km[mid_idx], y_km[mid_idx]),
                     xytext=(label_x, label_y),
                     fontsize=9, ha='center', va='center',
@@ -323,7 +385,7 @@ def main(dataset_dict):
     
     # Sort corners by emptiness (least points first)
     sorted_corners = sorted(corners.items(), key=lambda x: x[1])
-    legend_loc = sorted_corners[0][0]  # Emptiest corner
+    legend_loc = sorted_corners[0][0]
     
     # Legend
     legend_elements = [
@@ -343,11 +405,11 @@ def main(dataset_dict):
     
     # Print summary
     print(f"\n   Segment summary:")
-    for i, (start, end) in enumerate(segments):
-        mean_angle = np.nanmean(incidence[start:end])
+    for segment_df, start, end, orig_seg_num in segments:
+        mean_angle = np.nanmean(segment_flow[orig_seg_num]['incidence'])
         length_km = calculate_along_track_distance(x[start:end], y[start:end])[-1]
         orientation = 'Parallel' if mean_angle < 30 else ('Oblique' if mean_angle < 60 else 'Perpendicular')
-        print(f"     Seg {i+1}: {orientation:13s} ({mean_angle:.1f}°) | {length_km:.1f} km")
+        print(f"     Seg {orig_seg_num}: {orientation:13s} ({mean_angle:.1f}°) | {length_km:.1f} km")
 
 
 if __name__=="__main__":
