@@ -30,15 +30,22 @@ def load_datasets():
         #     'subset': lambda df: df.iloc[410823 : 410823 + 54566].copy(),
         #     'force_id': 'PRIC_2016_CHA2',
         # },
-
+        # {
+        #     'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
+        #     'label': 'Moller_Stream'
+        # },    # Institute-Möller Ice Stream
+        # {
+        #     'file': 'BAS_2018_Thwaites_AIR_BM3.csv',
+        #     'label':'Thwaites_BAS'
+        # },    # Thwaites Glacier
+        # {
+        #     'file': 'CRESIS_2009_Thwaites_AIR_BM3.csv',
+        #     'label': 'Thwaites_CR'
+        # },   # Thwaites Swath
         {
-            'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
-            'label': 'Moller_Stream'
-        },    # Institute-Möller Ice Stream
-        
-        # {'file': 'BAS_2018_Thwaites_AIR_BM3.csv',  'label':'Thwaites_BAS'},   # Thwaites Glacier
-        # {'file': 'CRESIS_2009_Thwaites_AIR_BM3.csv', 'label': 'Thwaites_CR'}, # Thwaites Swath
-        # {'file': 'AWI_2018_ANIRES_AIR_BM3.csv', 'label': 'DML_AniRES'},      # Dronning Maud Land
+          'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
+          'label': 'DML_AniRES'
+         },   # Dronning Maud Land
     ]
 
 
@@ -293,11 +300,11 @@ def analyse_sliding_windows(dist, elev, window_size=50000, step_size=25000):
     current_start = start_dist
     window_idx = 0
     
-    while current_start + window_size <= max_dist:
+    while current_start + window_size <= max_dist + 1e-6:  # small epsilon
         current_end = current_start + window_size
         
         # Mask data for this window
-        mask = (dist >= current_start) & (dist < current_end)
+        mask = (dist >= current_start) & (dist <= current_end)
         w_dist = dist[mask]
         w_elev = elev[mask]
         
@@ -331,7 +338,7 @@ def analyse_sliding_windows(dist, elev, window_size=50000, step_size=25000):
     if psd_accumulator:
         avg_psd = np.mean(psd_accumulator, axis=0)
     else:
-        avg_psd = np.zeros_like(freqs)
+        avg_psd = None
         
     return avg_psd, freqs, large_features, dx_median
 
@@ -505,6 +512,12 @@ def analyse_bedrock():
                 # PSD units
                 pos_freqs = freqs
                 pos_psd = avg_psd
+
+                # Guard against zero PSD (no valid spectral windows were processed)
+                if pos_psd is None or np.all(pos_psd == 0) or np.any(pos_psd < 0):
+                    print(f"  Skipping segment {seg_idx+1} spectral fit: Invalid PSD values")
+                    segment_results.append(stats_dict)
+                    continue
 
                 # Wavelengths
                 wavelengths_calc = 1 / pos_freqs
