@@ -118,30 +118,32 @@ def load_datasets():
         #     'label': 'ROSS_ICECAP',
         #     'subset': lambda df: df[df['trajectory_id'].astype(str).str.contains('IR1HI2_2009033_DMC_JKB1a_WLKX10b', na=False)].copy()
         # },
-        {
-            'file': 'PRIC_2016_CHA2_AIR_BM3.csv', 
-            'label': 'PEL_CHA2',
-            # We shift the start index forward to remove the first segment
-            # skip the exact number of rows in 'Segment 1'
-            'subset': lambda df: df.iloc[410823 : 410823 + 54566].copy(),
-            'force_id': 'PRIC_2016_CHA2',
-        },
+        # {
+        #     'file': 'PRIC_2016_CHA2_AIR_BM3.csv', 
+        #     'label': 'PEL_CHA2',
+        #     'subset': lambda df: df.iloc[410823 : 410823 + 54566].copy(),
+        #     'force_id': 'PRIC_2016_CHA2',
+        # },
         # {
         #     'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
-        #     'label': 'Moller_Stream'
-        # },    # Institute-Möller Ice Stream <<< NOT GREAT       
+        #     'label': 'Moller_Stream',
+        #     'trajectories': ['C16b', 'C22a', 'C34a'],
+        # },
         # {
         #     'file': 'BAS_2018_Thwaites_AIR_BM3.csv',
-        #     'label':'Thwaites_BAS'
-        # },    # Thwaites Glacier  <<< NOT GREAT
-        # {
-        #     'file': 'CRESIS_2009_Thwaites_AIR_BM3.csv',
-        #     'label': 'Thwaites_CR'
-        # },   # Thwaites Swath <<< NOT GREAT
-        # {
-        #   'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
-        #   'label': 'DML_AniRES'
-        #  },   # Dronning Maud Land
+        #     'label': 'Thwaites_BAS',
+        #     'trajectories': ['20190129_02_T4', '20190131_01_T6', '20190205_01_T11'],
+        # },
+        {
+            'file': 'CRESIS_2009_Thwaites_AIR_BM3.csv',
+            'label': 'Thwaites_CR',
+            'trajectories': ['20100112_02'], # '20091228_01', '20100103_02',
+        },
+        {
+          'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
+          'label': 'DML_AniRES',
+          'trajectories': ['2', '5', '7'],  # Note: stored as strings
+        },
     ]
 
     for item in target_files:
@@ -156,26 +158,43 @@ def load_datasets():
         try:
             df = pd.read_csv(filepath, comment='#')
             
+            # Apply subset if specified (for manual row slicing)
             if 'subset' in item:
                 df = item['subset'](df)
             
+            # Force trajectory ID if specified
             if 'force_id' in item:
                 df['trajectory_id'] = item['force_id']
             
             # Cleaning Bedmap3 specific nulls (-9999) 
-            initial_len = len(df)
             df = df[(df['bedrock_altitude (m)'] != -9999) & 
                     (df['trajectory_id'] != -9999)].copy()
             
             df['trajectory_id'] = df['trajectory_id'].astype(str)
             
-            if len(df) > 0:
-                print(f"✓ {label} loaded: {len(df)} rows (Filtered {initial_len - len(df)} nulls)")
-                all_dfs.append({'name': label, 'data': df})
+            # Filter to specific trajectories if specified
+            if 'trajectories' in item:
+                traj_list = [str(t) for t in item['trajectories']]
+                df_filtered = df[df['trajectory_id'].isin(traj_list)]
+                
+                # Create separate dataset for each trajectory
+                for traj_id in traj_list:
+                    traj_df = df_filtered[df_filtered['trajectory_id'] == traj_id].copy()
+                    if len(traj_df) > 0:
+                        print(f"✓ {label}/{traj_id} loaded: {len(traj_df)} rows")
+                        all_dfs.append({'name': f"{label}_{traj_id}", 'data': traj_df})
+                    else:
+                        print(f"✗ {label}/{traj_id}: No data found")
             else:
-                print(f"❌ {label} resulted in 0 rows.")
+                # No trajectory filter - use entire file (or subset)
+                if len(df) > 0:
+                    print(f"✓ {label} loaded: {len(df)} rows")
+                    all_dfs.append({'name': label, 'data': df})
+                else:
+                    print(f"✗ {label} resulted in 0 rows.")
+                
         except Exception as e:
-            print(f"❌ Error loading {label}: {e}")
+            print(f"✗ Error loading {label}: {e}")
 
     return all_dfs
 
