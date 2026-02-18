@@ -109,42 +109,163 @@ def load_datasets():
     
     target_files = [
         # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv', 
-        #     'label': 'ASB_ICECAP',
-        #     'subset': lambda df: df.iloc[8508112 : 8508112 + 17528].copy()
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        #     'label': 'ASB_ICECAP_2010_Fig4_Aurora_SB',
+        #     'subset': lambda df, _r={
+        #         'lat_min': -76.0, 'lat_max': -71.0,
+        #         'lon_min': 105.0, 'lon_max': 125.0,
+        #     }: df[
+        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
+        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
+        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
+        #         (df['longitude (degree_east)']  <= _r['lon_max'])
+        #     ].copy(),
+        # },
+
+        # {
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        #     'label': 'ASB_ICECAP_2010_Fig2F_Resolution_SH',
+        #     'subset': lambda df, _r={
+        #         'lat_min': -76.0, 'lat_max': -73.0,
+        #         'lon_min': 135.0, 'lon_max': 150.0,
+        #     }: df[
+        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
+        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
+        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
+        #         (df['longitude (degree_east)']  <= _r['lon_max'])
+        #     ].copy(),
+        # },
+
+        # {
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        #     'label': 'ASB_ICECAP_2010_Fig2G_Highland_A',
+        #     'subset': lambda df, _r={
+        #         'lat_min': -76.0, 'lat_max': -73.0,
+        #         'lon_min': 118.0, 'lon_max': 132.0,
+        #     }: df[
+        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
+        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
+        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
+        #         (df['longitude (degree_east)']  <= _r['lon_max'])
+        #     ].copy(),
         # },
         # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv', 
-        #     'label': 'ROSS_ICECAP',
-        #     'subset': lambda df: df[df['trajectory_id'].astype(str).str.contains('IR1HI2_2009033_DMC_JKB1a_WLKX10b', na=False)].copy()
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        #     'label': 'ASB_ICECAP_2010_Fig2H_Golicyna_SH',
+        #     'subset': lambda df, _r={
+        #         'lat_min': -75.0, 'lat_max': -72.0,
+        #         'lon_min': 103.0, 'lon_max': 117.0,
+        #     }: df[
+        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
+        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
+        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
+        #         (df['longitude (degree_east)']  <= _r['lon_max'])
+        #     ].copy(),
         # },
+
         # {
-        #     'file': 'PRIC_2016_CHA2_AIR_BM3.csv', 
-        #     'label': 'PEL_CHA2',
-        #     'subset': lambda df: df.iloc[410823 : 410823 + 54566].copy(),
-        #     'force_id': 'PRIC_2016_CHA2',
+        #     'file': 'UTIG_2008_ICECAP_AIR_BM2.csv',
+        #     'label': 'ASB_ICECAP_2008_Fig4_Aurora_SB',
+        #     'force_id': 'Fig4_Aurora_SB',
+        #     'subset': lambda df, _r={
+        #         'lat_min': -76.0, 'lat_max': -71.0,
+        #         'lon_min': 105.0, 'lon_max': 125.0,
+        #     }: df[
+        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
+        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
+        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
+        #         (df['longitude (degree_east)']  <= _r['lon_max'])
+        #     ].copy(),
         # },
+
         # {
-        #     'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
-        #     'label': 'Moller_Stream',
-        #     'trajectories': ['C16b', 'C22a', 'C34a'],
+        #     'file': 'UTIG_2008_ICECAP_AIR_BM2.csv',
+        #     'label': 'ASB_ICECAP_2008_Fig2G_Highland_A',
+        #     'force_id': 'Fig2G_Highland_A',
+        #     'subset': lambda df, _r={
+        #         'lat_min': -76.0, 'lat_max': -73.0,
+        #         'lon_min': 118.0, 'lon_max': 132.0,
+        #     }: df[
+        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
+        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
+        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
+        #         (df['longitude (degree_east)']  <= _r['lon_max'])
+        #     ].copy(),
         # },
+
         # {
-        #     'file': 'BAS_2018_Thwaites_AIR_BM3.csv',
-        #     'label': 'Thwaites_BAS',
-        #     'trajectories': ['20190129_02_T4', '20190131_01_T6', '20190205_01_T11'],
+        #     'file': 'UTIG_2008_ICECAP_AIR_BM2.csv',
+        #     'label': 'ASB_ICECAP_2008_Fig2H_Golicyna_SH',
+        #     'force_id': 'Fig2H_Golicyna_SH',
+        #     'subset': lambda df, _r={
+        #         'lat_min': -75.0, 'lat_max': -72.0,
+        #         'lon_min': 103.0, 'lon_max': 117.0,
+        #     }: df[
+        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
+        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
+        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
+        #         (df['longitude (degree_east)']  <= _r['lon_max'])
+        #     ].copy(),
         # },
+
+        # {
+        #     'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
+        #     'label': 'Rec_Catch_Fig2D_Recovery_SB',
+        #     'subset': lambda df, _r={
+        #         'lat_min': -83.5, 'lat_max': -80.5,
+        #         'lon_min': -35.0, 'lon_max': -15.0,
+        #     }: df[
+        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
+        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
+        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
+        #         (df['longitude (degree_east)']  <= _r['lon_max'])
+        #     ].copy(),
+        # },
+
+        # {
+        #     'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
+        #     'label': 'Rec_Catch_Fig1_Pensacola_Pole',
+        #     'subset': lambda df, _r={
+        #         'lat_min': -88.0, 'lat_max': -82.0,
+        #         'lon_min': -60.0, 'lon_max': -20.0,
+        #     }: df[
+        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
+        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
+        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
+        #         (df['longitude (degree_east)']  <= _r['lon_max'])
+        #     ].copy(),
+        # },
+        
         {
-            'file': 'CRESIS_2009_Thwaites_AIR_BM3.csv',
-            'label': 'Thwaites_CR',
-            'trajectories': ['20100112_02'], # '20091228_01', '20100103_02',
+            'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
+            'label': 'POLARGAP_2015_Fig1_Pensacola_Pole',
+            'subset': lambda df, _r={
+                'lat_min': -88.0, 'lat_max': -82.0,
+                'lon_min': -60.0, 'lon_max': -20.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
         },
+
         {
-          'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
-          'label': 'DML_AniRES',
-          'trajectories': ['2', '5', '7'],  # Note: stored as strings
+            'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
+            'label': 'POLARGAP_2015_Fig2C_Hercules_Dome',
+            'subset': lambda df, _r={
+                'lat_min': -87.5, 'lat_max': -85.0,
+                'lon_min': -120.0, 'lon_max': -100.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
         },
     ]
+
+
 
     for item in target_files:
         filename = item['file']
