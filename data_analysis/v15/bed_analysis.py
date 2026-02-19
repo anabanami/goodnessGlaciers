@@ -42,10 +42,10 @@ def load_datasets():
         #     'file': 'CRESIS_2009_Thwaites_AIR_BM3.csv',
         #     'label': 'Thwaites_CR'
         # },   # Thwaites Swath
-        {
-          'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
-          'label': 'DML_AniRES'
-         },   # Dronning Maud Land
+        # {
+        #   'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
+        #   'label': 'DML_AniRES'
+        #  },   # Dronning Maud Land
     ]
 
 
@@ -271,7 +271,7 @@ def calculate_flow_incidence(x, y, flow_x, flow_y):
     return np.minimum(angle, 180 - angle)
 
 
-def analyse_sliding_windows(dist, elev, window_size=50000, step_size=25000):
+def analyse_sliding_windows(dist, elev, window_size=50000, step_size=10000):
     """
     Slides a window across the segment to capture local morphometrics AND 
     build a robust average spectrum.
@@ -591,7 +591,7 @@ def analyse_bedrock():
                         plot_count += 1
 
                 else:
-                    print(f"Skipping Line {traj_id}: Not enough data points in 100m-10km range.")
+                    print(f"Skipping Line {traj_id}: Not enough data points in 250m–50km range.")
 
                 segment_results.append(stats_dict)
 
