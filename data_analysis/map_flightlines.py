@@ -21,19 +21,19 @@ def load_datasets():
     all_dfs = []
 
     target_files = [
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'ASB_ICECAP_2010_Fig4_Aurora_SB',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -76.0, 'lat_max': -71.0,
-        #         'lon_min': 105.0, 'lon_max': 125.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
+        {
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+            'label': 'ASB_ICECAP_2010_Fig4_Aurora_SB',
+            'subset': lambda df, _r={
+                'lat_min': -76.0, 'lat_max': -71.0,
+                'lon_min': 105.0, 'lon_max': 125.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
+        },
 
         # {
         #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
@@ -120,36 +120,35 @@ def load_datasets():
         #         (df['longitude (degree_east)']  <= _r['lon_max'])
         #     ].copy(),
         # },
-
         ##############################################################################
 
-        {
-            'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
-            'label': 'Rec_Catch_Fig2D_Recovery_SB',
-            'subset': lambda df, _r={
-                'lat_min': -83.5, 'lat_max': -80.5,
-                'lon_min': -35.0, 'lon_max': -15.0,
-            }: df[
-                (df['latitude (degree_north)'] >= _r['lat_min']) &
-                (df['latitude (degree_north)'] <= _r['lat_max']) &
-                (df['longitude (degree_east)']  >= _r['lon_min']) &
-                (df['longitude (degree_east)']  <= _r['lon_max'])
-            ].copy(),
-        },
+        # {
+        #     'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
+        #     'label': 'Rec_Catch_Fig2D_Recovery_SB',
+        #     'subset': lambda df, _r={
+        #         'lat_min': -83.5, 'lat_max': -80.5,
+        #         'lon_min': -35.0, 'lon_max': -15.0,
+        #     }: df[
+        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
+        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
+        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
+        #         (df['longitude (degree_east)']  <= _r['lon_max'])
+        #     ].copy(),
+        # },
 
-        {
-            'file': 'NASA_2018_ICEBRIDGE_AIR_BM3.csv',
-            'label': '2018_Rec_SB_Fig2D_Recovery_SB',
-            'subset': lambda df, _r={
-                'lat_min': -83.5, 'lat_max': -80.5,
-                'lon_min': -35.0, 'lon_max': -15.0,
-            }: df[
-                (df['latitude (degree_north)'] >= _r['lat_min']) &
-                (df['latitude (degree_north)'] <= _r['lat_max']) &
-                (df['longitude (degree_east)']  >= _r['lon_min']) &
-                (df['longitude (degree_east)']  <= _r['lon_max'])
-            ].copy(),
-        },
+        # {
+        #     'file': 'NASA_2018_ICEBRIDGE_AIR_BM3.csv',
+        #     'label': '2018_Rec_SB_Fig2D_Recovery_SB',
+        #     'subset': lambda df, _r={
+        #         'lat_min': -83.5, 'lat_max': -80.5,
+        #         'lon_min': -35.0, 'lon_max': -15.0,
+        #     }: df[
+        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
+        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
+        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
+        #         (df['longitude (degree_east)']  <= _r['lon_max'])
+        #     ].copy(),
+        # },
         ##############################################################################
         
         # {
