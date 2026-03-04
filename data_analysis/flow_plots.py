@@ -112,25 +112,55 @@ def load_datasets():
     all_dfs = []
     
     target_files = [
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'TEST_Aurora_SB',
-        #     'subset': lambda df: df.iloc[8508112:8508112+17528].copy(),
-        # },
-
         {
             'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-            'label': 'ASB_ICECAP_2010_Fig4_Aurora_SB',
-            'subset': lambda df, _r={
-                'lat_min': -76.0, 'lat_max': -71.0,
-                'lon_min': 105.0, 'lon_max': 125.0,
-            }: df[
-                (df['latitude (degree_north)'] >= _r['lat_min']) &
-                (df['latitude (degree_north)'] <= _r['lat_max']) &
-                (df['longitude (degree_east)']  >= _r['lon_min']) &
-                (df['longitude (degree_east)']  <= _r['lon_max'])
-            ].copy(),
+            'label': 'TEST_Aurora_SB',
+            'subset': lambda df: df.iloc[8508112:8508112+17528].copy(),
         },
+        {
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv', 
+            'label': 'ROSS_ICECAP',
+            'subset': lambda df: df[df['trajectory_id'].astype(str).str.contains('IR1HI2_2009033_DMC_JKB1a_WLKX10b', na=False)].copy()
+        },
+        {
+            'file': 'PRIC_2016_CHA2_AIR_BM3.csv', 
+            'label': 'PEL_CHA2',
+            # We shift the start index forward to remove the first segment
+            # skip the exact number of rows in 'Segment 1'
+            'subset': lambda df: df.iloc[410823 : 410823 + 54566].copy(),
+            'force_id': 'PRIC_2016_CHA2',
+        },
+        {
+            'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
+            'label': 'Moller_Stream'
+        },    # Institute-Möller Ice Stream
+        {
+            'file': 'BAS_2018_Thwaites_AIR_BM3.csv',
+            'label':'Thwaites_BAS'
+        },    # Thwaites Glacier
+        {
+            'file': 'CRESIS_2009_Thwaites_AIR_BM3.csv',
+            'label': 'Thwaites_CR'
+        },   # Thwaites Swath
+        {
+          'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
+          'label': 'DML_AniRES'
+         },   # Dronning Maud Land
+
+        ##############################################################################
+        # {
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        #     'label': 'ASB_ICECAP_2010_Fig4_Aurora_SB',
+        #     'subset': lambda df, _r={
+        #         'lat_min': -76.0, 'lat_max': -71.0,
+        #         'lon_min': 105.0, 'lon_max': 125.0,
+        #     }: df[
+        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
+        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
+        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
+        #         (df['longitude (degree_east)']  <= _r['lon_max'])
+        #     ].copy(),
+        # },
 
         # {
         #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
@@ -246,7 +276,6 @@ def load_datasets():
         #     ].copy(),
         # },
         ##############################################################################
-        
         # {
         #     'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
         #     'label': 'POLARGAP_2015_Fig1_Pensacola_Pole',
@@ -420,7 +449,6 @@ def get_orientation_color(angle):
 def main(dataset_dict):
     region_label = dataset_dict['name']
     df = dataset_dict['data']
-    traj_id = df['trajectory_id'].iloc[0] if 'trajectory_id' in df.columns else region_label
 
     print(f"Visualizing Flow Orientation for: {region_label}")
 
@@ -432,10 +460,34 @@ def main(dataset_dict):
     x, y = _TRANSFORMER.transform(df['longitude (degree_east)'].values,
                                   df['latitude (degree_north)'].values)
 
-    # Detect and filter segments (matching bed_analysis_17.py logic)
-    print("   Detecting segments...")
-    raw_segments = detect_segments(df, x, y)
-    print(f"   Found {len(raw_segments)} raw segments")
+    # Detect segments PER TRAJECTORY (matching bed_analysis_17.py logic)
+    # This ensures trajectory boundaries are respected, not just spatial gaps
+    print("   Detecting segments per trajectory...")
+    raw_segments = []
+
+    for traj_id in df['trajectory_id'].unique():
+        # Get indices for this trajectory in the original dataframe
+        traj_mask = df['trajectory_id'] == traj_id
+        traj_indices = np.where(traj_mask)[0]
+
+        if len(traj_indices) < 20:
+            continue
+
+        # Extract trajectory data
+        traj_df = df[traj_mask].copy()
+        traj_x = x[traj_mask]
+        traj_y = y[traj_mask]
+
+        # Detect segments within this trajectory
+        traj_segments = detect_segments(traj_df, traj_x, traj_y)
+
+        # Convert local indices back to global indices
+        for seg_df, local_start, local_end in traj_segments:
+            global_start = traj_indices[local_start]
+            global_end = traj_indices[local_end - 1] + 1  # end is exclusive
+            raw_segments.append((seg_df, global_start, global_end))
+
+    print(f"   Found {len(raw_segments)} raw segments across {df['trajectory_id'].nunique()} trajectories")
 
     print("   Filtering by ice thickness...")
     segments = filter_segments_by_thickness(raw_segments, x, y, DEM_PATH, cache)
