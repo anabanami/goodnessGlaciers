@@ -112,40 +112,45 @@ def load_datasets():
     all_dfs = []
     
     target_files = [
-        {
-            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-            'label': 'TEST_Aurora_SB',
-            'subset': lambda df: df.iloc[8508112:8508112+17528].copy(),
-        },
-        {
-            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv', 
-            'label': 'ROSS_ICECAP',
-            'subset': lambda df: df[df['trajectory_id'].astype(str).str.contains('IR1HI2_2009033_DMC_JKB1a_WLKX10b', na=False)].copy()
-        },
-        {
-            'file': 'PRIC_2016_CHA2_AIR_BM3.csv', 
-            'label': 'PEL_CHA2',
-            # We shift the start index forward to remove the first segment
-            # skip the exact number of rows in 'Segment 1'
-            'subset': lambda df: df.iloc[410823 : 410823 + 54566].copy(),
-            'force_id': 'PRIC_2016_CHA2',
-        },
-        {
-            'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
-            'label': 'Moller_Stream'
-        },    # Institute-Möller Ice Stream
-        {
-            'file': 'BAS_2018_Thwaites_AIR_BM3.csv',
-            'label':'Thwaites_BAS'
-        },    # Thwaites Glacier
-        {
-            'file': 'CRESIS_2009_Thwaites_AIR_BM3.csv',
-            'label': 'Thwaites_CR'
-        },   # Thwaites Swath
-        {
-          'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
-          'label': 'DML_AniRES'
-         },   # Dronning Maud Land
+        # {
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        #     'label': 'TEST_Aurora_SB',
+        #     'subset': lambda df: df.iloc[8508112:8508112+17528].copy(),
+        # },
+        
+        # {
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv', 
+        #     'label': 'ROSS_ICECAP',
+        #     'subset': lambda df: df[df['trajectory_id'].astype(str).str.contains('IR1HI2_2009033_DMC_JKB1a_WLKX10b', na=False)].copy()
+        # },
+
+        # {
+        #     'file': 'PRIC_2016_CHA2_AIR_BM3.csv', 
+        #     'label': 'PEL_CHA2',
+        #     # skip the exact number of rows in 'Segment 1'
+        #     'subset': lambda df: df.iloc[410823 : 410823 + 54566].copy(),
+        #     'force_id': 'PRIC_2016_CHA2',
+        # },
+
+        # {
+        #     'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
+        #     'label': 'Moller_Stream'
+        # },    # Institute-Möller Ice Stream
+        
+        # {
+        #     'file': 'BAS_2018_Thwaites_AIR_BM3.csv',
+        #     'label':'Thwaites_BAS'
+        # },    # Thwaites Glacier
+        
+        # {
+        #     'file': 'CRESIS_2009_Thwaites_AIR_BM3.csv',
+        #     'label': 'Thwaites_CR'
+        # },   # Thwaites Swath
+        
+        # {
+        #   'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
+        #   'label': 'DML_AniRES'
+        #  },   # Dronning Maud Land
 
         ##############################################################################
         # {
@@ -203,50 +208,6 @@ def load_datasets():
         #     ].copy(),
         # },
 
-        # {
-        #     'file': 'UTIG_2008_ICECAP_AIR_BM2.csv',
-        #     'label': 'ASB_ICECAP_2008_Fig4_Aurora_SB',
-        #     'force_id': 'Fig4_Aurora_SB',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -76.0, 'lat_max': -71.0,
-        #         'lon_min': 105.0, 'lon_max': 125.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
-
-        # {
-        #     'file': 'UTIG_2008_ICECAP_AIR_BM2.csv',
-        #     'label': 'ASB_ICECAP_2008_Fig2G_Highland_A',
-        #     'force_id': 'Fig2G_Highland_A',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -76.0, 'lat_max': -73.0,
-        #         'lon_min': 118.0, 'lon_max': 132.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
-
-        # {
-        #     'file': 'UTIG_2008_ICECAP_AIR_BM2.csv',
-        #     'label': 'ASB_ICECAP_2008_Fig2H_Golicyna_SH',
-        #     'force_id': 'Fig2H_Golicyna_SH',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -75.0, 'lat_max': -72.0,
-        #         'lon_min': 103.0, 'lon_max': 117.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
         ##############################################################################
         # {
         #     'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
@@ -276,19 +237,19 @@ def load_datasets():
         #     ].copy(),
         # },
         ##############################################################################
-        # {
-        #     'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
-        #     'label': 'POLARGAP_2015_Fig1_Pensacola_Pole',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -88.0, 'lat_max': -82.0,
-        #         'lon_min': -60.0, 'lon_max': -20.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
+        {
+            'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
+            'label': 'POLARGAP_2015_Fig1_Pensacola_Pole',
+            'subset': lambda df, _r={
+                'lat_min': -88.0, 'lat_max': -82.0,
+                'lon_min': -60.0, 'lon_max': -20.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
+        },
 
         # {
         #     'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
@@ -367,7 +328,7 @@ def load_datasets():
 def detect_segments(df, x, y, gap_threshold=2000, min_segment_length=50, min_segment_km=10):
     """
     Detect segments based on gaps in the flight track.
-    Matches the logic in bed_analysis_17.py.
+    Matches the logic in bed_analysis.py.
     Returns list of tuples: (segment_df, start_idx, end_idx)
     """
     # Calculate distances between consecutive points
@@ -460,7 +421,7 @@ def main(dataset_dict):
     x, y = _TRANSFORMER.transform(df['longitude (degree_east)'].values,
                                   df['latitude (degree_north)'].values)
 
-    # Detect segments PER TRAJECTORY (matching bed_analysis_17.py logic)
+    # Detect segments PER TRAJECTORY (matching bed_analysis.py logic)
     # This ensures trajectory boundaries are respected, not just spatial gaps
     print("   Detecting segments per trajectory...")
     raw_segments = []

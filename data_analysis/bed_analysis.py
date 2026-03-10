@@ -10,6 +10,11 @@ from REMA_extractor import extract_rema_elevation, extract_rema_flow_vector, cal
 # Output configuration - creates folders in same directory as this script
 OUTPUT_BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 
+# Window parameters for sensitivity testing
+WINDOW_SIZE = 50000  # metres
+STEP_SIZE = 10000    # metres
+WINDOW_TYPE = 'tukey'  # 'rectangular', 'hann', or 'tukey'
+
 
 def get_region_folder(dataset_name):
     """
@@ -56,40 +61,45 @@ def load_datasets():
     
 
     target_files = [
-        {
-            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-            'label': 'TEST_Aurora_SB',
-            'subset': lambda df: df.iloc[8508112:8508112+17528].copy(),
-        },
-        {
-            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv', 
-            'label': 'ROSS_ICECAP',
-            'subset': lambda df: df[df['trajectory_id'].astype(str).str.contains('IR1HI2_2009033_DMC_JKB1a_WLKX10b', na=False)].copy()
-        },
-        {
-            'file': 'PRIC_2016_CHA2_AIR_BM3.csv', 
-            'label': 'PEL_CHA2',
-            # We shift the start index forward to remove the first segment
-            # skip the exact number of rows in 'Segment 1'
-            'subset': lambda df: df.iloc[410823 : 410823 + 54566].copy(),
-            'force_id': 'PRIC_2016_CHA2',
-        },
-        {
-            'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
-            'label': 'Moller_Stream'
-        },    # Institute-Möller Ice Stream
-        {
-            'file': 'BAS_2018_Thwaites_AIR_BM3.csv',
-            'label':'Thwaites_BAS'
-        },    # Thwaites Glacier
-        {
-            'file': 'CRESIS_2009_Thwaites_AIR_BM3.csv',
-            'label': 'Thwaites_CR'
-        },   # Thwaites Swath
-        {
-          'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
-          'label': 'DML_AniRES'
-         },   # Dronning Maud Land
+        # {
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        #     'label': 'TEST_Aurora_SB',
+        #     'subset': lambda df: df.iloc[8508112:8508112+17528].copy(),
+        # },
+        
+        # {
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv', 
+        #     'label': 'ROSS_ICECAP',
+        #     'subset': lambda df: df[df['trajectory_id'].astype(str).str.contains('IR1HI2_2009033_DMC_JKB1a_WLKX10b', na=False)].copy()
+        # },
+
+        # {
+        #     'file': 'PRIC_2016_CHA2_AIR_BM3.csv', 
+        #     'label': 'PEL_CHA2',
+        #     # skip the exact number of rows in 'Segment 1'
+        #     'subset': lambda df: df.iloc[410823 : 410823 + 54566].copy(),
+        #     'force_id': 'PRIC_2016_CHA2',
+        # },
+
+        # {
+        #     'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
+        #     'label': 'Moller_Stream'
+        # },    # Institute-Möller Ice Stream
+        
+        # {
+        #     'file': 'BAS_2018_Thwaites_AIR_BM3.csv',
+        #     'label':'Thwaites_BAS'
+        # },    # Thwaites Glacier
+        
+        # {
+        #     'file': 'CRESIS_2009_Thwaites_AIR_BM3.csv',
+        #     'label': 'Thwaites_CR'
+        # },   # Thwaites Swath
+        
+        # {
+        #   'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
+        #   'label': 'DML_AniRES'
+        #  },   # Dronning Maud Land
 
         ##############################################################################
         # {
@@ -147,50 +157,6 @@ def load_datasets():
         #     ].copy(),
         # },
 
-        # {
-        #     'file': 'UTIG_2008_ICECAP_AIR_BM2.csv',
-        #     'label': 'ASB_ICECAP_2008_Fig4_Aurora_SB',
-        #     'force_id': 'Fig4_Aurora_SB',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -76.0, 'lat_max': -71.0,
-        #         'lon_min': 105.0, 'lon_max': 125.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
-
-        # {
-        #     'file': 'UTIG_2008_ICECAP_AIR_BM2.csv',
-        #     'label': 'ASB_ICECAP_2008_Fig2G_Highland_A',
-        #     'force_id': 'Fig2G_Highland_A',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -76.0, 'lat_max': -73.0,
-        #         'lon_min': 118.0, 'lon_max': 132.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
-
-        # {
-        #     'file': 'UTIG_2008_ICECAP_AIR_BM2.csv',
-        #     'label': 'ASB_ICECAP_2008_Fig2H_Golicyna_SH',
-        #     'force_id': 'Fig2H_Golicyna_SH',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -75.0, 'lat_max': -72.0,
-        #         'lon_min': 103.0, 'lon_max': 117.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
         ##############################################################################
         # {
         #     'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
@@ -220,19 +186,19 @@ def load_datasets():
         #     ].copy(),
         # },
         ##############################################################################
-        # {
-        #     'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
-        #     'label': 'POLARGAP_2015_Fig1_Pensacola_Pole',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -88.0, 'lat_max': -82.0,
-        #         'lon_min': -60.0, 'lon_max': -20.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
+        {
+            'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
+            'label': 'POLARGAP_2015_Fig1_Pensacola_Pole',
+            'subset': lambda df, _r={
+                'lat_min': -88.0, 'lat_max': -82.0,
+                'lon_min': -60.0, 'lon_max': -20.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
+        },
 
         # {
         #     'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
@@ -551,8 +517,17 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size=50000, step
             # A. DETREND LOCALLY
             # This removes the "slope" of the valley wall specific to this window
             w_detrended = signal.detrend(w_elev)
-            
-            # B. SPECTRAL ANALYSIS (For Texture/Beta)
+
+            # B. APPLY TAPER (reduces spectral leakage at window edges)
+            if WINDOW_TYPE == 'hann':
+                taper = signal.windows.hann(len(w_detrended))
+                w_detrended = w_detrended * taper
+            elif WINDOW_TYPE == 'tukey':
+                taper = signal.windows.tukey(len(w_detrended), alpha=0.5)
+                w_detrended = w_detrended * taper
+            # else: rectangular (no taper)
+
+            # C. SPECTRAL ANALYSIS (For Texture/Beta)
             pgram = signal.lombscargle(w_dist, w_detrended, angular_freqs, normalize=False)
             psd_accumulator.append(pgram)
             
@@ -624,6 +599,8 @@ def analyse_bedrock():
 
         # Create output directory structure for this dataset
         region_folder = get_region_folder(dataset_name)
+        window_suffix = f"_w{WINDOW_SIZE // 1000}km" if WINDOW_TYPE == 'rectangular' else f"_w{WINDOW_SIZE // 1000}km_{WINDOW_TYPE}"
+        region_folder = f"{region_folder}{window_suffix}"
         output_paths = ensure_output_dirs(OUTPUT_BASE_PATH, region_folder)
         print(f"  Output folder: {output_paths['region']}")
 
@@ -704,9 +681,7 @@ def analyse_bedrock():
                 # append valid segment to list 
                 valid_segments.append((segment_data, segment_distance))
 
-                # Define window parameters
-                WINDOW_SIZE = 50000
-                STEP_SIZE = 10000
+                # Window parameters defined at top of script
 
                 # 1. Get Flow Direction from REMA (Smoothed)
                 vx, vy = extract_rema_flow_vector(seg_x, seg_y, dem_path, valid_ice_thickness)
@@ -1064,7 +1039,8 @@ if __name__=="__main__":
                     'relief_m': w.get('local_relief_m'),
                     'rms_roughness': w.get('roughness_rms')
                 })
-        pd.DataFrame(all_window_data).to_csv(f'{region_name}_window_stats.csv', index=False)
+        csv_suffix = f"_w{WINDOW_SIZE // 1000}km" if WINDOW_TYPE == 'rectangular' else f"_w{WINDOW_SIZE // 1000}km_{WINDOW_TYPE}"
+        pd.DataFrame(all_window_data).to_csv(f'{region_name}{csv_suffix}_window_stats.csv', index=False)
 
         # --- Segment-level CSV (for cos²θ regression) ---
         all_segment_data = []
@@ -1084,5 +1060,5 @@ if __name__=="__main__":
                     'hurst': hursts[i] if i < len(hursts) else np.nan,
                     'orientation': orientations[i] if i < len(orientations) else '',
                 })
-        pd.DataFrame(all_segment_data).to_csv(f'{region_name}_segment_stats.csv', index=False)
+        pd.DataFrame(all_segment_data).to_csv(f'{region_name}{csv_suffix}_segment_stats.csv', index=False)
         print(f"Exported {len(all_window_data)} window rows and {len(all_segment_data)} segment rows")
