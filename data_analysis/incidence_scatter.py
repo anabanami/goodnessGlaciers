@@ -109,6 +109,42 @@ def select_region(regions):
             print("Please enter a number.")
 
 
+def cos2_model(theta_deg, beta_perp, beta_parallel):
+    """
+    β(θ) = β⊥ + (β∥ - β⊥) cos²(θ)
+    """
+    theta_rad = np.radians(theta_deg)
+    return beta_perp + (beta_parallel - beta_perp) * np.cos(theta_rad)**2
+
+
+def bootstrap_cos2_uncertainty(theta, beta, n_boot=2000, block_length=5):
+      """Block bootstrap for cos²θ fit with correlated overlapping windows."""
+      n = len(theta)
+      boot_params = []
+
+      for _ in range(n_boot):
+          # Draw random block start indices
+          n_blocks = int(np.ceil(n / block_length))
+          starts = np.random.randint(0, n, size=n_blocks)
+
+          # Build bootstrap sample from contiguous blocks
+          indices = np.concatenate([np.arange(s, min(s + block_length, n)) for s in starts])[:n]
+
+          t_boot = theta[indices]
+          b_boot = beta[indices]
+
+          try:
+              popt_b, _ = optimize.curve_fit(cos2_model, t_boot, b_boot,
+                                              p0=[np.mean(b_boot), np.mean(b_boot)],
+                                              maxfev=5000)
+              boot_params.append(popt_b)
+          except (RuntimeError, ValueError):
+              continue
+
+      boot_params = np.array(boot_params)
+      return np.std(boot_params, axis=0)  # bootstrap standard errors
+
+
 def plot_window_scatter(csv_path):
     """
     Creates a scatter plot of incidence angle vs beta from exported CSV.
@@ -122,6 +158,9 @@ def plot_window_scatter(csv_path):
         print("No valid incidence/beta pairs found.")
         return
 
+    theta = df_clean['incidence_deg'].values
+    beta = df_clean['beta'].values
+
     print(f"Loaded {len(df_clean)} valid windows from {csv_path}")
 
     fig, ax = plt.subplots(figsize=(10, 8))
@@ -132,18 +171,46 @@ def plot_window_scatter(csv_path):
     ax.set_ylabel(r'Power Law Exponent ($\beta$)')
     ax.set_title(f'Incidence Angle vs Roughness (n={len(df_clean)} windows)')
     ax.grid(True, alpha=0.3)
-
+    
+    x_fit = np.linspace(0, 90, 200)
+    
     # Linear regression with stats
     if len(df_clean) > 2:
-        slope, intercept, r_value, p_value, std_err = stats.linregress(
-            df_clean['incidence_deg'], df_clean['beta']
-        )
-        x_line = np.linspace(df_clean['incidence_deg'].min(), df_clean['incidence_deg'].max(), 100)
-        ax.plot(x_line, intercept + slope * x_line, 'r--', alpha=0.8,
-                label=f'Linear fit: slope={slope:.3f}, R²={r_value**2:.3f}')
-        ax.legend()
+        # Linear fit
+        slope, intercept, r_value, p_value, std_err = stats.linregress(theta, beta)
+        ax.plot(x_fit, intercept + slope * x_fit, 'r--', alpha=0.7, linewidth=1.5,
+                label=f'Linear: slope={slope:.4f}, R²={r_value**2:.3f}, p={p_value:.2e}')
+        print(f"  Linear: slope={slope:.4f}, R²={r_value**2:.3f}, p={p_value:.2e}")
 
-        print(f"Linear regression: slope={slope:.4f}, R²={r_value**2:.4f}, p={p_value:.4e}")
+        # cos²θ fit
+        try:
+            low = theta < 30
+            high = theta > 60
+            p0_par = np.mean(beta[low]) if np.any(low) else np.mean(beta)
+            p0_perp = np.mean(beta[high]) if np.any(high) else np.mean(beta)
+
+            popt, pcov = optimize.curve_fit(cos2_model, theta, beta, p0=[p0_perp, p0_par])
+            beta_perp, beta_par = popt
+            # Bootstrap uncertainty (accounts for window overlap correlation)
+            perr = bootstrap_cos2_uncertainty(theta, beta, block_length=5)
+
+            delta = beta_par - beta_perp
+
+            pred = cos2_model(theta, *popt)
+            ss_res = np.sum((beta - pred)**2)
+            ss_tot = np.sum((beta - np.mean(beta))**2)
+            r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0
+
+            ax.plot(x_fit, cos2_model(x_fit, *popt), 'k-', alpha=0.8, linewidth=2,
+                    label=(f'cos²θ: β∥={beta_par:.2f}±{perr[1]:.2f}, '
+                           f'β⊥={beta_perp:.2f}±{perr[0]:.2f}, '
+                           f'Δβ={delta:+.2f}, R²={r2:.3f}'))
+
+            print(f"  cos²θ fit: β∥={beta_par:.3f}±{perr[1]:.3f}, β⊥={beta_perp:.3f}±{perr[0]:.3f}, Δβ={delta:+.3f}, R²={r2:.4f}")
+        except (RuntimeError, ValueError) as e:
+            print(f"  cos²θ fit failed: {e}")
+
+        ax.legend(fontsize=8)
 
     plt.tight_layout()
 
@@ -151,16 +218,8 @@ def plot_window_scatter(csv_path):
     output_path = csv_path.replace('.csv', '_scatter.png')
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"Saved plot to {output_path}")
-
-    plt.show()
+    # plt.show()
     plt.close()
-
-def cos2_model(theta_deg, beta_perp, beta_parallel):
-    """
-    β(θ) = β⊥ + (β∥ - β⊥) cos²(θ)
-    """
-    theta_rad = np.radians(theta_deg)
-    return beta_perp + (beta_parallel - beta_perp) * np.cos(theta_rad)**2
 
 
 def plot_segment_scatter(csv_path):
@@ -222,6 +281,7 @@ def plot_segment_scatter_direct(seg_path):
         slope, intercept, r_value, p_value, std_err = stats.linregress(theta, beta)
         ax.plot(x_fit, intercept + slope * x_fit, 'r--', alpha=0.7, linewidth=1.5,
                 label=f'Linear: slope={slope:.4f}, R²={r_value**2:.3f}, p={p_value:.2e}')
+        print(f"  Linear: slope={slope:.4f}, R²={r_value**2:.3f}, p={p_value:.2e}")
 
         # cos²θ fit
         try:
@@ -257,7 +317,7 @@ def plot_segment_scatter_direct(seg_path):
     output_path = seg_path.replace('.csv', '_scatter.png')
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"Saved to {output_path}")
-    plt.show()
+    # plt.show()
     plt.close()
 
 

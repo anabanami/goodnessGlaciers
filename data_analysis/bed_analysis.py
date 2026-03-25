@@ -101,91 +101,91 @@ def load_datasets():
         #   'label': 'DML_AniRES'
         #  },   # Dronning Maud Land
 
-        ##############################################################################
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'ASB_ICECAP_2010_Fig4_Aurora_SB',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -76.0, 'lat_max': -71.0,
-        #         'lon_min': 105.0, 'lon_max': 125.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
+        ########################### OCKENDEN REGIONS #############################
+        {
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+            'label': 'ASB_ICECAP_2010_Fig4_Aurora_SB',
+            'subset': lambda df, _r={
+                'lat_min': -76.0, 'lat_max': -71.0,
+                'lon_min': 105.0, 'lon_max': 125.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
+        },
 
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'ASB_ICECAP_2010_Fig2F_Resolution_SH',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -76.0, 'lat_max': -73.0,
-        #         'lon_min': 135.0, 'lon_max': 150.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
+        {
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+            'label': 'ASB_ICECAP_2010_Fig2F_Resolution_SH',
+            'subset': lambda df, _r={
+                'lat_min': -76.0, 'lat_max': -73.0,
+                'lon_min': 135.0, 'lon_max': 150.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
+        },
 
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'ASB_ICECAP_2010_Fig2G_Highland_A',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -76.0, 'lat_max': -73.0,
-        #         'lon_min': 118.0, 'lon_max': 132.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'ASB_ICECAP_2010_Fig2H_Golicyna_SH',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -75.0, 'lat_max': -72.0,
-        #         'lon_min': 103.0, 'lon_max': 117.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
+        {
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+            'label': 'ASB_ICECAP_2010_Fig2G_Highland_A',
+            'subset': lambda df, _r={
+                'lat_min': -76.0, 'lat_max': -73.0,
+                'lon_min': 118.0, 'lon_max': 132.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
+        },
+        {
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+            'label': 'ASB_ICECAP_2010_Fig2H_Golicyna_SH',
+            'subset': lambda df, _r={
+                'lat_min': -75.0, 'lat_max': -72.0,
+                'lon_min': 103.0, 'lon_max': 117.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
+        },
 
-        ##############################################################################
-        # {
-        #     'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
-        #     'label': 'Rec_Catch_Fig2D_Recovery_SB',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -83.5, 'lat_max': -80.5,
-        #         'lon_min': -35.0, 'lon_max': -15.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
+        #############################################################################
+        {
+            'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
+            'label': 'Rec_Catch_Fig2D_Recovery_SB',
+            'subset': lambda df, _r={
+                'lat_min': -83.5, 'lat_max': -80.5,
+                'lon_min': -35.0, 'lon_max': -15.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
+        },
 
-        # {
-        #     'file': 'NASA_2018_ICEBRIDGE_AIR_BM3.csv',
-        #     'label': '2018_Rec_SB_Fig2D_Recovery_SB',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -83.5, 'lat_max': -80.5,
-        #         'lon_min': -35.0, 'lon_max': -15.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
-        ##############################################################################
+        {
+            'file': 'NASA_2018_ICEBRIDGE_AIR_BM3.csv',
+            'label': '2018_Rec_SB_Fig2D_Recovery_SB',
+            'subset': lambda df, _r={
+                'lat_min': -83.5, 'lat_max': -80.5,
+                'lon_min': -35.0, 'lon_max': -15.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
+        },
+        #############################################################################
         {
             'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
             'label': 'POLARGAP_2015_Fig1_Pensacola_Pole',
@@ -200,19 +200,19 @@ def load_datasets():
             ].copy(),
         },
 
-        # {
-        #     'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
-        #     'label': 'POLARGAP_2015_Fig2C_Hercules_Dome',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -87.5, 'lat_max': -85.0,
-        #         'lon_min': -120.0, 'lon_max': -100.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
+        {
+            'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
+            'label': 'POLARGAP_2015_Fig2C_Hercules_Dome',
+            'subset': lambda df, _r={
+                'lat_min': -87.5, 'lat_max': -85.0,
+                'lon_min': -120.0, 'lon_max': -100.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
+        },
     ]
 
 
@@ -727,11 +727,7 @@ def analyse_bedrock():
                     loc_of_max_relief = 0
                     avg_rms_roughness = 0
 
-                # 3. BIN incidence results
-                flow_orientation = "Oblique"
-                if mean_incidence < 30: flow_orientation = "Parallel"
-                elif mean_incidence > 60: flow_orientation = "Perpendicular"
-                print(f" >>>>>>>>>: {dataset_name} | {traj_id} | Segment {seg_idx+1}: {flow_orientation} (incidence: {mean_incidence:.1f})")
+                print(f" >>>>>>>>>: {dataset_name} | {traj_id} | Segment {seg_idx+1}: mean incidence {mean_incidence:.1f}°")
 
                 stats_dict = {
                     'elevation_range': global_relief,
@@ -745,7 +741,6 @@ def analyse_bedrock():
                     'ice_thickness_mean': np.nanmean(valid_ice_thickness),
                     'ice_thickness_range': np.nanmax(valid_ice_thickness) - np.nanmin(valid_ice_thickness),
                     'flow_incidence_deg': mean_incidence,
-                    'flow_orientation': flow_orientation,
                     'window_stats': window_stats
                 }
                 
@@ -841,7 +836,7 @@ def analyse_bedrock():
                 list_keys = ['dominant_wavelengths', 'confirmed_wavelengths', 'candidate_wavelengths', 'window_stats']
                 
                 # Keys that are SINGLE VALUES in the segment dict, but we want to KEEP as a list 
-                list_keys_collect = ['power_law_exponent', 'flow_orientation', 'hurst_exponent', 'flow_incidence_deg']
+                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'flow_incidence_deg']
 
                 for key in segment_results[0].keys():
                     # 1. Extract values for the CURRENT key immediately
@@ -947,40 +942,6 @@ def results_summary(results):
     if thickness:
         print(f"MEAN ICE THICKNESS:\n  -> {format_stat(thickness, 'm')}")
 
-    # 5. Flow Orientation (All Segments)
-    all_orientations = [o for r in results.values() for o in r.get('flow_orientation', [])]
-    if all_orientations:
-        print("." * 60)
-        print("FLOW ORIENTATION (All Segments):")
-        counts = {o: all_orientations.count(o) for o in set(all_orientations)}
-        total = len(all_orientations)
-        for o, count in counts.items():
-            print(f"  -> {o}: {count} segments ({100*count/total:.1f}%)")
-
-        # NOTE: Stratified beta analysis removed - now handled by incidence_scatter.py
-        # which performs cos²θ regression on the exported segment CSV data.
-        #
-        # # Beta breakdown by orientation
-        # print("\n  STRATIFIED BETA (Roughness) BY ORIENTATION:")
-        # for target_orient in ['Parallel', 'Oblique', 'Perpendicular']:
-        #     betas_for_orient = []
-        #     for r in results.values():
-        #         traj_orientations = r.get('flow_orientation', [])
-        #         traj_betas = r.get('power_law_exponent', [])
-        #
-        #         # Check if they match in length (they should)
-        #         if len(traj_orientations) == len(traj_betas):
-        #             # Zip them together to pair (Orientation, Beta)
-        #             for orient, beta in zip(traj_orientations, traj_betas):
-        #                 if orient == target_orient:
-        #                     betas_for_orient.append(beta)
-        #
-        #     if betas_for_orient:
-        #         avg_b = np.mean(betas_for_orient)
-        #         print(f"  -> {target_orient:<15}: Mean Beta = {avg_b:.2f}  (n={len(betas_for_orient)})")
-        #     else:
-        #         print(f"  -> {target_orient:<15}: No segments found")
-
     print("." * 60)
 
     # 6. Wavelength
@@ -1047,7 +1008,6 @@ if __name__=="__main__":
         for traj_id, traj_data in region_results.items():
             betas = traj_data.get('power_law_exponent', [])
             incidences = traj_data.get('flow_incidence_deg', [])
-            orientations = traj_data.get('flow_orientation', [])
             hursts = traj_data.get('hurst_exponent', [])
 
             n_segs = min(len(betas), len(incidences))
@@ -1058,7 +1018,6 @@ if __name__=="__main__":
                     'incidence_deg': incidences[i],
                     'beta': betas[i],
                     'hurst': hursts[i] if i < len(hursts) else np.nan,
-                    'orientation': orientations[i] if i < len(orientations) else '',
                 })
         pd.DataFrame(all_segment_data).to_csv(f'{region_name}{csv_suffix}_segment_stats.csv', index=False)
         print(f"Exported {len(all_window_data)} window rows and {len(all_segment_data)} segment rows")
