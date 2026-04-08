@@ -117,7 +117,7 @@ def cos2_model(theta_deg, beta_perp, beta_parallel):
     return beta_perp + (beta_parallel - beta_perp) * np.cos(theta_rad)**2
 
 
-def bootstrap_cos2_uncertainty(theta, beta, n_boot=2000, block_length=5):
+def bootstrap_cos2_uncertainty(theta, beta, n_boot=2000, block_length=3):
       """Block bootstrap for cos²θ fit with correlated overlapping windows."""
       n = len(theta)
       boot_params = []
@@ -160,12 +160,17 @@ def plot_window_scatter(csv_path):
 
     theta = df_clean['incidence_deg'].values
     beta = df_clean['beta'].values
+    beta_err = df_clean['beta_uncertainty'].values if 'beta_uncertainty' in df_clean.columns else None
 
     print(f"Loaded {len(df_clean)} valid windows from {csv_path}")
 
     fig, ax = plt.subplots(figsize=(10, 8))
 
-    ax.scatter(df_clean['incidence_deg'], df_clean['beta'], alpha=0.5, s=20, c='steelblue')
+    if beta_err is not None and np.any(np.isfinite(beta_err)):
+        ax.errorbar(theta, beta, yerr=beta_err, fmt='o', alpha=0.5, ms=3,
+                    color='steelblue', ecolor='gray', elinewidth=0.5, capsize=1.5)
+    else:
+        ax.scatter(theta, beta, alpha=0.5, s=20, c='steelblue')
 
     ax.set_xlabel('Incidence Angle (degrees)')
     ax.set_ylabel(r'Power Law Exponent ($\beta$)')
@@ -192,7 +197,7 @@ def plot_window_scatter(csv_path):
             popt, pcov = optimize.curve_fit(cos2_model, theta, beta, p0=[p0_perp, p0_par])
             beta_perp, beta_par = popt
             # Bootstrap uncertainty (accounts for window overlap correlation)
-            perr = bootstrap_cos2_uncertainty(theta, beta, block_length=5)
+            perr = bootstrap_cos2_uncertainty(theta, beta, block_length=3)
 
             delta = beta_par - beta_perp
 
@@ -266,9 +271,14 @@ def plot_segment_scatter_direct(seg_path):
 
     theta = df['incidence_deg'].values
     beta = df['beta'].values
+    beta_err = df['beta_uncertainty'].values if 'beta_uncertainty' in df.columns else None
 
     fig, ax = plt.subplots(figsize=(10, 8))
-    ax.scatter(theta, beta, alpha=0.6, s=40, c='darkorange')
+    if beta_err is not None:
+        ax.errorbar(theta, beta, yerr=beta_err, fmt='o', alpha=0.6, ms=5,
+                    color='darkorange', ecolor='gray', elinewidth=0.8, capsize=2)
+    else:
+        ax.scatter(theta, beta, alpha=0.6, s=40, c='darkorange')
     ax.set_xlabel('Incidence Angle (degrees)')
     ax.set_ylabel(r'Power Law Exponent ($\beta$)')
     ax.set_xlim(-2, 92)

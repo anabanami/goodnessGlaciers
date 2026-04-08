@@ -4,6 +4,8 @@ from pyproj import Transformer
 from scipy.ndimage import map_coordinates
 import os
 
+import xarray as xr
+
 
 class REMACache:
     """Cache for REMA DEM data to avoid repeated file I/O."""
@@ -116,3 +118,20 @@ def extract_rema_flow_vector(x, y, dem_path, ice_thickness, cache=None):
     magnitude[magnitude == 0] = 1.0
 
     return flow_x / magnitude, flow_y / magnitude
+
+
+def MEaSUREs_validation(track_x, track_y, rema_fx, rema_fy):
+    ds = xr.open_dataset('shortcut_to_culled-data/measures_velocity/antarctica_ice_velocity_450m_v2.nc')
+
+    # track_x, track_y are your EPSG:3031 coordinates
+    measures_vx = ds['VX'].interp(x=xr.DataArray(track_x), y=xr.DataArray(track_y)).values
+    measures_vy = ds['VY'].interp(x=xr.DataArray(track_x), y=xr.DataArray(track_y)).values
+
+    # Normalise
+    meas_mag = np.sqrt(measures_vx**2 + measures_vy**2)
+    meas_mag[meas_mag ==0] = np.nan
+
+    dot = (rema_fx * measures_vx + rema_fy * measures_vy) / meas_mag
+    angular_diff = np.degrees(np.arccos(np.clip(dot, -1, 1))) 
+
+    return angular_diff

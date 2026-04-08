@@ -5,15 +5,15 @@ from scipy import signal, stats
 from pyproj import Transformer
 import os
 import re
-from REMA_extractor import extract_rema_elevation, extract_rema_flow_vector, calculate_ice_thickness
+from REMA_extractor import extract_rema_elevation, extract_rema_flow_vector, calculate_ice_thickness, MEaSUREs_validation
 
 # Output configuration - creates folders in same directory as this script
 OUTPUT_BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 
 # Window parameters for sensitivity testing
-WINDOW_SIZE = 50000  # metres
-STEP_SIZE = 10000    # metres
-WINDOW_TYPE = 'tukey'  # 'rectangular', 'hann', or 'tukey'
+WINDOW_SIZE = 30000  # metres # TEST: 30000, 50000, 75000, 100000
+STEP_SIZE = WINDOW_SIZE // 2 # 25000 metres for the chosen 50km window default
+WINDOW_TYPE = 'rectangular'  # 'rectangular', 'hann', or 'tukey'
 
 
 def get_region_folder(dataset_name):
@@ -116,75 +116,75 @@ def load_datasets():
             ].copy(),
         },
 
-        {
-            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-            'label': 'ASB_ICECAP_2010_Fig2F_Resolution_SH',
-            'subset': lambda df, _r={
-                'lat_min': -76.0, 'lat_max': -73.0,
-                'lon_min': 135.0, 'lon_max': 150.0,
-            }: df[
-                (df['latitude (degree_north)'] >= _r['lat_min']) &
-                (df['latitude (degree_north)'] <= _r['lat_max']) &
-                (df['longitude (degree_east)']  >= _r['lon_min']) &
-                (df['longitude (degree_east)']  <= _r['lon_max'])
-            ].copy(),
-        },
+        # {
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        #     'label': 'ASB_ICECAP_2010_Fig2F_Resolution_SH',
+        #     'subset': lambda df, _r={
+        #         'lat_min': -76.0, 'lat_max': -73.0,
+        #         'lon_min': 135.0, 'lon_max': 150.0,
+        #     }: df[
+        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
+        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
+        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
+        #         (df['longitude (degree_east)']  <= _r['lon_max'])
+        #     ].copy(),
+        # },
 
-        {
-            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-            'label': 'ASB_ICECAP_2010_Fig2G_Highland_A',
-            'subset': lambda df, _r={
-                'lat_min': -76.0, 'lat_max': -73.0,
-                'lon_min': 118.0, 'lon_max': 132.0,
-            }: df[
-                (df['latitude (degree_north)'] >= _r['lat_min']) &
-                (df['latitude (degree_north)'] <= _r['lat_max']) &
-                (df['longitude (degree_east)']  >= _r['lon_min']) &
-                (df['longitude (degree_east)']  <= _r['lon_max'])
-            ].copy(),
-        },
-        {
-            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-            'label': 'ASB_ICECAP_2010_Fig2H_Golicyna_SH',
-            'subset': lambda df, _r={
-                'lat_min': -75.0, 'lat_max': -72.0,
-                'lon_min': 103.0, 'lon_max': 117.0,
-            }: df[
-                (df['latitude (degree_north)'] >= _r['lat_min']) &
-                (df['latitude (degree_north)'] <= _r['lat_max']) &
-                (df['longitude (degree_east)']  >= _r['lon_min']) &
-                (df['longitude (degree_east)']  <= _r['lon_max'])
-            ].copy(),
-        },
+        # {
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        #     'label': 'ASB_ICECAP_2010_Fig2G_Highland_A',
+        #     'subset': lambda df, _r={
+        #         'lat_min': -76.0, 'lat_max': -73.0,
+        #         'lon_min': 118.0, 'lon_max': 132.0,
+        #     }: df[
+        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
+        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
+        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
+        #         (df['longitude (degree_east)']  <= _r['lon_max'])
+        #     ].copy(),
+        # },
+        # {
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        #     'label': 'ASB_ICECAP_2010_Fig2H_Golicyna_SH',
+        #     'subset': lambda df, _r={
+        #         'lat_min': -75.0, 'lat_max': -72.0,
+        #         'lon_min': 103.0, 'lon_max': 117.0,
+        #     }: df[
+        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
+        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
+        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
+        #         (df['longitude (degree_east)']  <= _r['lon_max'])
+        #     ].copy(),
+        # },
 
-        #############################################################################
-        {
-            'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
-            'label': 'Rec_Catch_Fig2D_Recovery_SB',
-            'subset': lambda df, _r={
-                'lat_min': -83.5, 'lat_max': -80.5,
-                'lon_min': -35.0, 'lon_max': -15.0,
-            }: df[
-                (df['latitude (degree_north)'] >= _r['lat_min']) &
-                (df['latitude (degree_north)'] <= _r['lat_max']) &
-                (df['longitude (degree_east)']  >= _r['lon_min']) &
-                (df['longitude (degree_east)']  <= _r['lon_max'])
-            ].copy(),
-        },
+        # #############################################################################
+        # {
+        #     'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
+        #     'label': 'Rec_Catch_Fig2D_Recovery_SB',
+        #     'subset': lambda df, _r={
+        #         'lat_min': -83.5, 'lat_max': -80.5,
+        #         'lon_min': -35.0, 'lon_max': -15.0,
+        #     }: df[
+        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
+        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
+        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
+        #         (df['longitude (degree_east)']  <= _r['lon_max'])
+        #     ].copy(),
+        # },
 
-        {
-            'file': 'NASA_2018_ICEBRIDGE_AIR_BM3.csv',
-            'label': '2018_Rec_SB_Fig2D_Recovery_SB',
-            'subset': lambda df, _r={
-                'lat_min': -83.5, 'lat_max': -80.5,
-                'lon_min': -35.0, 'lon_max': -15.0,
-            }: df[
-                (df['latitude (degree_north)'] >= _r['lat_min']) &
-                (df['latitude (degree_north)'] <= _r['lat_max']) &
-                (df['longitude (degree_east)']  >= _r['lon_min']) &
-                (df['longitude (degree_east)']  <= _r['lon_max'])
-            ].copy(),
-        },
+        # {
+        #     'file': 'NASA_2018_ICEBRIDGE_AIR_BM3.csv',
+        #     'label': '2018_Rec_SB_Fig2D_Recovery_SB',
+        #     'subset': lambda df, _r={
+        #         'lat_min': -83.5, 'lat_max': -80.5,
+        #         'lon_min': -35.0, 'lon_max': -15.0,
+        #     }: df[
+        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
+        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
+        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
+        #         (df['longitude (degree_east)']  <= _r['lon_max'])
+        #     ].copy(),
+        # },
         #############################################################################
         {
             'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
@@ -200,19 +200,19 @@ def load_datasets():
             ].copy(),
         },
 
-        {
-            'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
-            'label': 'POLARGAP_2015_Fig2C_Hercules_Dome',
-            'subset': lambda df, _r={
-                'lat_min': -87.5, 'lat_max': -85.0,
-                'lon_min': -120.0, 'lon_max': -100.0,
-            }: df[
-                (df['latitude (degree_north)'] >= _r['lat_min']) &
-                (df['latitude (degree_north)'] <= _r['lat_max']) &
-                (df['longitude (degree_east)']  >= _r['lon_min']) &
-                (df['longitude (degree_east)']  <= _r['lon_max'])
-            ].copy(),
-        },
+        # {
+        #     'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
+        #     'label': 'POLARGAP_2015_Fig2C_Hercules_Dome',
+        #     'subset': lambda df, _r={
+        #         'lat_min': -87.5, 'lat_max': -85.0,
+        #         'lon_min': -120.0, 'lon_max': -100.0,
+        #     }: df[
+        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
+        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
+        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
+        #         (df['longitude (degree_east)']  <= _r['lon_max'])
+        #     ].copy(),
+        # },
     ]
 
 
@@ -465,7 +465,7 @@ def calculate_flow_incidence(x, y, flow_x, flow_y):
     return np.minimum(angle, 180 - angle)
 
 
-def analyse_sliding_windows(dist, elev, incidence_array, window_size=50000, step_size=10000):
+def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size, flow_angular_diff=None):
     """
     Slides a window across the segment to capture local morphometrics AND 
     build a robust average spectrum.
@@ -533,24 +533,31 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size=50000, step
             
             # C. Calculate per-window beta (power law exponent)
             window_beta = np.nan
+            window_beta_uncertainty = np.nan
             if np.sum(mask) >= 2 and np.all(pgram > 0):
                 log_psd = np.log10(pgram)
                 try:
-                    slope, _ = np.polyfit(log_freqs[mask], log_psd[mask], 1)
-                    window_beta = -slope
+                    n_fit = np.sum(mask)
+                    if n_fit > 2:
+                        coeffs, cov = np.polyfit(log_freqs[mask], log_psd[mask], 1, cov=True)
+                        window_beta_uncertainty = np.sqrt(cov[0, 0])
+                    else:
+                        coeffs = np.polyfit(log_freqs[mask], log_psd[mask], 1)
+                    window_beta = -coeffs[0]
                 except:
                     pass
 
             # D. MORPHOMETRICS (For "Big Mountains")
             local_relief = np.max(w_elev) - np.min(w_elev)
-            
+
             feature_stats = {
                 'window_id': window_idx,
                 'start_km': current_start / 1000,
                 'end_km': current_end / 1000,
                 'local_relief_m': local_relief,
                 'roughness_rms': np.sqrt(np.mean(w_detrended**2)),
-                'window_beta': window_beta
+                'window_beta': window_beta,
+                'window_beta_uncertainty': window_beta_uncertainty
             }
 
             # Extract the point-by-point incidence for just this window
@@ -562,6 +569,15 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size=50000, step
             # add to feature_stats dictionary
             feature_stats['mean_window_incidence'] = mean_window_incidence
 
+            # MEaSUREs flow validation stats for this window
+            if flow_angular_diff is not None:
+                w_flow_diff = flow_angular_diff[fit_mask]
+                feature_stats['flow_error_mean'] = np.nanmean(w_flow_diff)
+                feature_stats['flow_error_median'] = np.nanmedian(w_flow_diff)
+            else:
+                feature_stats['flow_error_mean'] = np.nan
+                feature_stats['flow_error_median'] = np.nan
+
             large_features.append(feature_stats)
             
         current_start += step_size
@@ -569,11 +585,16 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size=50000, step
         
     # 3. Average the PSDs
     if psd_accumulator:
-        avg_psd = np.mean(psd_accumulator, axis=0)
+        psd_stack = np.array(psd_accumulator)
+        avg_psd = np.mean(psd_stack, axis=0)
+        log_psd_std = np.std(np.log10(psd_stack), axis=0)
+        log_psd_std[log_psd_std == 0] = np.inf  # zero std -> zero weight
+        psd_weights = 1.0 / log_psd_std
     else:
         avg_psd = None
-        
-    return avg_psd, freqs, large_features, dx_median                                     
+        psd_weights = None
+
+    return avg_psd, freqs, large_features, dx_median, psd_weights                                 
                                                                                         
 
 def analyse_bedrock():
@@ -588,7 +609,6 @@ def analyse_bedrock():
     # paths
     base_path = 'shortcut_to_culled-data/'
     dem_path = os.path.join(base_path, 'rema_mosaic_100m_v2.0_filled_cop30/rema_mosaic_100m_v2.0_filled_cop30_dem.tif')
-
 
     all_results = {}
 
@@ -685,12 +705,15 @@ def analyse_bedrock():
 
                 # 1. Get Flow Direction from REMA (Smoothed)
                 vx, vy = extract_rema_flow_vector(seg_x, seg_y, dem_path, valid_ice_thickness)
-
                 # If we don't know the thickness, we don't know the smoothing scale.
                 # Force these to NaN so they don't count as 90 degree (perpendicular) flow.
                 invalid_mask = np.isnan(valid_ice_thickness)
                 vx[invalid_mask] = np.nan
                 vy[invalid_mask] = np.nan
+
+                # MEaSUREs validation call:
+                angular_diff = MEaSUREs_validation(seg_x, seg_y, vx, vy)
+                print(f"Flow validation: mean diff = {np.nanmean(angular_diff):.1f}°, median ={np.nanmedian(angular_diff):.1f}°")
 
                 # 2. Calculate Incidence_array
                 incidence_array = calculate_flow_incidence(seg_x, seg_y, vx, vy) # array
@@ -701,16 +724,18 @@ def analyse_bedrock():
 
                 if segment_len_m < WINDOW_SIZE:
                     # fallback if segment is valid and short treat the whole segment as one window
-                    avg_psd, freqs, window_stats, dx_median = analyse_sliding_windows(
+                    avg_psd, freqs, window_stats, dx_median, psd_weights = analyse_sliding_windows(
                         segment_distance, bedrock_segment_elev, incidence_array,
-                        window_size=segment_len_m, step_size=segment_len_m
+                        window_size=segment_len_m, step_size=segment_len_m,
+                        flow_angular_diff=angular_diff
                     )
 
                 else:
                     # Standard processing
-                    avg_psd, freqs, window_stats, dx_median = analyse_sliding_windows(
+                    avg_psd, freqs, window_stats, dx_median, psd_weights = analyse_sliding_windows(
                         segment_distance, bedrock_segment_elev, incidence_array,
-                        window_size=WINDOW_SIZE, step_size=STEP_SIZE
+                        window_size=WINDOW_SIZE, step_size=STEP_SIZE,
+                        flow_angular_diff=angular_diff
                     )
 
                 # Identifying largest features found in windows
@@ -741,6 +766,8 @@ def analyse_bedrock():
                     'ice_thickness_mean': np.nanmean(valid_ice_thickness),
                     'ice_thickness_range': np.nanmax(valid_ice_thickness) - np.nanmin(valid_ice_thickness),
                     'flow_incidence_deg': mean_incidence,
+                    'flow_error_mean': np.nanmean(angular_diff),
+                    'flow_error_median': np.nanmedian(angular_diff),
                     'window_stats': window_stats
                 }
                 
@@ -785,8 +812,16 @@ def analyse_bedrock():
                     # REFIT
                     if np.sum(clean_mask) >= 2:
                         # Fit only on masked data
-                        slope, intercept = np.polyfit(log_freqs[clean_mask], log_psd[clean_mask], 1)
+                        # Use the spread across windows as weights:
+                        psd_weights[~np.isfinite(psd_weights)] = 0
+                        w = psd_weights[clean_mask]
+                        # If weights are all zero (e.g. single window → zero std), fall back to unweighted fit
+                        if np.all(w == 0):
+                            w = None
+                        (slope, intercept), cov = np.polyfit(log_freqs[clean_mask], log_psd[clean_mask], 1, w=w, cov=True)
+
                         beta = -slope # Power law exponent
+                        beta_uncertainty = np.sqrt(cov[0, 0]) # beta std error
 
                         # Apply fit to the full range
                         fitted_psd = 10**(intercept + slope * log_freqs)
@@ -794,6 +829,7 @@ def analyse_bedrock():
 
                     else: # fallback
                         beta = -slope_init
+                        beta_uncertainty = np.nan
                         fitted_psd = fitted_psd_init
 
                     dominant_wavelengths = wavelengths_calc[peaks] if len(peaks) > 0 else []
@@ -804,7 +840,9 @@ def analyse_bedrock():
                     # Calculate Hurst exponent from spectral exponent
                     # For 1D profiles: β = 2H + 1, so H = (β - 1) / 2
                     hurst_exponent = (beta - 1) / 2
-
+                    # uncertainty
+                    hurst_uncertainty = beta_uncertainty / 2
+                    
                     stats_dict.update({
                         'median_spacing': dx_median,
                         'profile_length': profile_length,
@@ -813,7 +851,9 @@ def analyse_bedrock():
                         'candidate_wavelengths': confidence_flags['candidate'],
                         'confidence_threshold': confidence_flags['threshold'],
                         'power_law_exponent': beta,
-                        'hurst_exponent': hurst_exponent
+                        'beta_uncertainty': beta_uncertainty, 
+                        'hurst_exponent': hurst_exponent,
+                        'hurst_uncertainty': hurst_uncertainty
                     })
 
                     # Plot the first n lines
@@ -836,7 +876,7 @@ def analyse_bedrock():
                 list_keys = ['dominant_wavelengths', 'confirmed_wavelengths', 'candidate_wavelengths', 'window_stats']
                 
                 # Keys that are SINGLE VALUES in the segment dict, but we want to KEEP as a list 
-                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'flow_incidence_deg']
+                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'flow_incidence_deg', 'flow_error_mean', 'flow_error_median']
 
                 for key in segment_results[0].keys():
                     # 1. Extract values for the CURRENT key immediately
@@ -937,6 +977,14 @@ def results_summary(results):
     hurst_exponents = [H_e for r in results.values() for H_e in r.get('hurst_exponent', [])]
     print(f"HURST EXPONENT:\n  -> {format_stat(hurst_exponents)}")
     
+    # 3b. Skewness and Kurtosis
+    skews = [r['skewness'] for r in results.values() if 'skewness' in r and np.isfinite(r['skewness'])]
+    kurts = [r['kurtosis'] for r in results.values() if 'kurtosis' in r and np.isfinite(r['kurtosis'])]
+    if skews:
+        print(f"SKEWNESS:\n  -> {format_stat(skews)}")
+    if kurts:
+        print(f"KURTOSIS (excess):\n  -> {format_stat(kurts)}")
+
     # 4. Ice Thickness
     thickness = [r['ice_thickness_mean'] for r in results.values() if 'ice_thickness_mean' in r and not np.isnan(r['ice_thickness_mean'])]
     if thickness:
@@ -997,8 +1045,11 @@ if __name__=="__main__":
                     'window_id': w.get('window_id'),
                     'incidence_deg': w.get('mean_window_incidence'),
                     'beta': w.get('window_beta'),
+                    'beta_uncertainty': w.get('window_beta_uncertainty'),
                     'relief_m': w.get('local_relief_m'),
-                    'rms_roughness': w.get('roughness_rms')
+                    'rms_roughness': w.get('roughness_rms'),
+                    'flow_error_mean': w.get('flow_error_mean'),
+                    'flow_error_median': w.get('flow_error_median')
                 })
         csv_suffix = f"_w{WINDOW_SIZE // 1000}km" if WINDOW_TYPE == 'rectangular' else f"_w{WINDOW_SIZE // 1000}km_{WINDOW_TYPE}"
         pd.DataFrame(all_window_data).to_csv(f'{region_name}{csv_suffix}_window_stats.csv', index=False)
@@ -1007,8 +1058,13 @@ if __name__=="__main__":
         all_segment_data = []
         for traj_id, traj_data in region_results.items():
             betas = traj_data.get('power_law_exponent', [])
+            beta_uncerts = traj_data.get('beta_uncertainty', [])
             incidences = traj_data.get('flow_incidence_deg', [])
             hursts = traj_data.get('hurst_exponent', [])
+            hurst_uncerts = traj_data.get('hurst_uncertainty', [])
+            flow_err_means = traj_data.get('flow_error_mean', [])
+            flow_err_medians = traj_data.get('flow_error_median', [])
+
 
             n_segs = min(len(betas), len(incidences))
             for i in range(n_segs):
@@ -1017,7 +1073,12 @@ if __name__=="__main__":
                     'segment': i + 1,
                     'incidence_deg': incidences[i],
                     'beta': betas[i],
+                    'beta_uncertainty': beta_uncerts[i] if i < len(beta_uncerts) else np.nan,
                     'hurst': hursts[i] if i < len(hursts) else np.nan,
+                    'hurst_uncertainty': hurst_uncerts[i] if i < len(hurst_uncerts) else np.nan,
+                    'flow_error_mean': flow_err_means[i] if i < len(flow_err_means) else np.nan,
+                    'flow_error_median': flow_err_medians[i] if i < len(flow_err_medians) else np.nan,
                 })
+
         pd.DataFrame(all_segment_data).to_csv(f'{region_name}{csv_suffix}_segment_stats.csv', index=False)
         print(f"Exported {len(all_window_data)} window rows and {len(all_segment_data)} segment rows")

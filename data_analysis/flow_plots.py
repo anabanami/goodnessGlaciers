@@ -152,20 +152,20 @@ def load_datasets():
         #   'label': 'DML_AniRES'
         #  },   # Dronning Maud Land
 
-        ##############################################################################
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'ASB_ICECAP_2010_Fig4_Aurora_SB',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -76.0, 'lat_max': -71.0,
-        #         'lon_min': 105.0, 'lon_max': 125.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
+        ########################### OCKENDEN REGIONS #############################
+        {
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+            'label': 'ASB_ICECAP_2010_Fig4_Aurora_SB',
+            'subset': lambda df, _r={
+                'lat_min': -76.0, 'lat_max': -71.0,
+                'lon_min': 105.0, 'lon_max': 125.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
+        },
 
         # {
         #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
@@ -208,7 +208,7 @@ def load_datasets():
         #     ].copy(),
         # },
 
-        ##############################################################################
+        # #############################################################################
         # {
         #     'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
         #     'label': 'Rec_Catch_Fig2D_Recovery_SB',
@@ -236,7 +236,7 @@ def load_datasets():
         #         (df['longitude (degree_east)']  <= _r['lon_max'])
         #     ].copy(),
         # },
-        ##############################################################################
+        #############################################################################
         {
             'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
             'label': 'POLARGAP_2015_Fig1_Pensacola_Pole',
@@ -265,6 +265,7 @@ def load_datasets():
         #     ].copy(),
         # },
     ]
+
 
     file_cache = {}
 
