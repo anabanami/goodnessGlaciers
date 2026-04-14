@@ -41,10 +41,10 @@ def load_datasets():
         #     'force_id': 'PRIC_2016_CHA2',
         # },
 
-        # {
-        #     'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
-        #     'label': 'Moller_Stream'
-        # },    # Institute-Möller Ice Stream
+        {
+            'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
+            'label': 'Moller_Stream'
+        },    # Institute-Möller Ice Stream
         
         # {
         #     'file': 'BAS_2018_Thwaites_AIR_BM3.csv',

@@ -9,9 +9,11 @@ from rasterio.windows import from_bounds
 import os
 from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
+from matplotlib.collections import LineCollection
+from matplotlib.colors import Normalize
 
 # Import the local tools
-from REMA_extractor import extract_rema_elevation, extract_rema_flow_vector, calculate_ice_thickness, get_rema_cache
+from REMA_extractor import extract_rema_elevation, extract_rema_flow_vector, calculate_ice_thickness, get_rema_cache, MEaSUREs_comparison
 
 BASE_PATH = 'shortcut_to_culled-data'
 DEM_PATH = os.path.join(BASE_PATH, 'rema_mosaic_100m_v2.0_filled_cop30/rema_mosaic_100m_v2.0_filled_cop30_dem.tif')
@@ -132,10 +134,10 @@ def load_datasets():
         #     'force_id': 'PRIC_2016_CHA2',
         # },
 
-        # {
-        #     'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
-        #     'label': 'Moller_Stream'
-        # },    # Institute-Möller Ice Stream
+        {
+            'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
+            'label': 'Moller_Stream'
+        },    # Institute-Möller Ice Stream
         
         # {
         #     'file': 'BAS_2018_Thwaites_AIR_BM3.csv',
@@ -638,7 +640,142 @@ def main(dataset_dict):
         print(f"     Seg {seg['seg_num']}: {orientation:13s} ({mean_angle:.1f}°) | {length_km:.1f} km")
 
 
+def plot_flow_confidence(dataset_dict):
+    """
+    Plots flight tracks colored by angular difference between
+    REMA-derived and MEaSUREs flow vectors (0-90 degrees).
+    0 = agreement, 90 = perpendicular disagreement.
+    """
+    region_label = dataset_dict['name']
+    df = dataset_dict['data']
+
+    print(f"Flow confidence map for: {region_label}")
+
+    cache = get_rema_cache()
+    cache.load(DEM_PATH)
+
+    # Project coordinates
+    x, y = _TRANSFORMER.transform(df['longitude (degree_east)'].values,
+                                  df['latitude (degree_north)'].values)
+
+    # Detect and filter segments (reuse existing logic)
+    print("   Detecting segments per trajectory...")
+    raw_segments = []
+    for traj_id in df['trajectory_id'].unique():
+        traj_mask = df['trajectory_id'] == traj_id
+        traj_indices = np.where(traj_mask)[0]
+        if len(traj_indices) < 20:
+            continue
+        traj_df = df[traj_mask].copy()
+        traj_x = x[traj_mask]
+        traj_y = y[traj_mask]
+        traj_segments = detect_segments(traj_df, traj_x, traj_y)
+        for seg_df, local_start, local_end in traj_segments:
+            global_start = traj_indices[local_start]
+            global_end = traj_indices[local_end - 1] + 1
+            raw_segments.append((seg_df, global_start, global_end))
+
+    print(f"   Found {len(raw_segments)} raw segments")
+
+    print("   Filtering by ice thickness...")
+    segments = filter_segments_by_thickness(raw_segments, x, y, DEM_PATH, cache)
+    if not segments:
+        print(f"   No valid segments for {region_label}")
+        return
+    print(f"   {len(segments)} valid segments after filtering")
+
+    # Extract REMA hillshade
+    print("   Extracting REMA hillshade...")
+    bounds = (x.min(), y.min(), x.max(), y.max())
+    elevation, extent = extract_rema_subset(DEM_PATH, bounds, buffer_km=10)
+    hillshade = make_hillshade(elevation, extent)
+
+    # Compute REMA flow vectors and MEaSUREs angular difference per segment
+    print("   Computing flow vectors and MEaSUREs comparison...")
+    segment_data = []
+    for seg in segments:
+        seg_x = x[seg['start']:seg['end']]
+        seg_y = y[seg['start']:seg['end']]
+        ice_thick = seg['ice_thickness']
+
+        fx, fy = extract_rema_flow_vector(seg_x, seg_y, DEM_PATH, ice_thick, cache)
+
+        # Mask where ice thickness is unknown
+        invalid_mask = np.isnan(ice_thick)
+        fx[invalid_mask] = np.nan
+        fy[invalid_mask] = np.nan
+
+        angular_diff = MEaSUREs_comparison(seg_x, seg_y, fx, fy)
+        segment_data.append({
+            'x': seg_x, 'y': seg_y,
+            'angular_diff': angular_diff,
+            'seg_num': seg['seg_num'],
+        })
+        print(f"     Seg {seg['seg_num']}: mean diff = {np.nanmean(angular_diff):.1f}°, "
+              f"median = {np.nanmedian(angular_diff):.1f}°")
+
+    # Convert to km
+    extent_km = [e / 1000 for e in extent]
+
+    # --- Plot ---
+    fig, ax = plt.subplots(figsize=(14, 10))
+
+    # Hillshade background
+    ax.imshow(hillshade, extent=extent_km, cmap='gray', alpha=0.7, origin='upper')
+
+    # Elevation contours
+    elev_x = np.linspace(extent_km[0], extent_km[1], elevation.shape[1])
+    elev_y = np.linspace(extent_km[3], extent_km[2], elevation.shape[0])
+    ax.contour(elev_x, elev_y, elevation, levels=15, colors='white', linewidths=0.3, alpha=0.4)
+
+    # Color tracks by angular difference using LineCollection
+    norm = Normalize(vmin=0, vmax=90)
+    cmap = plt.cm.YlOrRd
+
+    for sd in segment_data:
+        sx_km = sd['x'] / 1000
+        sy_km = sd['y'] / 1000
+        diff = sd['angular_diff']
+
+        # Build line segments: each segment connects consecutive points
+        points = np.column_stack([sx_km, sy_km]).reshape(-1, 1, 2)
+        line_segments = np.concatenate([points[:-1], points[1:]], axis=1)
+
+        # Color each segment by the mean of its two endpoint values
+        colors = (diff[:-1] + diff[1:]) / 2
+
+        lc = LineCollection(line_segments, cmap=cmap, norm=norm, linewidths=2.5, zorder=3)
+        lc.set_array(colors)
+        ax.add_collection(lc)
+
+    # Segment number labels
+    for sd in segment_data:
+        mid = len(sd['x']) // 2
+        ax.text(sd['x'][mid] / 1000, sd['y'][mid] / 1000, str(sd['seg_num']),
+                fontsize=6, fontweight='bold', ha='center', va='center',
+                color='white', zorder=6,
+                bbox=dict(boxstyle='circle,pad=0.15', facecolor='black', alpha=0.7, linewidth=0))
+
+    # Colorbar
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    cbar = plt.colorbar(sm, ax=ax, shrink=0.6, pad=0.02)
+    cbar.set_label('REMA–MEaSUREs flow direction difference (°)', fontsize=10)
+
+    ax.set_xlabel('Easting (km, EPSG:3031)', fontsize=11)
+    ax.set_ylabel('Northing (km, EPSG:3031)', fontsize=11)
+    ax.set_title(f'Flow Direction Confidence: {region_label}\nREMA vs MEaSUREs', fontsize=12, pad=10)
+    ax.set_aspect('equal')
+
+    plt.tight_layout()
+    output_file = f'flow_confidence_{region_label}.png'
+    plt.savefig(output_file, dpi=300, bbox_inches='tight')
+    plt.show()
+    plt.close()
+    print(f"   Saved to {output_file}")
+
+
 if __name__=="__main__":
     datasets = load_datasets()
     for ds in datasets:
         main(ds)
+        plot_flow_confidence(ds)

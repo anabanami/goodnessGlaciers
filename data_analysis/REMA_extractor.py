@@ -120,7 +120,7 @@ def extract_rema_flow_vector(x, y, dem_path, ice_thickness, cache=None):
     return flow_x / magnitude, flow_y / magnitude
 
 
-def MEaSUREs_validation(track_x, track_y, rema_fx, rema_fy):
+def MEaSUREs_comparison(track_x, track_y, rema_fx, rema_fy):
     ds = xr.open_dataset('shortcut_to_culled-data/measures_velocity/antarctica_ice_velocity_450m_v2.nc')
 
     # track_x, track_y are your EPSG:3031 coordinates
@@ -129,9 +129,14 @@ def MEaSUREs_validation(track_x, track_y, rema_fx, rema_fy):
 
     # Normalise
     meas_mag = np.sqrt(measures_vx**2 + measures_vy**2)
-    meas_mag[meas_mag ==0] = np.nan
+    meas_mag[meas_mag==0] = np.nan # in case MEaSUREs reports zero velocities
+    measures_vx /= meas_mag                                                                   
+    measures_vy /= meas_mag 
 
-    dot = (rema_fx * measures_vx + rema_fy * measures_vy) / meas_mag
-    angular_diff = np.degrees(np.arccos(np.clip(dot, -1, 1))) 
+    dot = rema_fx * measures_vx + rema_fy * measures_vy 
+    angular_diff = np.degrees(np.arccos(np.clip(dot, -1, 1)))
+    
+    # fold angle range to parallel/antiparallel to perpendicular
+    angular_diff = np.minimum(angular_diff, 180 - angular_diff)
 
     return angular_diff

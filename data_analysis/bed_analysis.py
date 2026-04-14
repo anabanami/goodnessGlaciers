@@ -5,15 +5,23 @@ from scipy import signal, stats
 from pyproj import Transformer
 import os
 import re
-from REMA_extractor import extract_rema_elevation, extract_rema_flow_vector, calculate_ice_thickness, MEaSUREs_validation
-
-# Output configuration - creates folders in same directory as this script
-OUTPUT_BASE_PATH = os.path.dirname(os.path.abspath(__file__))
+from REMA_extractor import extract_rema_elevation, extract_rema_flow_vector, calculate_ice_thickness, MEaSUREs_comparison
 
 # Window parameters for sensitivity testing
-WINDOW_SIZE = 30000  # metres # TEST: 30000, 50000, 75000, 100000
-STEP_SIZE = WINDOW_SIZE // 2 # 25000 metres for the chosen 50km window default
-WINDOW_TYPE = 'rectangular'  # 'rectangular', 'hann', or 'tukey'
+WINDOW_SIZE = 50000  # metres
+STEP_SIZE = WINDOW_SIZE // 2 # 25000 metres
+WINDOW_TYPE = 'rectangular'
+
+# peak masking parameters for sensitivity testing
+peak_masking_height_threshold = 2.0
+bin_buffer = 5
+
+# Output configuration - creates folders in same directory as this script
+OUTPUT_BASE_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    # 'sensitivity-peak-masking',
+    # f'threshold_{peak_masking_height_threshold}'
+)
 
 
 def get_region_folder(dataset_name):
@@ -81,10 +89,10 @@ def load_datasets():
         #     'force_id': 'PRIC_2016_CHA2',
         # },
 
-        # {
-        #     'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
-        #     'label': 'Moller_Stream'
-        # },    # Institute-Möller Ice Stream
+        {
+            'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
+            'label': 'Moller_Stream'
+        },    # Institute-Möller Ice Stream
         
         # {
         #     'file': 'BAS_2018_Thwaites_AIR_BM3.csv',
@@ -344,7 +352,7 @@ def plot_spectra(dist, detrended, wavelengths, psd, fitted_psd, beta, residual_p
     ax3.semilogx(wavelengths, residual_psd, color='k', alpha=0.5)
 
     # Highlight peaks
-    peaks, _ = signal.find_peaks(residual_psd, height=2.0)
+    peaks, _ = signal.find_peaks(residual_psd, height=peak_masking_height_threshold)
     if len(peaks) > 0:
         # Find min and max peaks
         peak_waves = wavelengths[peaks]
@@ -712,7 +720,7 @@ def analyse_bedrock():
                 vy[invalid_mask] = np.nan
 
                 # MEaSUREs validation call:
-                angular_diff = MEaSUREs_validation(seg_x, seg_y, vx, vy)
+                angular_diff = MEaSUREs_comparison(seg_x, seg_y, vx, vy)
                 print(f"Flow validation: mean diff = {np.nanmean(angular_diff):.1f}°, median ={np.nanmedian(angular_diff):.1f}°")
 
                 # 2. Calculate Incidence_array
@@ -797,16 +805,15 @@ def analyse_bedrock():
 
                     # Calculate residuals to find peaks
                     residual_psd = avg_psd / fitted_psd_init
-                    peaks, _ = signal.find_peaks(residual_psd, height=2.0)
+                    peaks, _ = signal.find_peaks(residual_psd, height=peak_masking_height_threshold)
 
                     # PASS 2: Mask large peaks for "texture only" fit
                     clean_mask = fit_mask.copy()
                     if len(peaks) > 0:
                         for p_idx in peaks:
                             # mask out small buffer around the peak to remove edge effects
-                            buffer = 5
-                            start = max(0, p_idx - buffer)
-                            end = min(len(clean_mask), p_idx + buffer + 1)
+                            start = max(0, p_idx - bin_buffer)
+                            end = min(len(clean_mask), p_idx + bin_buffer + 1)
                             clean_mask[start:end] = False
 
                     # REFIT
@@ -1052,7 +1059,8 @@ if __name__=="__main__":
                     'flow_error_median': w.get('flow_error_median')
                 })
         csv_suffix = f"_w{WINDOW_SIZE // 1000}km" if WINDOW_TYPE == 'rectangular' else f"_w{WINDOW_SIZE // 1000}km_{WINDOW_TYPE}"
-        pd.DataFrame(all_window_data).to_csv(f'{region_name}{csv_suffix}_window_stats.csv', index=False)
+        region_output = os.path.join(OUTPUT_BASE_PATH, f'{get_region_folder(region_name)}{csv_suffix}')
+        pd.DataFrame(all_window_data).to_csv(os.path.join(region_output, f'{region_name}{csv_suffix}_window_stats.csv'), index=False)
 
         # --- Segment-level CSV (for cos²θ regression) ---
         all_segment_data = []
@@ -1080,5 +1088,23 @@ if __name__=="__main__":
                     'flow_error_median': flow_err_medians[i] if i < len(flow_err_medians) else np.nan,
                 })
 
-        pd.DataFrame(all_segment_data).to_csv(f'{region_name}{csv_suffix}_segment_stats.csv', index=False)
-        print(f"Exported {len(all_window_data)} window rows and {len(all_segment_data)} segment rows")
+        pd.DataFrame(all_segment_data).to_csv(os.path.join(region_output, f'{region_name}{csv_suffix}_segment_stats.csv'), index=False)
+
+        # --- Wavelength detections CSV (for threshold sensitivity analysis) ---
+        all_wavelength_data = []
+        for traj_id, traj_data in region_results.items():
+            for wl in traj_data.get('confirmed_wavelengths', []):
+                all_wavelength_data.append({
+                    'trajectory': traj_id,
+                    'wavelength_m': wl,
+                    'type': 'confirmed'
+                })
+            for wl in traj_data.get('candidate_wavelengths', []):
+                all_wavelength_data.append({
+                    'trajectory': traj_id,
+                    'wavelength_m': wl,
+                    'type': 'candidate'
+                })
+        pd.DataFrame(all_wavelength_data).to_csv(os.path.join(region_output, f'{region_name}{csv_suffix}_wavelength_detections.csv'), index=False)
+
+        print(f"Exported {len(all_window_data)} window rows, {len(all_segment_data)} segment rows, {len(all_wavelength_data)} wavelength detections")

@@ -118,31 +118,31 @@ def cos2_model(theta_deg, beta_perp, beta_parallel):
 
 
 def bootstrap_cos2_uncertainty(theta, beta, n_boot=2000, block_length=3):
-      """Block bootstrap for cos²θ fit with correlated overlapping windows."""
-      n = len(theta)
-      boot_params = []
+    """Block bootstrap for cos²θ fit with correlated overlapping windows."""
+    n = len(theta)
+    boot_params = []
 
-      for _ in range(n_boot):
-          # Draw random block start indices
-          n_blocks = int(np.ceil(n / block_length))
-          starts = np.random.randint(0, n, size=n_blocks)
+    for _ in range(n_boot):
+        # Draw random block start indices
+        n_blocks = int(np.ceil(n / block_length))
+        starts = np.random.randint(0, n, size=n_blocks)
 
-          # Build bootstrap sample from contiguous blocks
-          indices = np.concatenate([np.arange(s, min(s + block_length, n)) for s in starts])[:n]
+        # Build bootstrap sample from contiguous blocks
+        indices = np.concatenate([np.arange(s, min(s + block_length, n)) for s in starts])[:n]
 
-          t_boot = theta[indices]
-          b_boot = beta[indices]
+        t_boot = theta[indices]
+        b_boot = beta[indices]
 
-          try:
-              popt_b, _ = optimize.curve_fit(cos2_model, t_boot, b_boot,
-                                              p0=[np.mean(b_boot), np.mean(b_boot)],
-                                              maxfev=5000)
-              boot_params.append(popt_b)
-          except (RuntimeError, ValueError):
-              continue
+        try:
+            popt_b, _ = optimize.curve_fit(cos2_model, t_boot, b_boot,
+                                            p0=[np.mean(b_boot), np.mean(b_boot)],
+                                            maxfev=5000)
+            boot_params.append(popt_b)
+        except (RuntimeError, ValueError):
+            continue
 
-      boot_params = np.array(boot_params)
-      return np.std(boot_params, axis=0)  # bootstrap standard errors
+    boot_params = np.array(boot_params)
+    return np.std(boot_params, axis=0)  # bootstrap standard errors
 
 
 def plot_window_scatter(csv_path):
