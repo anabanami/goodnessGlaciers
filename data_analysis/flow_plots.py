@@ -627,7 +627,7 @@ def main(dataset_dict):
     plt.tight_layout()
     output_file = f'flow_orientation_{region_label}.png'
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
-    plt.show()
+    # plt.show()
     plt.close()
     print(f"   Done! Saved to {output_file}")
     
@@ -769,7 +769,7 @@ def plot_flow_confidence(dataset_dict):
     plt.tight_layout()
     output_file = f'flow_confidence_{region_label}.png'
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
-    plt.show()
+    # plt.show()
     plt.close()
     print(f"   Saved to {output_file}")
 

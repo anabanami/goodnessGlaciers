@@ -30,7 +30,7 @@ class REMACache:
 
     def sample(self, x_coords, y_coords):
         """Sample elevations at given coordinates using bilinear interpolation."""
-        rows, cols = self._inv_transform * (x_coords, y_coords)
+        cols, rows = self._inv_transform * (x_coords, y_coords)
         return map_coordinates(self._data, [rows, cols], order=1, mode='nearest')
 
     def clear(self):

@@ -19,6 +19,8 @@ bin_buffer = 5
 # Output configuration - creates folders in same directory as this script
 OUTPUT_BASE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
+    # 'sensitivity-window-size',
+    # f'{WINDOW_SIZE/1000}km'
     # 'sensitivity-peak-masking',
     # f'threshold_{peak_masking_height_threshold}'
 )
