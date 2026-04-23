@@ -730,7 +730,7 @@ def plot_flow_confidence(dataset_dict):
 
     # Color tracks by angular difference using LineCollection
     norm = Normalize(vmin=0, vmax=90)
-    cmap = plt.cm.YlOrRd
+    cmap = plt.get_cmap('berlin')#.reversed()
 
     for sd in segment_data:
         sx_km = sd['x'] / 1000
