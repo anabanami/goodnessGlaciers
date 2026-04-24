@@ -452,20 +452,6 @@ def flag_wavelength_confidence(wavelengths, profile_length, min_cycles=2.0):
     }
 
 
-def incidence_weight(theta_deg, full_weight=30.0, zero_weight=60.0):
-    """
-    Weight for PSD accumulation based on incidence angle.
-    Incidence is folded to [0, 90]: 0=parallel, 90=perpendicular.
-      - theta <= full_weight (30°): weight = 1.0 (clean along-flow signal)
-      - full_weight < theta < zero_weight: linear ramp from 1.0 to 0.0
-      - theta >= zero_weight (60°): weight = 0.0 (perpendicular artifact)
-    """
-    w = np.clip((zero_weight - theta_deg) / (zero_weight - full_weight), 0.0, 1.0)
-    # NaN incidence -> zero weight
-    w = np.where(np.isfinite(theta_deg), w, 0.0)
-    return float(w) if np.ndim(w) == 0 else w
-
-
 def calculate_flow_incidence(x, y, flow_x, flow_y):
     """
     Calculates angle between Flight Line and Flow Vector.
@@ -518,7 +504,6 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
     log_freqs = np.log10(freqs)
 
     psd_accumulator = []
-    psd_incidence_weights = []
     large_features = []
     
     # 2. Slide the Window
@@ -555,11 +540,7 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
             # C. SPECTRAL ANALYSIS (For Texture/Beta)
             pgram = signal.lombscargle(w_dist, w_detrended, angular_freqs, normalize=False)
 
-            # Weight this window's PSD by incidence angle (parallel=high, perpendicular=zero)
-            window_incidence_for_weight = np.nanmean(incidence_array[fit_mask])
-            w_inc = incidence_weight(window_incidence_for_weight)
             psd_accumulator.append(pgram)
-            psd_incidence_weights.append(w_inc)
             
             # C. Calculate per-window beta (power law exponent)
             window_beta = np.nan
@@ -598,7 +579,6 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
 
             # add to feature_stats dictionary
             feature_stats['mean_window_incidence'] = mean_window_incidence
-            feature_stats['incidence_weight'] = w_inc
 
             # MEaSUREs flow validation stats for this window
             if flow_angular_diff is not None:
@@ -614,23 +594,11 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
         current_start += step_size
         window_idx += 1
         
-    # 3. Average the PSDs (weighted by incidence angle)
+    # 3. Average the PSDs
     if psd_accumulator:
         psd_stack = np.array(psd_accumulator)
-        inc_weights = np.array(psd_incidence_weights)
-
-        if np.sum(inc_weights) > 0:
-            # Weighted average: parallel windows dominate, perpendicular excluded
-            avg_psd = np.average(psd_stack, axis=0, weights=inc_weights)
-            # Weighted std for the per-frequency spread weights
-            w_norm = inc_weights / inc_weights.sum()
-            weighted_mean_log = np.average(np.log10(psd_stack), axis=0, weights=inc_weights)
-            log_psd_std = np.sqrt(np.average((np.log10(psd_stack) - weighted_mean_log)**2, axis=0, weights=inc_weights))
-        else:
-            # All windows perpendicular — fall back to unweighted
-            avg_psd = np.mean(psd_stack, axis=0)
-            log_psd_std = np.std(np.log10(psd_stack), axis=0)
-
+        avg_psd = np.mean(psd_stack, axis=0)
+        log_psd_std = np.std(np.log10(psd_stack), axis=0)
         log_psd_std[log_psd_std == 0] = np.inf  # zero std -> zero weight
         psd_weights = 1.0 / log_psd_std
     else:
@@ -760,14 +728,7 @@ def analyse_bedrock():
 
                 # 2. Calculate Incidence_array
                 incidence_array = calculate_flow_incidence(seg_x, seg_y, vx, vy) # array
-                inc_w = incidence_weight(incidence_array)
-                inc_valid = np.isfinite(incidence_array) & np.isfinite(inc_w)
-                if np.any(inc_valid) and np.sum(inc_w[inc_valid]) > 0:
-                    mean_incidence = np.average(incidence_array[inc_valid], weights=inc_w[inc_valid])
-                    incidence_qc = 'pass'
-                else:
-                    mean_incidence = np.nanmean(incidence_array)
-                    incidence_qc = 'fail'
+                mean_incidence = np.nanmean(incidence_array)
 
                 # Check if segment is long enough for at least one window  
                 segment_len_m = segment_distance.max() - segment_distance.min()  
@@ -816,14 +777,12 @@ def analyse_bedrock():
                     'ice_thickness_mean': np.nanmean(valid_ice_thickness),
                     'ice_thickness_range': np.nanmax(valid_ice_thickness) - np.nanmin(valid_ice_thickness),
                     'flow_incidence_deg': mean_incidence,
-                    'incidence_qc': incidence_qc,
                     'flow_error_mean': np.nanmean(angular_diff),
                     'flow_error_median': np.nanmedian(angular_diff),
                     'window_stats': window_stats
                 }
                 
                 # SPECTRAL ANALYSIS
-                unweighted_fallback = False
                 # Guard against zero PSD (no valid spectral windows were processed)
                 if avg_psd is None or np.all(avg_psd == 0) or np.any(avg_psd < 0):
                     print(f"  Skipping segment {seg_idx+1} spectral fit: Invalid PSD values")
@@ -866,18 +825,13 @@ def analyse_bedrock():
                         # Use the spread across windows as weights:
                         psd_weights[~np.isfinite(psd_weights)] = 0
                         w = psd_weights[clean_mask]
-                        # Fall back to unweighted if weights are degenerate or cause a singular matrix
-                        if np.all(w == 0) or np.ptp(w) == 0:
+                        # If weights are all zero (e.g. single window → zero std), fall back to unweighted fit
+                        if np.all(w == 0):
                             w = None
-                            unweighted_fallback = True
-                        try:
-                            (slope, intercept), cov = np.polyfit(log_freqs[clean_mask], log_psd[clean_mask], 1, w=w, cov=True)
-                        except np.linalg.LinAlgError:
-                            (slope, intercept), cov = np.polyfit(log_freqs[clean_mask], log_psd[clean_mask], 1, cov=True)
-                            unweighted_fallback = True
+                        (slope, intercept), cov = np.polyfit(log_freqs[clean_mask], log_psd[clean_mask], 1, w=w, cov=True)
 
                         beta = -slope # Power law exponent
-                        beta_uncertainty = np.sqrt(cov[0, 0])
+                        beta_uncertainty = np.sqrt(cov[0, 0]) # beta std error
 
                         # Apply fit to the full range
                         fitted_psd = 10**(intercept + slope * log_freqs)
@@ -922,9 +876,6 @@ def analyse_bedrock():
 
                 segment_results.append(stats_dict)
 
-                if unweighted_fallback:
-                    print(f"  [fallback] {traj_id} Segment {seg_idx+1}: PSD weights uniform (too few near-parallel windows) — used unweighted fit")
-
             if valid_segments:
                 plot_raw_data_with_segmentation_check(dist, elev, valid_segments, traj_id, gap_mask, output_path=output_paths['trajectories'])
 
@@ -935,7 +886,7 @@ def analyse_bedrock():
                 list_keys = ['dominant_wavelengths', 'confirmed_wavelengths', 'candidate_wavelengths', 'window_stats']
                 
                 # Keys that are SINGLE VALUES in the segment dict, but we want to KEEP as a list 
-                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'flow_incidence_deg', 'incidence_qc', 'flow_error_mean', 'flow_error_median']
+                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'flow_incidence_deg', 'flow_error_mean', 'flow_error_median']
 
                 for key in segment_results[0].keys():
                     # 1. Extract values for the CURRENT key immediately
@@ -1076,7 +1027,7 @@ def results_summary(results):
     
     if max_reliefs:
         print("." * 60)
-        print("LARGEST LOCAL STRUCTURES (50km Window):")
+        print(f"LARGEST LOCAL STRUCTURES ({WINDOW_SIZE/1000:.0f}km Window):")
         # Zip them to print pairs
         for relief, loc in zip(max_reliefs, locs):
             print(f"  -> Relief: {relief:.1f}m at km {loc:.1f}")
@@ -1107,7 +1058,6 @@ if __name__=="__main__":
                     'beta_uncertainty': w.get('window_beta_uncertainty'),
                     'relief_m': w.get('local_relief_m'),
                     'rms_roughness': w.get('roughness_rms'),
-                    'incidence_weight': w.get('incidence_weight'),
                     'flow_error_mean': w.get('flow_error_mean'),
                     'flow_error_median': w.get('flow_error_median')
                 })
@@ -1123,7 +1073,6 @@ if __name__=="__main__":
             incidences = traj_data.get('flow_incidence_deg', [])
             hursts = traj_data.get('hurst_exponent', [])
             hurst_uncerts = traj_data.get('hurst_uncertainty', [])
-            inc_qcs = traj_data.get('incidence_qc', [])
             flow_err_means = traj_data.get('flow_error_mean', [])
             flow_err_medians = traj_data.get('flow_error_median', [])
 
@@ -1138,7 +1087,6 @@ if __name__=="__main__":
                     'beta_uncertainty': beta_uncerts[i] if i < len(beta_uncerts) else np.nan,
                     'hurst': hursts[i] if i < len(hursts) else np.nan,
                     'hurst_uncertainty': hurst_uncerts[i] if i < len(hurst_uncerts) else np.nan,
-                    'incidence_qc': inc_qcs[i] if i < len(inc_qcs) else '',
                     'flow_error_mean': flow_err_means[i] if i < len(flow_err_means) else np.nan,
                     'flow_error_median': flow_err_medians[i] if i < len(flow_err_medians) else np.nan,
                 })

@@ -154,14 +154,6 @@ def plot_window_scatter(csv_path):
     # Drop rows with NaN in either column
     df_clean = df.dropna(subset=['incidence_deg', 'beta'])
 
-    # Filter to windows with non-zero incidence weight if column exists
-    if 'incidence_weight' in df_clean.columns:
-        n_before = len(df_clean)
-        df_clean = df_clean[df_clean['incidence_weight'] > 0]
-        n_dropped = n_before - len(df_clean)
-        if n_dropped > 0:
-            print(f"  Excluded {n_dropped} perpendicular windows (incidence_weight=0)")
-
     if len(df_clean) == 0:
         print("No valid incidence/beta pairs found.")
         return
@@ -264,22 +256,14 @@ def process_region(region_name, files):
 def plot_segment_scatter_direct(seg_path):
     """
     Segment-level scatter with cos²θ anisotropy fit.
-    Takes segment CSV path directly. Weighted by flow confidence if available.
+    Takes segment CSV path directly.
     """
     if not os.path.exists(seg_path):
         print(f"No segment CSV found at {seg_path}")
         return
 
     df = pd.read_csv(seg_path).dropna(subset=['incidence_deg', 'beta'])
-
-    # Filter to segments that passed incidence QC if column exists
-    if 'incidence_qc' in df.columns:
-        n_before = len(df)
-        df = df[df['incidence_qc'] == 'pass']
-        n_dropped = n_before - len(df)
-        if n_dropped > 0:
-            print(f"  Excluded {n_dropped} segments (incidence_qc=fail)")
-
+    
     if len(df) == 0:
         print("No valid segment incidence/beta pairs found.")
         return
