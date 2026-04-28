@@ -451,6 +451,84 @@ def print_coordinate_summary(coords):
             print(f"    - {traj_id}: {len(traj_data['lon'])} points")
 
 
+def plot_tracks_on_ockenden(coords, output_path='tracks_on_ockenden.png',
+                            metrics_dir='Ockenden/Data_Science_Zenodo/Data_Science_Zenodo/Metrics/'):
+    """
+    Overlay flight tracks on Ockenden et al. Fig 4 landscape classification,
+    recreated natively from the published metrics data (no image needed).
+    """
+    from netCDF4 import Dataset
+    import geopandas as gpd
+
+    def load_metric(name):
+        ds = Dataset(os.path.join(metrics_dir, name + '.nc'))
+        d = ds.variables['data'][:].data
+        ds.close()
+        return d
+
+    x_ifpa = load_metric('X_ifpa')
+    y_ifpa = load_metric('Y_ifpa')
+
+    # Reproduce classification masks from Ockenden source (Antarctic_FIGURES.ipynb cell 45)
+    i_rms_slope_h = load_metric('i_rms_slope_h')
+    ifpa_count_250 = load_metric('ifpa_count_max_250')
+    ifpa_mean = load_metric('ifpa_mean')
+    i_std_l = load_metric('i_std_l')
+    ifpa_b1_thick = load_metric('ifpa_b1_thickness')
+    ifpa_rms_slope = load_metric('ifpa_rms_slope')
+    ifpa_rms_curv = load_metric('ifpa_rms_curvature')
+    ifpa_count_20 = load_metric('ifpa_count_max_20')
+    ifpa_count_100 = load_metric('ifpa_count_max_100')
+    ifpa_wav_max = load_metric('ifpa_wav_max_power')
+
+    mountain_mask = (i_rms_slope_h > 2) | (ifpa_count_250 > 10)
+    SGM_mask = (~mountain_mask) & ((ifpa_mean > 1000) | (i_std_l > 19))
+    SGM_mask2 = (~mountain_mask) & (~SGM_mask) & \
+                (ifpa_b1_thick > -5.0) & (ifpa_rms_slope < 1.1) & (ifpa_mean > 500)
+    poordetail_mask = (~mountain_mask) & (~SGM_mask) & (~SGM_mask2) & \
+                      ((ifpa_rms_curv < 0.025) | (ifpa_count_20 < 15) | (i_rms_slope_h < 0.07))
+    dunes_mask = (~poordetail_mask) & (~mountain_mask) & (~SGM_mask) & (~SGM_mask2) & \
+                 ((ifpa_rms_slope / ifpa_rms_curv) < 14.75) & \
+                 (ifpa_rms_slope < 0.9) & (ifpa_wav_max < 5000) & (ifpa_count_100 == 0)
+    icestreams_mask = (~mountain_mask) & (~poordetail_mask) & (~dunes_mask) & (~SGM_mask) & (~SGM_mask2) & \
+                      (ifpa_b1_thick < -5.5) & (ifpa_rms_slope > 1.0)
+    icestreams_mask2 = (~mountain_mask) & (~poordetail_mask) & (~dunes_mask) & \
+                       (~SGM_mask) & (~SGM_mask2) & (~icestreams_mask)
+
+    # Plot classification (same colors as Ockenden source)
+    xlim, ylim = (-2.55e6, 2.7e6), (-2.2e6, 2.2e6)
+    fig, ax = plt.subplots(figsize=(12, 10))
+    s = 12
+    ax.scatter(x_ifpa[poordetail_mask], y_ifpa[poordetail_mask], c='#f3e738', s=s, label='Low relief landscape')
+    ax.scatter(x_ifpa[SGM_mask | SGM_mask2], y_ifpa[SGM_mask | SGM_mask2], c='#ff9248', s=s, label='Alpine landscape (subglacial)')
+    ax.scatter(x_ifpa[mountain_mask], y_ifpa[mountain_mask], c='#e75921', s=s, label='Alpine landscape (subaerial)')
+    ax.scatter(x_ifpa[icestreams_mask], y_ifpa[icestreams_mask], c='#4399bf', s=s, label='Selective erosion (ice streams)')
+    ax.scatter(x_ifpa[icestreams_mask2], y_ifpa[icestreams_mask2], c='#2f64b4', s=s, label='Selective erosion (relict)')
+    ax.scatter(x_ifpa[dunes_mask], y_ifpa[dunes_mask], c='white', s=s, label='Invalid data (dunes)')
+
+    # Grounding line
+    gl_path = os.path.join(os.path.dirname(metrics_dir), 'GroundingLine_Antarctica_v2.shp')
+    if os.path.exists(gl_path):
+        gpd.read_file(gl_path).plot(ax=ax, facecolor='None', edgecolor='k', linewidth=0.5)
+
+    # Overlay tracks
+    to_ps = Transformer.from_crs('EPSG:4326', 'EPSG:3031', always_xy=True)
+    for name, data in coords.items():
+        x, y = to_ps.transform(data['lon'], data['lat'])
+        ax.plot(x, y, '.', color='white', ms=4, zorder=3)
+        ax.plot(x, y, '.', color='black', ms=2, alpha=0.9, label=name, zorder=4)
+
+    ax.set_xlim(xlim); ax.set_ylim(ylim)
+    ax.set_aspect('equal')
+    ax.axis('off')
+    ax.legend(loc='lower left', markerscale=4, fontsize=9, framealpha=0.8)
+    ax.set_title('Flight tracks on Ockenden et al. landscape classification', fontsize=12)
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f"Saved overlay map to {output_path}")
+    plt.close()
+
+
 if __name__ == "__main__":
     print("Loading datasets...")
     datasets = load_datasets()
@@ -469,7 +547,10 @@ if __name__ == "__main__":
     plot_regional_detail(coords)
     plot_tracks_with_elevation(coords, datasets)
     
+    plot_tracks_on_ockenden(coords)
+
     print("\nDone! Generated maps:")
     print("  - antarctica_tracks_overview.png (full continent)")
     print("  - antarctica_tracks_regional.png (zoomed to data)")
     print("  - antarctica_tracks_elevation.png (colored by bed elevation)")
+    print("  - tracks_on_ockenden.png (tracks on Ockenden Fig 4)")

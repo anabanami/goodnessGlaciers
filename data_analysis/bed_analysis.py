@@ -2,10 +2,25 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy import signal, stats
+from scipy.ndimage import uniform_filter1d
 from pyproj import Transformer
 import os
 import re
+import sys
 from REMA_extractor import extract_rema_elevation, extract_rema_flow_vector, calculate_ice_thickness, MEaSUREs_comparison
+
+
+class Tee:
+    """Write to both stdout and a log file."""
+    def __init__(self, filepath):
+        self.terminal = sys.stdout
+        self.log = open(filepath, 'w')
+    def write(self, msg):
+        self.terminal.write(msg)
+        self.log.write(msg)
+    def flush(self):
+        self.terminal.flush()
+        self.log.flush()
 
 # Window parameters for sensitivity testing
 WINDOW_SIZE = 50000  # metres
@@ -16,13 +31,21 @@ WINDOW_TYPE = 'rectangular'
 peak_masking_height_threshold = 2.0
 bin_buffer = 5
 
+# Landscape splitting parameters
+SMOOTHING_LENGTH = WINDOW_SIZE  # metres — full window for elevation smoothing
+GRADIENT_THRESHOLD = 15  # m/km (split where smoothed elevation gradient exceeds this)
+
+
 # Output configuration - creates folders in same directory as this script
 OUTPUT_BASE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
-    'sensitivity-window-size',
-    f'{WINDOW_SIZE/1000}km'
+    '3-Regions-test',
+    # 'sensitivity-window-size',
+    # f'{WINDOW_SIZE/1000}km'
     # 'sensitivity-peak-masking',
     # f'threshold_{peak_masking_height_threshold}'
+    # 'sensitivity-gradient-threshold',
+    # f'{GRADIENT_THRESHOLD}m_per_km'
 )
 
 
@@ -430,6 +453,91 @@ def split_into_segments(datafile, distance, gap_threshold=2000, min_segment_leng
     return segments
 
 
+def split_by_landscape(segment_data, segment_distance, smoothing_length=SMOOTHING_LENGTH,
+                       gradient_threshold=GRADIENT_THRESHOLD,
+                       min_segment_km=10, min_segment_pts=50):
+    """
+    Further splits a gap-free segment at landscape transitions detected by
+    the gradient of the smoothed bedrock elevation profile.
+
+    Transition zones (steep gradients) become their own segments rather than
+    being discarded — e.g. basin | rise | highland | descent | basin.
+
+    Returns list of (sub_segment_data, sub_segment_distance) tuples.
+    """
+    elev = segment_data['bedrock_altitude (m)'].values
+    dist = segment_distance
+
+    if len(dist) < 2:
+        return [(segment_data, segment_distance)]
+
+    # Smoothing kernel width in number of points
+    dx_median = np.median(np.diff(dist))
+    if dx_median <= 0:
+        dx_median = 15.0
+    kernel_pts = int(smoothing_length / dx_median)
+    kernel_pts = max(3, kernel_pts if kernel_pts % 2 == 1 else kernel_pts + 1)
+
+    smoothed = uniform_filter1d(elev, size=kernel_pts, mode='nearest')
+
+    # Gradient in m/km
+    grad = np.gradient(smoothed, dist / 1000)
+
+    # Identify transition zones where |gradient| exceeds threshold
+    in_transition = np.abs(grad) > gradient_threshold
+
+    if not np.any(in_transition):
+        return [(segment_data, segment_distance)]
+
+    # Find edges of transition zones
+    changes = np.diff(in_transition.astype(int))
+    t_starts = np.where(changes == 1)[0] + 1   # first point in transition
+    t_ends = np.where(changes == -1)[0] + 1     # first point after transition
+
+    if in_transition[0]:
+        t_starts = np.concatenate([[0], t_starts])
+    if in_transition[-1]:
+        t_ends = np.concatenate([t_ends, [len(in_transition)]])
+
+    # Merge nearby transition zones — if the gap between two zones is < merge_gap_km,
+    # treat them as one continuous transition
+    merge_gap_km = 5.0
+    merged_starts, merged_ends = [t_starts[0]], [t_ends[0]]
+    for s, e in zip(t_starts[1:], t_ends[1:]):
+        gap_km = (dist[s] - dist[merged_ends[-1]]) / 1000
+        if gap_km < merge_gap_km:
+            merged_ends[-1] = e  # extend the current zone
+        else:
+            merged_starts.append(s)
+            merged_ends.append(e)
+
+    # Build boundaries: split AT the edges of transition zones so transitions
+    # become their own segments: [0..t_start1] [t_start1..t_end1] [t_end1..t_start2] ...
+    boundaries = set([0, len(dist)])
+    for s, e in zip(merged_starts, merged_ends):
+        boundaries.add(s)
+        boundaries.add(e)
+        peak_grad_idx = s + np.argmax(np.abs(grad[s:e]))
+        print(f"      transition zone km {dist[s]/1000:.1f}-{dist[min(e,len(dist)-1)]/1000:.1f}, "
+              f"peak gradient = {grad[peak_grad_idx]:.1f} m/km")
+    boundaries = sorted(boundaries)
+
+    # Build sub-segments (transitions and flat zones alike)
+    sub_segments = []
+    for i in range(len(boundaries) - 1):
+        s, e = boundaries[i], boundaries[i + 1]
+        if e <= s:
+            continue
+        length_km = (dist[e - 1] - dist[s]) / 1000
+        if e - s >= min_segment_pts and length_km >= min_segment_km:
+            sub_segments.append((segment_data.iloc[s:e].copy(), dist[s:e]))
+
+    if not sub_segments:
+        return [(segment_data, segment_distance)]
+
+    return sub_segments
+
+
 def flag_wavelength_confidence(wavelengths, profile_length, min_cycles=2.0):
     """
     Categorizes detected peaks by statistical reliability based on the 
@@ -675,14 +783,22 @@ def analyse_bedrock():
             n_gaps = np.sum(gap_mask) // 2
             print(f"  {traj_id}: Found {n_gaps} gaps (>=2000m) in data")
             
-            # Split into valid segments
-            segments = split_into_segments(line, dist)
+            # Split into valid segments (gap-based)
+            gap_segments = split_into_segments(line, dist)
 
-            if len(segments) != 0:
-                print(f"{len(segments)} data segments found")
-            else:
+            if not gap_segments:
                 print(f" Skipping trajectory {traj_id}: no valid segments found")
                 continue
+
+            # Further split at landscape transitions (elevation gradient)
+            segments = []
+            for seg_data, seg_dist in gap_segments:
+                sub_segs = split_by_landscape(seg_data, seg_dist)
+                segments.extend(sub_segs)
+
+            n_landscape_splits = len(segments) - len(gap_segments)
+            print(f"{len(gap_segments)} gap segments -> {len(segments)} after landscape splitting"
+                  + (f" (+{n_landscape_splits} landscape splits)" if n_landscape_splits > 0 else ""))
 
             # Process each segment separately 
             valid_segments = []
@@ -1037,6 +1153,10 @@ def results_summary(results):
 
 
 if __name__=="__main__":
+
+    log_path = os.path.join(OUTPUT_BASE_PATH, 'run_log.txt')
+    os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
+    sys.stdout = Tee(log_path)
 
     results = analyse_bedrock()
     print(f"\n---")
