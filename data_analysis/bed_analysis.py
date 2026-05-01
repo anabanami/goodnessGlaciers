@@ -1154,7 +1154,7 @@ def results_summary(results):
 
 if __name__=="__main__":
 
-    log_path = os.path.join(OUTPUT_BASE_PATH, 'run_log.txt')
+    log_path = os.path.join(OUTPUT_BASE_PATH, 'bed_analysis_log.txt')
     os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
     sys.stdout = Tee(log_path)
 

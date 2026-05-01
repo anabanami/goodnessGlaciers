@@ -5,6 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy import stats, optimize
 import sys
+from bed_analysis_20 import Tee
 
 # CSV columns:
 #   - trajectory: which flight line
@@ -333,6 +334,7 @@ def plot_segment_scatter_direct(seg_path):
 
 
 if __name__ == "__main__":
+    sys.stdout = Tee('incidence_scatter_log.txt')
     # Discover available regions
     regions = discover_regions('.')
 

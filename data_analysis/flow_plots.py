@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.colors import LightSource
 from matplotlib.gridspec import GridSpec
@@ -14,6 +13,7 @@ from matplotlib.colors import Normalize
 
 # Import the local tools
 from REMA_extractor import extract_rema_elevation, extract_rema_flow_vector, calculate_ice_thickness, get_rema_cache, MEaSUREs_comparison
+from bed_analysis_20 import Tee, load_datasets
 
 BASE_PATH = 'shortcut_to_culled-data'
 DEM_PATH = os.path.join(BASE_PATH, 'rema_mosaic_100m_v2.0_filled_cop30/rema_mosaic_100m_v2.0_filled_cop30_dem.tif')
@@ -106,226 +106,6 @@ def calculate_along_track_distance(x, y):
     segment_distances = np.sqrt(dx**2 + dy**2)
     dist_m = np.concatenate([[0], np.cumsum(segment_distances)])
     return dist_m / 1000  # Convert to km
-
-
-def load_datasets():
-    """Returns a list of dictionaries: {'name': label, 'data': df}"""
-    base_path = BASE_PATH
-    all_dfs = []
-    
-    target_files = [
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'TEST_Aurora_SB',
-        #     'subset': lambda df: df.iloc[8508112:8508112+17528].copy(),
-        # },
-        
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv', 
-        #     'label': 'ROSS_ICECAP',
-        #     'subset': lambda df: df[df['trajectory_id'].astype(str).str.contains('IR1HI2_2009033_DMC_JKB1a_WLKX10b', na=False)].copy()
-        # },
-
-        # {
-        #     'file': 'PRIC_2016_CHA2_AIR_BM3.csv', 
-        #     'label': 'PEL_CHA2',
-        #     # skip the exact number of rows in 'Segment 1'
-        #     'subset': lambda df: df.iloc[410823 : 410823 + 54566].copy(),
-        #     'force_id': 'PRIC_2016_CHA2',
-        # },
-
-        {
-            'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
-            'label': 'Moller_Stream'
-        },    # Institute-Möller Ice Stream
-        
-        # {
-        #     'file': 'BAS_2018_Thwaites_AIR_BM3.csv',
-        #     'label':'Thwaites_BAS'
-        # },    # Thwaites Glacier
-        
-        # {
-        #     'file': 'CRESIS_2009_Thwaites_AIR_BM3.csv',
-        #     'label': 'Thwaites_CR'
-        # },   # Thwaites Swath
-        
-        # {
-        #   'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
-        #   'label': 'DML_AniRES'
-        #  },   # Dronning Maud Land
-
-        ########################### OCKENDEN REGIONS #############################
-        {
-            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-            'label': 'ASB_ICECAP_2010_Fig4_Aurora_SB',
-            'subset': lambda df, _r={
-                'lat_min': -76.0, 'lat_max': -71.0,
-                'lon_min': 105.0, 'lon_max': 125.0,
-            }: df[
-                (df['latitude (degree_north)'] >= _r['lat_min']) &
-                (df['latitude (degree_north)'] <= _r['lat_max']) &
-                (df['longitude (degree_east)']  >= _r['lon_min']) &
-                (df['longitude (degree_east)']  <= _r['lon_max'])
-            ].copy(),
-        },
-
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'ASB_ICECAP_2010_Fig2F_Resolution_SH',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -76.0, 'lat_max': -73.0,
-        #         'lon_min': 135.0, 'lon_max': 150.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
-
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'ASB_ICECAP_2010_Fig2G_Highland_A',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -76.0, 'lat_max': -73.0,
-        #         'lon_min': 118.0, 'lon_max': 132.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'ASB_ICECAP_2010_Fig2H_Golicyna_SH',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -75.0, 'lat_max': -72.0,
-        #         'lon_min': 103.0, 'lon_max': 117.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
-
-        # #############################################################################
-        # {
-        #     'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
-        #     'label': 'Rec_Catch_Fig2D_Recovery_SB',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -83.5, 'lat_max': -80.5,
-        #         'lon_min': -35.0, 'lon_max': -15.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
-
-        # {
-        #     'file': 'NASA_2018_ICEBRIDGE_AIR_BM3.csv',
-        #     'label': '2018_Rec_SB_Fig2D_Recovery_SB',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -83.5, 'lat_max': -80.5,
-        #         'lon_min': -35.0, 'lon_max': -15.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
-        #############################################################################
-        {
-            'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
-            'label': 'POLARGAP_2015_Fig1_Pensacola_Pole',
-            'subset': lambda df, _r={
-                'lat_min': -88.0, 'lat_max': -82.0,
-                'lon_min': -60.0, 'lon_max': -20.0,
-            }: df[
-                (df['latitude (degree_north)'] >= _r['lat_min']) &
-                (df['latitude (degree_north)'] <= _r['lat_max']) &
-                (df['longitude (degree_east)']  >= _r['lon_min']) &
-                (df['longitude (degree_east)']  <= _r['lon_max'])
-            ].copy(),
-        },
-
-        # {
-        #     'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
-        #     'label': 'POLARGAP_2015_Fig2C_Hercules_Dome',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -87.5, 'lat_max': -85.0,
-        #         'lon_min': -120.0, 'lon_max': -100.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
-    ]
-
-
-    file_cache = {}
-
-    for item in target_files:
-        filename = item['file']
-        label = item['label']
-        filepath = os.path.join(base_path, filename)
-        
-        if not os.path.exists(filepath):
-            print(f" Warning: {filename} not found. Skipping.")
-            continue
-
-        try:
-            if filepath not in file_cache:
-                print(f"  Reading {filename}...")
-                file_cache[filepath] = pd.read_csv(filepath, comment='#', low_memory=False)
-            df = file_cache[filepath].copy()
-            
-            # Apply subset if specified (for manual row slicing)
-            if 'subset' in item:
-                df = item['subset'](df)
-            
-            if 'force_id' in item:
-                df['trajectory_id'] = item['force_id']
-            
-            # Cleaning Bedmap3 specific nulls (-9999) 
-            has_valid_bed = df['bedrock_altitude (m)'] != -9999
-            has_valid_traj = (df['trajectory_id'] != -9999) | ('force_id' in item)
-            df = df[has_valid_bed & has_valid_traj].copy()
-            
-            df['trajectory_id'] = df['trajectory_id'].astype(str)
-            
-            # Filter to specific trajectories if specified
-            if 'trajectories' in item:
-                traj_list = [str(t) for t in item['trajectories']]
-                df_filtered = df[df['trajectory_id'].isin(traj_list)]
-                
-                # Create separate dataset for each trajectory
-                for traj_id in traj_list:
-                    traj_df = df_filtered[df_filtered['trajectory_id'] == traj_id].copy()
-                    if len(traj_df) > 0:
-                        print(f"✓ {label}/{traj_id} loaded: {len(traj_df)} rows")
-                        all_dfs.append({'name': f"{label}_{traj_id}", 'data': traj_df})
-                    else:
-                        print(f"✗ {label}/{traj_id}: No data found")
-            else:
-                # No trajectory filter - use entire file (or subset)
-                if len(df) > 0:
-                    print(f"✓ {label} loaded: {len(df)} rows")
-                    all_dfs.append({'name': label, 'data': df})
-                else:
-                    print(f"✗ {label} resulted in 0 rows.")
-                
-        except Exception as e:
-            print(f"✗ Error loading {label}: {e}")
-
-    del file_cache
-    return all_dfs
 
 
 def detect_segments(df, x, y, gap_threshold=2000, min_segment_length=50, min_segment_km=10):
@@ -775,6 +555,8 @@ def plot_flow_confidence(dataset_dict):
 
 
 if __name__=="__main__":
+    import sys
+    sys.stdout = Tee('flow_plots_log.txt')
     datasets = load_datasets()
     for ds in datasets:
         main(ds)
