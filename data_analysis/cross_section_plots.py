@@ -62,7 +62,7 @@ def plot_cross_section(dist, elev, segments, surface_segments, traj_id, output_p
     ax.legend(loc='upper right', fontsize='small', ncol=2)
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
-    fig.savefig(os.path.join(output_path, f'{traj_id}.png'), dpi=300, bbox_inches='tight')
+    fig.savefig(os.path.join(output_path, f'cross_section_{traj_id}.png'), dpi=300, bbox_inches='tight')
     plt.close(fig)
 
 
