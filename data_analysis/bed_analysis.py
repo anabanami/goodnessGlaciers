@@ -583,7 +583,7 @@ def calculate_flow_incidence(x, y, flow_x, flow_y):
     return np.minimum(angle, 180 - angle)
 
 
-def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size, flow_angular_diff=None):
+def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size, flow_angular_diff=None, flow_speed=None):
     """
     Slides a window across the segment to capture local morphometrics AND 
     build a robust average spectrum.
@@ -696,6 +696,12 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
             else:
                 feature_stats['flow_error_mean'] = np.nan
                 feature_stats['flow_error_median'] = np.nan
+
+            if flow_speed is not None:
+                w_speed = flow_speed[fit_mask]
+                feature_stats['measures_speed_mean'] = np.nanmean(w_speed)
+            else:
+                feature_stats['measures_speed_mean'] = np.nan
 
             large_features.append(feature_stats)
             
@@ -839,8 +845,8 @@ def analyse_bedrock():
                 vy[invalid_mask] = np.nan
 
                 # MEaSUREs validation call:
-                angular_diff = MEaSUREs_comparison(seg_x, seg_y, vx, vy)
-                print(f"Flow validation: mean diff = {np.nanmean(angular_diff):.1f}°, median ={np.nanmedian(angular_diff):.1f}°")
+                angular_diff, measures_speed = MEaSUREs_comparison(seg_x, seg_y, vx, vy)
+                print(f"Flow validation: mean diff = {np.nanmean(angular_diff):.1f}°, median ={np.nanmedian(angular_diff):.1f}°, mean speed = {np.nanmean(measures_speed):.1f} m/yr")
 
                 # 2. Calculate Incidence_array
                 incidence_array = calculate_flow_incidence(seg_x, seg_y, vx, vy) # array
@@ -854,7 +860,7 @@ def analyse_bedrock():
                     avg_psd, freqs, window_stats, dx_median, psd_weights = analyse_sliding_windows(
                         segment_distance, bedrock_segment_elev, incidence_array,
                         window_size=segment_len_m, step_size=segment_len_m,
-                        flow_angular_diff=angular_diff
+                        flow_angular_diff=angular_diff, flow_speed=measures_speed
                     )
 
                 else:
@@ -862,7 +868,7 @@ def analyse_bedrock():
                     avg_psd, freqs, window_stats, dx_median, psd_weights = analyse_sliding_windows(
                         segment_distance, bedrock_segment_elev, incidence_array,
                         window_size=WINDOW_SIZE, step_size=STEP_SIZE,
-                        flow_angular_diff=angular_diff
+                        flow_angular_diff=angular_diff, flow_speed=measures_speed
                     )
 
                 # Identifying largest features found in windows
@@ -895,6 +901,7 @@ def analyse_bedrock():
                     'flow_incidence_deg': mean_incidence,
                     'flow_error_mean': np.nanmean(angular_diff),
                     'flow_error_median': np.nanmedian(angular_diff),
+                    'measures_speed_mean': np.nanmean(measures_speed),
                     'window_stats': window_stats
                 }
                 
@@ -1002,7 +1009,7 @@ def analyse_bedrock():
                 list_keys = ['dominant_wavelengths', 'confirmed_wavelengths', 'candidate_wavelengths', 'window_stats']
                 
                 # Keys that are SINGLE VALUES in the segment dict, but we want to KEEP as a list 
-                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'flow_incidence_deg', 'flow_error_mean', 'flow_error_median']
+                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'flow_incidence_deg', 'flow_error_mean', 'flow_error_median', 'measures_speed_mean']
 
                 for key in segment_results[0].keys():
                     # 1. Extract values for the CURRENT key immediately
@@ -1179,7 +1186,8 @@ if __name__=="__main__":
                     'relief_m': w.get('local_relief_m'),
                     'rms_roughness': w.get('roughness_rms'),
                     'flow_error_mean': w.get('flow_error_mean'),
-                    'flow_error_median': w.get('flow_error_median')
+                    'flow_error_median': w.get('flow_error_median'),
+                    'measures_speed_mean': w.get('measures_speed_mean')
                 })
         csv_suffix = f"_w{WINDOW_SIZE // 1000}km" if WINDOW_TYPE == 'rectangular' else f"_w{WINDOW_SIZE // 1000}km_{WINDOW_TYPE}"
         region_output = os.path.join(OUTPUT_BASE_PATH, f'{get_region_folder(region_name)}{csv_suffix}')
@@ -1195,7 +1203,7 @@ if __name__=="__main__":
             hurst_uncerts = traj_data.get('hurst_uncertainty', [])
             flow_err_means = traj_data.get('flow_error_mean', [])
             flow_err_medians = traj_data.get('flow_error_median', [])
-
+            speed_means = traj_data.get('measures_speed_mean', [])
 
             n_segs = min(len(betas), len(incidences))
             for i in range(n_segs):
@@ -1209,6 +1217,7 @@ if __name__=="__main__":
                     'hurst_uncertainty': hurst_uncerts[i] if i < len(hurst_uncerts) else np.nan,
                     'flow_error_mean': flow_err_means[i] if i < len(flow_err_means) else np.nan,
                     'flow_error_median': flow_err_medians[i] if i < len(flow_err_medians) else np.nan,
+                    'measures_speed_mean': speed_means[i] if i < len(speed_means) else np.nan,
                 })
 
         pd.DataFrame(all_segment_data).to_csv(os.path.join(region_output, f'{region_name}{csv_suffix}_segment_stats.csv'), index=False)

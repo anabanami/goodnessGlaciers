@@ -139,4 +139,4 @@ def MEaSUREs_comparison(track_x, track_y, rema_fx, rema_fy):
     # fold angle range to parallel/antiparallel to perpendicular
     angular_diff = np.minimum(angular_diff, 180 - angular_diff)
 
-    return angular_diff
+    return angular_diff, meas_mag

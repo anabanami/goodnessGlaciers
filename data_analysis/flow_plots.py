@@ -13,7 +13,7 @@ from matplotlib.colors import Normalize
 
 # Import the local tools
 from REMA_extractor import extract_rema_elevation, extract_rema_flow_vector, calculate_ice_thickness, get_rema_cache, MEaSUREs_comparison
-from bed_analysis_20 import Tee, load_datasets
+from bed_analysis_21 import Tee, load_datasets
 
 BASE_PATH = 'shortcut_to_culled-data'
 DEM_PATH = os.path.join(BASE_PATH, 'rema_mosaic_100m_v2.0_filled_cop30/rema_mosaic_100m_v2.0_filled_cop30_dem.tif')
@@ -515,7 +515,7 @@ def plot_flow_confidence(dataset_dict):
     for sd in segment_data:
         sx_km = sd['x'] / 1000
         sy_km = sd['y'] / 1000
-        diff = sd['angular_diff']
+        diff = np.asarray(sd['angular_diff']).ravel()
 
         # Build line segments: each segment connects consecutive points
         points = np.column_stack([sx_km, sy_km]).reshape(-1, 1, 2)

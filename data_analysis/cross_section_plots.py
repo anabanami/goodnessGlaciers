@@ -16,7 +16,7 @@ from scipy.ndimage import uniform_filter1d
 import os
 import sys
 
-from bed_analysis_20 import Tee, load_datasets, detect_data_gaps, split_into_segments, split_by_landscape
+from bed_analysis_21 import Tee, load_datasets, detect_data_gaps, split_into_segments, split_by_landscape
 from REMA_extractor import extract_rema_elevation
 
 # ── Config ──────────────────────────────────────────────────────────────────
@@ -103,7 +103,7 @@ def main():
             dist = np.concatenate([[0], np.cumsum(np.sqrt(np.diff(x)**2 + np.diff(y)**2))])
             elev = line['bedrock_altitude (m)'].values
 
-            # Segmentation (same as bed_analysis_20)
+            # Segmentation (same as bed_analysis_21)
             gap_segments = split_into_segments(line, dist)
             if not gap_segments:
                 continue
