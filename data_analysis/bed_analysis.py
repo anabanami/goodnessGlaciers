@@ -39,7 +39,8 @@ GRADIENT_THRESHOLD = 15  # m/km (split where smoothed elevation gradient exceeds
 # Output configuration - creates folders in same directory as this script
 OUTPUT_BASE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
-    '3-Regions-test',
+    'SMUG-regions',
+    # '3-Regions-test',
     # 'sensitivity-window-size',
     # f'{WINDOW_SIZE/1000}km'
     # 'sensitivity-peak-masking',
@@ -94,61 +95,6 @@ def load_datasets():
     
 
     target_files = [
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'TEST_Aurora_SB',
-        #     'subset': lambda df: df.iloc[8508112:8508112+17528].copy(),
-        # },
-        
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv', 
-        #     'label': 'ROSS_ICECAP',
-        #     'subset': lambda df: df[df['trajectory_id'].astype(str).str.contains('IR1HI2_2009033_DMC_JKB1a_WLKX10b', na=False)].copy()
-        # },
-
-        # {
-        #     'file': 'PRIC_2016_CHA2_AIR_BM3.csv', 
-        #     'label': 'PEL_CHA2',
-        #     # skip the exact number of rows in 'Segment 1'
-        #     'subset': lambda df: df.iloc[410823 : 410823 + 54566].copy(),
-        #     'force_id': 'PRIC_2016_CHA2',
-        # },
-
-        {
-            'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
-            'label': 'Moller_Stream'
-        },    # Institute-Möller Ice Stream
-        
-        # {
-        #     'file': 'BAS_2018_Thwaites_AIR_BM3.csv',
-        #     'label':'Thwaites_BAS'
-        # },    # Thwaites Glacier
-        
-        # {
-        #     'file': 'CRESIS_2009_Thwaites_AIR_BM3.csv',
-        #     'label': 'Thwaites_CR'
-        # },   # Thwaites Swath
-        
-        # {
-        #   'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
-        #   'label': 'DML_AniRES'
-        #  },   # Dronning Maud Land
-
-        ########################### OCKENDEN REGIONS #############################
-        {
-            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-            'label': 'ASB_ICECAP_2010_Fig4_Aurora_SB',
-            'subset': lambda df, _r={
-                'lat_min': -76.0, 'lat_max': -71.0,
-                'lon_min': 105.0, 'lon_max': 125.0,
-            }: df[
-                (df['latitude (degree_north)'] >= _r['lat_min']) &
-                (df['latitude (degree_north)'] <= _r['lat_max']) &
-                (df['longitude (degree_east)']  >= _r['lon_min']) &
-                (df['longitude (degree_east)']  <= _r['lon_max'])
-            ].copy(),
-        },
-
         # {
         #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
         #     'label': 'ASB_ICECAP_2010_Fig2F_Resolution_SH',
@@ -211,34 +157,6 @@ def load_datasets():
         #     'subset': lambda df, _r={
         #         'lat_min': -83.5, 'lat_max': -80.5,
         #         'lon_min': -35.0, 'lon_max': -15.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
-        #############################################################################
-        {
-            'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
-            'label': 'POLARGAP_2015_Fig1_Pensacola_Pole',
-            'subset': lambda df, _r={
-                'lat_min': -88.0, 'lat_max': -82.0,
-                'lon_min': -60.0, 'lon_max': -20.0,
-            }: df[
-                (df['latitude (degree_north)'] >= _r['lat_min']) &
-                (df['latitude (degree_north)'] <= _r['lat_max']) &
-                (df['longitude (degree_east)']  >= _r['lon_min']) &
-                (df['longitude (degree_east)']  <= _r['lon_max'])
-            ].copy(),
-        },
-
-        # {
-        #     'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
-        #     'label': 'POLARGAP_2015_Fig2C_Hercules_Dome',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -87.5, 'lat_max': -85.0,
-        #         'lon_min': -120.0, 'lon_max': -100.0,
         #     }: df[
         #         (df['latitude (degree_north)'] >= _r['lat_min']) &
         #         (df['latitude (degree_north)'] <= _r['lat_max']) &
@@ -880,10 +798,15 @@ def analyse_bedrock():
 
                     # average (RMS) roughness accross the whole segment
                     avg_rms_roughness = np.mean([w['roughness_rms'] for w in window_stats])
+
+                    # within-segment window-to-window beta variance
+                    window_betas = [w['window_beta'] for w in window_stats if np.isfinite(w.get('window_beta', np.nan))]
+                    beta_variance = np.var(window_betas, ddof=1) if len(window_betas) > 1 else np.nan
                 else:
                     max_local_relief = 0
                     loc_of_max_relief = 0
                     avg_rms_roughness = 0
+                    beta_variance = np.nan
 
                 print(f" >>>>>>>>>: {dataset_name} | {traj_id} | Segment {seg_idx+1}: mean incidence {mean_incidence:.1f}°")
 
@@ -902,6 +825,7 @@ def analyse_bedrock():
                     'flow_error_mean': np.nanmean(angular_diff),
                     'flow_error_median': np.nanmedian(angular_diff),
                     'measures_speed_mean': np.nanmean(measures_speed),
+                    'beta_variance': beta_variance,
                     'window_stats': window_stats
                 }
                 
@@ -1009,7 +933,7 @@ def analyse_bedrock():
                 list_keys = ['dominant_wavelengths', 'confirmed_wavelengths', 'candidate_wavelengths', 'window_stats']
                 
                 # Keys that are SINGLE VALUES in the segment dict, but we want to KEEP as a list 
-                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'flow_incidence_deg', 'flow_error_mean', 'flow_error_median', 'measures_speed_mean']
+                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'flow_incidence_deg', 'flow_error_mean', 'flow_error_median', 'measures_speed_mean', 'beta_variance']
 
                 for key in segment_results[0].keys():
                     # 1. Extract values for the CURRENT key immediately
@@ -1204,6 +1128,7 @@ if __name__=="__main__":
             flow_err_means = traj_data.get('flow_error_mean', [])
             flow_err_medians = traj_data.get('flow_error_median', [])
             speed_means = traj_data.get('measures_speed_mean', [])
+            beta_vars = traj_data.get('beta_variance', [])
 
             n_segs = min(len(betas), len(incidences))
             for i in range(n_segs):
@@ -1213,6 +1138,7 @@ if __name__=="__main__":
                     'incidence_deg': incidences[i],
                     'beta': betas[i],
                     'beta_uncertainty': beta_uncerts[i] if i < len(beta_uncerts) else np.nan,
+                    'beta_variance': beta_vars[i] if i < len(beta_vars) else np.nan,
                     'hurst': hursts[i] if i < len(hursts) else np.nan,
                     'hurst_uncertainty': hurst_uncerts[i] if i < len(hurst_uncerts) else np.nan,
                     'flow_error_mean': flow_err_means[i] if i < len(flow_err_means) else np.nan,
