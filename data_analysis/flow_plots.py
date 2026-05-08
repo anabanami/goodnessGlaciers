@@ -15,12 +15,18 @@ from matplotlib.colors import Normalize
 from REMA_extractor import extract_rema_elevation, extract_rema_flow_vector, calculate_ice_thickness, get_rema_cache, MEaSUREs_comparison
 from bed_analysis_21 import Tee, load_datasets
 
-BASE_PATH = 'shortcut_to_culled-data'
+BASE_PATH = 'all_data/'
 DEM_PATH = os.path.join(BASE_PATH, 'rema_mosaic_100m_v2.0_filled_cop30/rema_mosaic_100m_v2.0_filled_cop30_dem.tif')
 
 # Module-level transformer (created once, reused)
 _TRANSFORMER = Transformer.from_crs("EPSG:4326", "EPSG:3031", always_xy=True)
 
+
+# Output configuration - creates folders in same directory as this script
+OUTPUT_BASE_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    'flow_plots/',
+    )
 
 def extract_rema_subset(dem_path, bounds, buffer_km=20):
     """
@@ -405,7 +411,7 @@ def main(dataset_dict):
         ax_list.text(col_x + col_width * 0.88, y_pos, f"{seg['length']:.1f}", fontsize=6, ha='center', va='top')
 
     plt.tight_layout()
-    output_file = f'flow_orientation_{region_label}.png'
+    output_file = os.path.join(OUTPUT_BASE_PATH, f'flow_orientation_{region_label}.png')
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
     # plt.show()
     plt.close()
@@ -547,7 +553,7 @@ def plot_flow_confidence(dataset_dict):
     ax.set_aspect('equal')
 
     plt.tight_layout()
-    output_file = f'flow_confidence_{region_label}.png'
+    output_file = os.path.join(OUTPUT_BASE_PATH, f'flow_confidence_{region_label}.png')
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
     # plt.show()
     plt.close()
@@ -556,7 +562,9 @@ def plot_flow_confidence(dataset_dict):
 
 if __name__=="__main__":
     import sys
-    sys.stdout = Tee('flow_plots_log.txt')
+    os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
+    log_path = os.path.join(OUTPUT_BASE_PATH, 'flow_plots_log.txt')
+    sys.stdout = Tee(log_path)
     datasets = load_datasets()
     for ds in datasets:
         main(ds)

@@ -5,6 +5,10 @@ import matplotlib.pyplot as plt
 from scipy import optimize
 from bed_analysis_21 import Tee
 
+# Output configuration - creates folders in same directory as this script
+OUTPUT_BASE_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    'anisotropy/')
 
 """
 Compares cos²(θ) anisotropy fits with and without MEaSUREs-based weighting.
@@ -229,10 +233,13 @@ def plot_anisotropy(csv_path, level='window'):
             fontsize=13, y=1.02)
 
     plt.tight_layout()
+    os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
+    basename = os.path.basename(csv_path)
     suffix = '_seg_weighted_anisotropy.png' if is_seg else '_weighted_anisotropy.png'
-    output_path = csv_path.replace(f'_{level}_stats.csv', suffix)
-    if output_path == csv_path:
-        output_path = csv_path.replace('.csv', suffix)
+    out_name = basename.replace(f'_{level}_stats.csv', suffix)
+    if out_name == basename:
+        out_name = basename.replace('.csv', suffix)
+    output_path = os.path.join(OUTPUT_BASE_PATH, out_name)
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
 
@@ -251,7 +258,8 @@ def process_region(region_name, files):
 
 if __name__ == "__main__":
     regions = discover_regions('.')
-    log_path = os.path.join('weighted_anisotropy_log.txt')
+    os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
+    log_path = os.path.join(OUTPUT_BASE_PATH, 'weighted_anisotropy_log.txt')
     sys.stdout = Tee(log_path)
 
     if len(sys.argv) > 1:

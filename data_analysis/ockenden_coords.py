@@ -6,10 +6,10 @@ These are approximate — refine by checking against the Metrics_v2/*.nc grids
 if needed (those contain x_ifpa.nc and y_ifpa.nc with PS71 coordinates).
 
 Usage:
-    1. Adjust BASE_DIR to your bedmap3_csvs/ folder
+    1. Adjust BASE_DIR to the folder containing the datasets
     2. Run: python subset_for_ockenden.py
     3. Check which regions have data overlap
-    4. Copy the suggested 'subset' lambdas into your analysis pipeline
+    4. Copy the suggested 'subset' lambdas into the analysis pipeline
 """
 
 import pandas as pd
@@ -18,7 +18,7 @@ import numpy as np
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
-BASE_DIR = '/home/ana/Desktop/code/Data/Bedmap/bedmap_csvs/'
+BASE_DIR = '/home/ana/Desktop/code/Data/Bedmap/all_data/'
 
 # ============================================================================
 # OCKENDEN FIGURE REGIONS — lat/lon bounding boxes
@@ -81,26 +81,27 @@ OCKENDEN_REGIONS = {
 }
 
 # ============================================================================
-# YOUR DATASETS → candidate Ockenden regions
+# MY DATASETS → candidate Ockenden regions
 # ============================================================================
 
 DATASETS = [
-    {
-        'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        'label': 'ASB_ICECAP_2010',
-        'candidate_regions': [
-            'Fig4_Aurora_SB', 'Fig2F_Resolution_SH',
-            'Fig2G_Highland_A', 'Fig2H_Golicyna_SH',
-        ],
-    },
-    {
-        'file': 'UTIG_2008_ICECAP_AIR_BM2.csv',
-        'label': 'ASB_ICECAP_2008',
-        'candidate_regions': [
-            'Fig4_Aurora_SB', 'Fig2F_Resolution_SH',
-            'Fig2G_Highland_A', 'Fig2H_Golicyna_SH',
-        ],
-    },
+    # {
+    #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+    #     'label': 'ASB_ICECAP_2010',
+    #     'candidate_regions': [
+    #         'Fig4_Aurora_SB', 'Fig2F_Resolution_SH',
+    #         'Fig2G_Highland_A', 'Fig2H_Golicyna_SH',
+    #     ],
+    # },
+    # {
+    #     'file': 'UTIG_2008_ICECAP_AIR_BM2.csv',
+    #     'label': 'ASB_ICECAP_2008',
+    #     'candidate_regions': [
+    #         'Fig4_Aurora_SB', 'Fig2F_Resolution_SH',
+    #         'Fig2G_Highland_A', 'Fig2H_Golicyna_SH',
+    #     ],
+    # },
+    ############################################################################
     {
         'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
         'label': 'Rec_Catch',
@@ -108,20 +109,71 @@ DATASETS = [
             'Fig2D_Recovery_SB', 'Fig1_Pensacola_Pole',
         ],
     },
+
     {
-        'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
-        'label': 'DML_AniRES',
+        'file': 'BAS_2010_IMAFI_AIR_BM3.csv',
+        'label': 'Rec__SB',
         'candidate_regions': [
-            'Fig2A_Maud_SB',
+            'Fig2D_Recovery_SB',
         ],
     },
+
     {
-        'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
-        'label': 'POLARGAP_2015',
+        'file': 'NASA_2014_ICEBRIDGE_AIR_BM3.csv',
+        'label': 'Rec__SB',
         'candidate_regions': [
-            'Fig1_Pensacola_Pole', 'Fig2C_Hercules_Dome',
+            'Fig2D_Recovery_SB',
         ],
     },
+
+    {
+        'file': 'NASA_2016_ICEBRIDGE_AIR_BM3.csv',
+        'label': 'Rec__SB',
+        'candidate_regions': [
+            'Fig2D_Recovery_SB',
+        ],
+    },
+    
+    {
+        'file': 'NASA_2017_ICEBRIDGE_AIR_BM3.csv',
+        'label': 'Rec__SB',
+        'candidate_regions': [
+            'Fig2D_Recovery_SB',
+        ],
+    },
+    
+    {
+        'file': 'NASA_2018_ICEBRIDGE_AIR_BM3.csv',
+        'label': 'Rec__SB',
+        'candidate_regions': [
+            'Fig2D_Recovery_SB',
+        ],
+    },
+
+    {
+        'file': 'NASA_2019_ICEBRIDGE_AIR_BM3.csv',
+        'label': 'Rec__SB',
+        'candidate_regions': [
+            'Fig2D_Recovery_SB',
+        ],
+    },
+    
+    ############################################################################
+
+    # {
+    #     'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
+    #     'label': 'DML_AniRES',
+    #     'candidate_regions': [
+    #         'Fig2A_Maud_SB',
+    #     ],
+    # },
+    # {
+    #     'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
+    #     'label': 'POLARGAP_2015',
+    #     'candidate_regions': [
+    #         'Fig1_Pensacola_Pole', 'Fig2C_Hercules_Dome',
+    #     ],
+    # },
 ]
 
 
@@ -246,13 +298,6 @@ def main():
     print(f"""
 NEXT STEPS:
   1. If a region shows 0 overlap, try expanding the box by 1-2 degrees.
-  2. The Ockenden Metrics_v2/ NetCDFs contain gridded roughness metrics
-     you can sample at your flight line locations for direct comparison:
-       - ifpa_rms_slope.nc, ifpa_b1_5km.nc (fractal dimension)
-       - ifpa_count_max_50.nc (hill counts)
-       - bedmach_rms_slope.nc, etc. (BedMachine equivalents)
-  3. BedMachine Antarctica v4 now includes IFPA topography:
-     https://doi.org/10.5067/POJQI54A45HX
 """)
 
 

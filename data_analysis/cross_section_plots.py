@@ -22,7 +22,7 @@ from REMA_extractor import extract_rema_elevation
 # ── Config ──────────────────────────────────────────────────────────────────
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cross_sections')
 DEM_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                        'shortcut_to_culled-data',
+                        'all_data',
                         'rema_mosaic_100m_v2.0_filled_cop30',
                         'rema_mosaic_100m_v2.0_filled_cop30_dem.tif')
 # MAX_PLOTS = 50  # safety cap per dataset

@@ -121,7 +121,7 @@ def extract_rema_flow_vector(x, y, dem_path, ice_thickness, cache=None):
 
 
 def MEaSUREs_comparison(track_x, track_y, rema_fx, rema_fy):
-    ds = xr.open_dataset('shortcut_to_culled-data/measures_velocity/antarctica_ice_velocity_450m_v2.nc')
+    ds = xr.open_dataset('all_data/measures_velocity/antarctica_ice_velocity_450m_v2.nc')
 
     # track_x, track_y are your EPSG:3031 coordinates
     measures_vx = ds['VX'].interp(x=xr.DataArray(track_x), y=xr.DataArray(track_y)).values

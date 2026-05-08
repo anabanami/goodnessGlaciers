@@ -16,6 +16,12 @@ import sys
 from bed_analysis_21 import Tee, load_datasets
 
 
+# Output configuration - creates folders in same directory as this script
+OUTPUT_BASE_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    'map_flightlines/'
+    )
+
 def extract_coordinates(datasets):
     """
     Extract lon/lat coordinates from loaded datasets.
@@ -323,7 +329,9 @@ def plot_tracks_on_ockenden(coords, output_path='tracks_on_ockenden.png',
 
 
 if __name__ == "__main__":
-    sys.stdout = Tee('map_flightlines_log.txt')
+    os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
+    log_path = os.path.join(OUTPUT_BASE_PATH, 'map_flightlines_log.txt')
+    sys.stdout = Tee(log_path)
     print("Loading datasets...")
     datasets = load_datasets()
     
@@ -337,11 +345,11 @@ if __name__ == "__main__":
     print_coordinate_summary(coords)
     
     print("\nGenerating maps...")
-    plot_antarctica_overview(coords)
-    plot_regional_detail(coords)
-    plot_tracks_with_elevation(coords, datasets)
-    
-    plot_tracks_on_ockenden(coords)
+    plot_antarctica_overview(coords, os.path.join(OUTPUT_BASE_PATH, 'antarctica_tracks_overview.png'))
+    plot_regional_detail(coords, os.path.join(OUTPUT_BASE_PATH, 'antarctica_tracks_regional.png'))
+    plot_tracks_with_elevation(coords, datasets, os.path.join(OUTPUT_BASE_PATH, 'antarctica_tracks_elevation.png'))
+
+    plot_tracks_on_ockenden(coords, os.path.join(OUTPUT_BASE_PATH, 'tracks_on_ockenden.png'))
 
     print("\nDone! Generated maps:")
     print("  - antarctica_tracks_overview.png (full continent)")
