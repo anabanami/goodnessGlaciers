@@ -1,3 +1,4 @@
+import glob
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -39,8 +40,7 @@ GRADIENT_THRESHOLD = 15  # m/km (split where smoothed elevation gradient exceeds
 # Output configuration - creates folders in same directory as this script
 OUTPUT_BASE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
-    'SMUG-regions',
-    # '3-Regions-test',
+    'TEST-regions_v22/Ockenden-regions/',
     # 'sensitivity-window-size',
     # f'{WINDOW_SIZE/1000}km'
     # 'sensitivity-peak-masking',
@@ -90,80 +90,121 @@ def ensure_output_dirs(base_path, region_folder):
 
 
 def load_datasets():
-    base_path = 'shortcut_to_culled-data'
+    base_path = 'all_data/bedmap3_data/bedmap*/Results/'
     all_dfs = []
     
 
     target_files = [
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'ASB_ICECAP_2010_Fig2F_Resolution_SH',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -76.0, 'lat_max': -73.0,
-        #         'lon_min': 135.0, 'lon_max': 150.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
+        {
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+            'label': 'ASB_ICECAP_2010_Fig4_Aurora_SB',
+            'subset': lambda df, _r={
+                'lat_min': -76.0, 'lat_max': -71.0,
+                'lon_min': 105.0, 'lon_max': 125.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
+        },
 
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'ASB_ICECAP_2010_Fig2G_Highland_A',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -76.0, 'lat_max': -73.0,
-        #         'lon_min': 118.0, 'lon_max': 132.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'ASB_ICECAP_2010_Fig2H_Golicyna_SH',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -75.0, 'lat_max': -72.0,
-        #         'lon_min': 103.0, 'lon_max': 117.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
+        {
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+            'label': 'ASB_ICECAP_2010_Fig2F_Resolution_SH',
+            'subset': lambda df, _r={
+                'lat_min': -76.0, 'lat_max': -73.0,
+                'lon_min': 135.0, 'lon_max': 150.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
+        },
 
-        # #############################################################################
-        # {
-        #     'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
-        #     'label': 'Rec_Catch_Fig2D_Recovery_SB',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -83.5, 'lat_max': -80.5,
-        #         'lon_min': -35.0, 'lon_max': -15.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
+        {
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+            'label': 'ASB_ICECAP_2010_Fig2G_Highland_A',
+            'subset': lambda df, _r={
+                'lat_min': -76.0, 'lat_max': -73.0,
+                'lon_min': 118.0, 'lon_max': 132.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
+        },
+        {
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+            'label': 'ASB_ICECAP_2010_Fig2H_Golicyna_SH',
+            'subset': lambda df, _r={
+                'lat_min': -75.0, 'lat_max': -72.0,
+                'lon_min': 103.0, 'lon_max': 117.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
+        },
 
-        # {
-        #     'file': 'NASA_2018_ICEBRIDGE_AIR_BM3.csv',
-        #     'label': '2018_Rec_SB_Fig2D_Recovery_SB',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -83.5, 'lat_max': -80.5,
-        #         'lon_min': -35.0, 'lon_max': -15.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
+        {
+            'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
+            'label': 'Rec_Catch_Fig2D_Recovery_SB',
+            'subset': lambda df, _r={
+                'lat_min': -83.5, 'lat_max': -80.5,
+                'lon_min': -35.0, 'lon_max': -15.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
+        },
+
+        {
+            'file': 'NASA_2018_ICEBRIDGE_AIR_BM3.csv',
+            'label': '2018_Rec_SB_Fig2D_Recovery_SB',
+            'subset': lambda df, _r={
+                'lat_min': -83.5, 'lat_max': -80.5,
+                'lon_min': -35.0, 'lon_max': -15.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
+        },
+
+        {
+            'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
+            'label': 'POLARGAP_2015_Fig1_Pensacola_Pole',
+            'subset': lambda df, _r={
+                'lat_min': -88.0, 'lat_max': -82.0,
+                'lon_min': -60.0, 'lon_max': -20.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
+        },
+
+        {
+            'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
+            'label': 'POLARGAP_2015_Fig2C_Hercules_Dome',
+            'subset': lambda df, _r={
+                'lat_min': -87.5, 'lat_max': -85.0,
+                'lon_min': -120.0, 'lon_max': -100.0,
+            }: df[
+                (df['latitude (degree_north)'] >= _r['lat_min']) &
+                (df['latitude (degree_north)'] <= _r['lat_max']) &
+                (df['longitude (degree_east)']  >= _r['lon_min']) &
+                (df['longitude (degree_east)']  <= _r['lon_max'])
+            ].copy(),
+        },
     ]
 
 
@@ -172,11 +213,12 @@ def load_datasets():
     for item in target_files:
         filename = item['file']
         label = item['label']
-        filepath = os.path.join(base_path, filename)
-        
-        if not os.path.exists(filepath):
+        matches = glob.glob(os.path.join(base_path, filename))
+        if not matches:
             print(f"⚠️ Warning: {filename} not found. Skipping.")
             continue
+
+        filepath = matches[0]
 
         try:
             if filepath not in file_cache:
@@ -650,7 +692,7 @@ def analyse_bedrock():
     datasets_bundle = load_datasets()
 
     # paths
-    base_path = 'shortcut_to_culled-data/'
+    base_path = 'all_data/'
     dem_path = os.path.join(base_path, 'rema_mosaic_100m_v2.0_filled_cop30/rema_mosaic_100m_v2.0_filled_cop30_dem.tif')
 
     all_results = {}
@@ -826,7 +868,7 @@ def analyse_bedrock():
                     'flow_error_median': np.nanmedian(angular_diff),
                     'measures_speed_mean': np.nanmean(measures_speed),
                     'beta_variance': beta_variance,
-                    'window_stats': window_stats
+                    'window_stats': [{**w, 'segment': seg_idx + 1} for w in window_stats]
                 }
                 
                 # SPECTRAL ANALYSIS
@@ -1103,6 +1145,7 @@ if __name__=="__main__":
             for w in traj_data.get('window_stats', []):
                 all_window_data.append({
                     'trajectory': traj_id,
+                    'segment': w.get('segment'),
                     'window_id': w.get('window_id'),
                     'incidence_deg': w.get('mean_window_incidence'),
                     'beta': w.get('window_beta'),
@@ -1115,7 +1158,9 @@ if __name__=="__main__":
                 })
         csv_suffix = f"_w{WINDOW_SIZE // 1000}km" if WINDOW_TYPE == 'rectangular' else f"_w{WINDOW_SIZE // 1000}km_{WINDOW_TYPE}"
         region_output = os.path.join(OUTPUT_BASE_PATH, f'{get_region_folder(region_name)}{csv_suffix}')
-        pd.DataFrame(all_window_data).to_csv(os.path.join(region_output, f'{region_name}{csv_suffix}_window_stats.csv'), index=False)
+        window_csv_dir = os.path.join(OUTPUT_BASE_PATH, 'window_csvs')
+        os.makedirs(window_csv_dir, exist_ok=True)
+        pd.DataFrame(all_window_data).to_csv(os.path.join(window_csv_dir, f'{region_name}{csv_suffix}_window_stats.csv'), index=False)
 
         # --- Segment-level CSV (for cos²θ regression) ---
         all_segment_data = []

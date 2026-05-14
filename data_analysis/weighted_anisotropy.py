@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy import optimize
-from bed_analysis_21 import Tee
+from bed_analysis_22 import Tee
 
 # Output configuration - creates folders in same directory as this script
 OUTPUT_BASE_PATH = os.path.join(
@@ -25,12 +25,22 @@ Usage:
 
 
 def discover_regions(directory='.'):
-    """Find all region datasets by looking for *_{segment,window}_stats.csv."""
+    """Find all region datasets: window CSVs in window_csvs/, segment CSVs in region subfolders."""
     regions = {}
-    for kind, pattern in [('segment', '*_segment_stats.csv'), ('window', '*_window_stats.csv')]:
-        for f in glob.glob(os.path.join(directory, pattern)):
-            region = os.path.basename(f).replace(f'_{kind}_stats.csv', '')
-            regions.setdefault(region, {})[kind] = f
+    # Window CSVs in window_csvs/
+    for f in glob.glob(os.path.join(directory, 'window_csvs', '*_window_stats.csv')):
+        region = os.path.basename(f).replace('_window_stats.csv', '')
+        regions.setdefault(region, {})['window'] = f
+    # Segment CSVs in region subfolders
+    for f in glob.glob(os.path.join(directory, '*', '*_segment_stats.csv')):
+        region = os.path.basename(f).replace('_segment_stats.csv', '')
+        regions.setdefault(region, {})['segment'] = f
+    # Fallback: flat directory (legacy layout)
+    if not regions:
+        for kind, pattern in [('segment', '*_segment_stats.csv'), ('window', '*_window_stats.csv')]:
+            for f in glob.glob(os.path.join(directory, pattern)):
+                region = os.path.basename(f).replace(f'_{kind}_stats.csv', '')
+                regions.setdefault(region, {})[kind] = f
     return regions
 
 

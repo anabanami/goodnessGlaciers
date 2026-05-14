@@ -13,7 +13,7 @@ from matplotlib.colors import Normalize
 
 # Import the local tools
 from REMA_extractor import extract_rema_elevation, extract_rema_flow_vector, calculate_ice_thickness, get_rema_cache, MEaSUREs_comparison
-from bed_analysis_21 import Tee, load_datasets
+from bed_analysis_22 import Tee, load_datasets
 
 BASE_PATH = 'all_data/'
 DEM_PATH = os.path.join(BASE_PATH, 'rema_mosaic_100m_v2.0_filled_cop30/rema_mosaic_100m_v2.0_filled_cop30_dem.tif')
