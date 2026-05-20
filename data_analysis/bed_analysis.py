@@ -40,7 +40,9 @@ GRADIENT_THRESHOLD = 15  # m/km (split where smoothed elevation gradient exceeds
 # Output configuration - creates folders in same directory as this script
 OUTPUT_BASE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
-    'TEST-regions_v22/Ockenden-regions/',
+    'Ockenden-regions/',
+    # 'SMUG-regions/',
+    
     # 'sensitivity-window-size',
     # f'{WINDOW_SIZE/1000}km'
     # 'sensitivity-peak-masking',
@@ -136,6 +138,7 @@ def load_datasets():
                 (df['longitude (degree_east)']  <= _r['lon_max'])
             ].copy(),
         },
+
         {
             'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
             'label': 'ASB_ICECAP_2010_Fig2H_Golicyna_SH',
@@ -426,7 +429,12 @@ def split_by_landscape(segment_data, segment_distance, smoothing_length=SMOOTHIN
     Returns list of (sub_segment_data, sub_segment_distance) tuples.
     """
     elev = segment_data['bedrock_altitude (m)'].values
-    dist = segment_distance
+    dist = segment_distance.copy()
+
+    # Ensure strictly increasing distances (duplicates/reversals cause np.gradient div-by-zero)
+    for i in range(1, len(dist)):
+        if dist[i] <= dist[i - 1]:
+            dist[i] = dist[i - 1] + 1e-3
 
     if len(dist) < 2:
         return [(segment_data, segment_distance)]
@@ -626,6 +634,9 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
                 except:
                     pass
 
+            window_hurst = (window_beta - 1) / 2
+            window_hurst_uncertainty = window_beta_uncertainty / 2
+
             # D. MORPHOMETRICS (For "Big Mountains")
             local_relief = np.max(w_elev) - np.min(w_elev)
 
@@ -636,7 +647,9 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
                 'local_relief_m': local_relief,
                 'roughness_rms': np.sqrt(np.mean(w_detrended**2)),
                 'window_beta': window_beta,
-                'window_beta_uncertainty': window_beta_uncertainty
+                'window_beta_uncertainty': window_beta_uncertainty,
+                'window_hurst': window_hurst,
+                'window_hurst_uncertainty': window_hurst_uncertainty
             }
 
             # Extract the point-by-point incidence for just this window
@@ -841,14 +854,10 @@ def analyse_bedrock():
                     # average (RMS) roughness accross the whole segment
                     avg_rms_roughness = np.mean([w['roughness_rms'] for w in window_stats])
 
-                    # within-segment window-to-window beta variance
-                    window_betas = [w['window_beta'] for w in window_stats if np.isfinite(w.get('window_beta', np.nan))]
-                    beta_variance = np.var(window_betas, ddof=1) if len(window_betas) > 1 else np.nan
                 else:
                     max_local_relief = 0
                     loc_of_max_relief = 0
                     avg_rms_roughness = 0
-                    beta_variance = np.nan
 
                 print(f" >>>>>>>>>: {dataset_name} | {traj_id} | Segment {seg_idx+1}: mean incidence {mean_incidence:.1f}°")
 
@@ -867,7 +876,6 @@ def analyse_bedrock():
                     'flow_error_mean': np.nanmean(angular_diff),
                     'flow_error_median': np.nanmedian(angular_diff),
                     'measures_speed_mean': np.nanmean(measures_speed),
-                    'beta_variance': beta_variance,
                     'window_stats': [{**w, 'segment': seg_idx + 1} for w in window_stats]
                 }
                 
@@ -975,7 +983,7 @@ def analyse_bedrock():
                 list_keys = ['dominant_wavelengths', 'confirmed_wavelengths', 'candidate_wavelengths', 'window_stats']
                 
                 # Keys that are SINGLE VALUES in the segment dict, but we want to KEEP as a list 
-                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'flow_incidence_deg', 'flow_error_mean', 'flow_error_median', 'measures_speed_mean', 'beta_variance']
+                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'flow_incidence_deg', 'flow_error_mean', 'flow_error_median', 'measures_speed_mean']
 
                 for key in segment_results[0].keys():
                     # 1. Extract values for the CURRENT key immediately
@@ -1070,12 +1078,6 @@ def results_summary(results):
     lengths = [r['profile_length'] for r in results.values() if 'profile_length' in r]
     print(f"AVG SEGMENT LENGTH:\n  -> {format_stat(lengths, 'm')}")
 
-    # 3. Power Law and Hurst Exponents
-    betas = [b for r in results.values() for b in r.get('power_law_exponent', [])]
-    print(f"POWER LAW EXPONENT (Beta):\n  -> {format_stat(betas)}")
-    hurst_exponents = [H_e for r in results.values() for H_e in r.get('hurst_exponent', [])]
-    print(f"HURST EXPONENT:\n  -> {format_stat(hurst_exponents)}")
-    
     # 3b. Skewness and Kurtosis
     skews = [r['skewness'] for r in results.values() if 'skewness' in r and np.isfinite(r['skewness'])]
     kurts = [r['kurtosis'] for r in results.values() if 'kurtosis' in r and np.isfinite(r['kurtosis'])]
@@ -1150,6 +1152,8 @@ if __name__=="__main__":
                     'incidence_deg': w.get('mean_window_incidence'),
                     'beta': w.get('window_beta'),
                     'beta_uncertainty': w.get('window_beta_uncertainty'),
+                    'hurst': w.get('window_hurst'),
+                    'hurst_uncertainty': w.get('window_hurst_uncertainty'),
                     'relief_m': w.get('local_relief_m'),
                     'rms_roughness': w.get('roughness_rms'),
                     'flow_error_mean': w.get('flow_error_mean'),
@@ -1163,6 +1167,9 @@ if __name__=="__main__":
         pd.DataFrame(all_window_data).to_csv(os.path.join(window_csv_dir, f'{region_name}{csv_suffix}_window_stats.csv'), index=False)
 
         # --- Segment-level CSV (for cos²θ regression) ---
+        # Build window DF first so we can derive per-segment distribution stats
+        window_df = pd.DataFrame(all_window_data)
+
         all_segment_data = []
         for traj_id, traj_data in region_results.items():
             betas = traj_data.get('power_law_exponent', [])
@@ -1173,25 +1180,42 @@ if __name__=="__main__":
             flow_err_means = traj_data.get('flow_error_mean', [])
             flow_err_medians = traj_data.get('flow_error_median', [])
             speed_means = traj_data.get('measures_speed_mean', [])
-            beta_vars = traj_data.get('beta_variance', [])
 
             n_segs = min(len(betas), len(incidences))
             for i in range(n_segs):
-                all_segment_data.append({
+                seg_num = i + 1
+                row = {
                     'trajectory': traj_id,
-                    'segment': i + 1,
+                    'segment': seg_num,
                     'incidence_deg': incidences[i],
                     'beta': betas[i],
                     'beta_uncertainty': beta_uncerts[i] if i < len(beta_uncerts) else np.nan,
-                    'beta_variance': beta_vars[i] if i < len(beta_vars) else np.nan,
                     'hurst': hursts[i] if i < len(hursts) else np.nan,
                     'hurst_uncertainty': hurst_uncerts[i] if i < len(hurst_uncerts) else np.nan,
                     'flow_error_mean': flow_err_means[i] if i < len(flow_err_means) else np.nan,
                     'flow_error_median': flow_err_medians[i] if i < len(flow_err_medians) else np.nan,
                     'measures_speed_mean': speed_means[i] if i < len(speed_means) else np.nan,
-                })
+                }
 
-        pd.DataFrame(all_segment_data).to_csv(os.path.join(region_output, f'{region_name}{csv_suffix}_segment_stats.csv'), index=False)
+                # Window-beta distribution stats for this segment
+                if len(window_df) > 0:
+                    wm = window_df[(window_df['trajectory'] == traj_id) & (window_df['segment'] == seg_num)]
+                    wb = wm['beta'].dropna()
+                    row['n_windows'] = len(wb)
+                    row['beta_median'] = wb.median() if len(wb) > 0 else np.nan
+                    if len(wb) > 1:
+                        row['beta_iqr'] = wb.quantile(0.75) - wb.quantile(0.25)
+                    else:
+                        row['beta_iqr'] = np.nan
+                    row['relief_median'] = wm['relief_m'].median() if len(wm) > 0 else np.nan
+                else:
+                    row.update({'n_windows': 0, 'beta_median': np.nan, 'beta_iqr': np.nan, 'relief_median': np.nan})
+
+                all_segment_data.append(row)
+
+        segment_csv_dir = os.path.join(OUTPUT_BASE_PATH, 'segment_csvs')
+        os.makedirs(segment_csv_dir, exist_ok=True)
+        pd.DataFrame(all_segment_data).to_csv(os.path.join(segment_csv_dir, f'{region_name}{csv_suffix}_segment_stats.csv'), index=False)
 
         # --- Wavelength detections CSV (for threshold sensitivity analysis) ---
         all_wavelength_data = []

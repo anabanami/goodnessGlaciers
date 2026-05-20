@@ -1,4 +1,4 @@
-import os, sys, glob
+import os, sys, glob, re
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -21,16 +21,16 @@ Usage:
 # Beta thresholds for bed character classification
 BED_CLASSES = [
     ('chaotic',       -np.inf, 1.5),
-    ('hard',          1.5,     2.2),
-    ('transitional',  2.2,     2.5),
+    ('hard',          1.5,     2.1),
+    ('transitional',  2.1,     2.5),
     ('soft',          2.5,     np.inf),
 ]
 
-# Relief thresholds — placeholder, to be refined
+# Relief thresholds — anchored to reference landscapes (DML_AniRES, Aurora/Golicyna, Moller/Recovery)
 RELIEF_CLASSES = [
-    ('flat',        -np.inf, 200),
-    ('subdued',     200,     600),
-    ('mountainous', 600,     np.inf),
+    ('flat',        -np.inf, 350),
+    ('subdued',     350,     800),
+    ('mountainous', 800,     np.inf),
 ]
 
 BED_COLORS = {
@@ -233,6 +233,63 @@ def plot_bed_character(df, summary, region_name):
     print(f"  Plot saved: {out_path}")
 
 
+def parse_window_km(csv_path):
+    """Extract window size in km from filename like '*_w50km_window_stats.csv'."""
+    m = re.search(r'_w(\d+)km_', os.path.basename(csv_path))
+    return int(m.group(1)) if m else 50  # fallback
+
+
+def plot_beta_along_track(df, region_name, csv_path):
+    """Beta vs along-track distance per segment, colored by bed class."""
+    step_km = parse_window_km(csv_path) / 2  # 50% overlap
+
+    # Only plot segments with >1 window
+    groups = [(k, g) for k, g in df.groupby(['trajectory', 'segment']) if len(g) > 1]
+    if not groups:
+        return
+
+    n = len(groups)
+    fig, axes = plt.subplots(n, 1, figsize=(14, max(2.5 * n, 4)), squeeze=False, sharex=False)
+
+    boundaries = [1.5, 2.2, 2.5]
+
+    for ax, ((traj, seg), g) in zip(axes[:, 0], groups):
+        g = g.sort_values('window_id')
+        dist = g['window_id'].values * step_km
+        beta = g['beta'].values
+
+        # Plot colored scatter + connecting line
+        ax.plot(dist, beta, color='0.6', lw=0.8, zorder=1)
+        for name, lo, hi in BED_CLASSES:
+            mask = g['bed_class'].values == name
+            if mask.any():
+                ax.scatter(dist[mask], beta[mask], c=BED_COLORS[name],
+                           s=30, label=name, zorder=2, edgecolors='k', linewidths=0.3)
+
+        for b in boundaries:
+            ax.axhline(b, color='k', ls='--', lw=0.7, alpha=0.5)
+
+        ax.set_ylabel(r'$\beta$', fontsize=10)
+        ax.set_title(f'{traj} seg {seg:.0f}  (n={len(g)})', fontsize=10, loc='left')
+        ax.grid(True, alpha=0.3)
+
+    axes[-1, 0].set_xlabel('Along-track distance (km)', fontsize=11)
+
+    # Single legend from first axes
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    seen = {}
+    unique = [(h, l) for h, l in zip(handles, labels) if l not in seen and not seen.update({l: 1})]
+    fig.legend(*zip(*unique), loc='upper right', fontsize=9, framealpha=0.9)
+
+    fig.suptitle(f'β along track — {region_name}', fontsize=13)
+    plt.tight_layout(rect=[0, 0, 1, 0.97])
+
+    out_path = os.path.join(OUTPUT_DIR, f'{region_name}_beta_along_track.png')
+    plt.savefig(out_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"  Along-track plot saved: {out_path}")
+
+
 def process_region(region_name, csv_path):
     print(f"\nProcessing: {region_name}")
     df = pd.read_csv(csv_path).dropna(subset=['beta'])
@@ -259,8 +316,9 @@ def process_region(region_name, csv_path):
     summary.to_csv(summary_path, index=False)
     print(f"  Summary saved: {summary_path}")
 
-    # Plot
+    # Plots
     plot_bed_character(df, summary, region_name)
+    plot_beta_along_track(df, region_name, csv_path)
 
 
 if __name__ == "__main__":

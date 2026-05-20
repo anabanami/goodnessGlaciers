@@ -31,8 +31,8 @@ def discover_regions(directory='.'):
     for f in glob.glob(os.path.join(directory, 'window_csvs', '*_window_stats.csv')):
         region = os.path.basename(f).replace('_window_stats.csv', '')
         regions.setdefault(region, {})['window'] = f
-    # Segment CSVs in region subfolders
-    for f in glob.glob(os.path.join(directory, '*', '*_segment_stats.csv')):
+    # Segment CSVs in segment_csvs/
+    for f in glob.glob(os.path.join(directory, 'segment_csvs', '*_segment_stats.csv')):
         region = os.path.basename(f).replace('_segment_stats.csv', '')
         regions.setdefault(region, {})['segment'] = f
     # Fallback: flat directory (legacy layout)
@@ -187,7 +187,13 @@ def plot_anisotropy(csv_path, level='window'):
         print(f"  {n_slow} {level}s with MEaSUREs speed < 5 m/yr (down-weighted)")
 
     n_total = len(theta)
-    print(f"Loaded {n_total} {level}s, {np.sum(weights > 0)} with non-zero weight")
+    n_valid = np.sum(weights > 0)
+    print(f"Loaded {n_total} {level}s, {n_valid} with non-zero weight")
+
+    if n_valid == 0:
+        print(f"  FLOW-AMBIGUOUS: all {level}s have zero weight (ice speed too low).")
+        print(f"  Incidence angles unreliable — skipping anisotropy fit.")
+        return
 
     fit_unw = fit_cos2(theta, beta)
     fit_w = fit_cos2(theta, beta, weights=weights)

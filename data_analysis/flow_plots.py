@@ -491,7 +491,7 @@ def plot_flow_confidence(dataset_dict):
         fx[invalid_mask] = np.nan
         fy[invalid_mask] = np.nan
 
-        angular_diff = MEaSUREs_comparison(seg_x, seg_y, fx, fy)
+        angular_diff, meas_mag = MEaSUREs_comparison(seg_x, seg_y, fx, fy)
         segment_data.append({
             'x': seg_x, 'y': seg_y,
             'angular_diff': angular_diff,
