@@ -150,7 +150,7 @@ def plot_bed_character(df, summary, region_name):
 
     # --- Left: beta histogram colored by class ---
     # Build bin edges that always include the class boundaries
-    boundaries = [1.5, 2.2, 2.5]
+    boundaries = [1.5, 2.1, 2.5]
     beta_min, beta_max = df['beta'].min() - 0.1, df['beta'].max() + 0.1
     bin_width = 0.1
     bin_edges = np.arange(beta_min, beta_max + bin_width, bin_width)
@@ -251,7 +251,7 @@ def plot_beta_along_track(df, region_name, csv_path):
     n = len(groups)
     fig, axes = plt.subplots(n, 1, figsize=(14, max(2.5 * n, 4)), squeeze=False, sharex=False)
 
-    boundaries = [1.5, 2.2, 2.5]
+    boundaries = [1.5, 2.1, 2.5]
 
     for ax, ((traj, seg), g) in zip(axes[:, 0], groups):
         g = g.sort_values('window_id')

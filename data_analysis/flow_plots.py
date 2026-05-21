@@ -425,6 +425,20 @@ def main(dataset_dict):
         orientation = 'Parallel' if mean_angle < 30 else ('Oblique' if mean_angle < 60 else 'Perpendicular')
         print(f"     Seg {seg['seg_num']}: {orientation:13s} ({mean_angle:.1f}°) | {length_km:.1f} km")
 
+    # Angular coverage diagnostic
+    all_angles = np.concatenate([v['incidence'] for v in segment_flow.values()])
+    all_angles = all_angles[~np.isnan(all_angles)]
+    if len(all_angles) > 0:
+        bins = np.arange(0, 91, 10)
+        counts, _ = np.histogram(all_angles, bins=bins)
+        total = len(all_angles)
+        occupied = np.sum(counts > 0)
+        print(f"\n   Angular coverage: {occupied}/{len(counts)} bins occupied | "
+              f"range {np.min(all_angles):.0f}°–{np.max(all_angles):.0f}°, std={np.std(all_angles):.1f}°")
+        for i in range(len(counts)):
+            bar = '#' * int(40 * counts[i] / max(counts.max(), 1))
+            print(f"     {bins[i]:2.0f}°–{bins[i+1]:2.0f}°: {counts[i]:5d} ({100*counts[i]/total:5.1f}%) {bar}")
+
 
 def plot_flow_confidence(dataset_dict):
     """
@@ -497,8 +511,11 @@ def plot_flow_confidence(dataset_dict):
             'angular_diff': angular_diff,
             'seg_num': seg['seg_num'],
         })
-        print(f"     Seg {seg['seg_num']}: mean diff = {np.nanmean(angular_diff):.1f}°, "
-              f"median = {np.nanmedian(angular_diff):.1f}°")
+        if np.all(np.isnan(angular_diff)):
+            print(f"     Seg {seg['seg_num']}: no valid flow data")
+        else:
+            print(f"     Seg {seg['seg_num']}: mean diff = {np.nanmean(angular_diff):.1f}°, "
+                  f"median = {np.nanmedian(angular_diff):.1f}°")
 
     # Convert to km
     extent_km = [e / 1000 for e in extent]
