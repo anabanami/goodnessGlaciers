@@ -33,6 +33,13 @@ RELIEF_CLASSES = [
     ('mountainous', 800,     np.inf),
 ]
 
+# Elevation thresholds — absolute bed elevation (m a.s.l.) [Siegert_2004, Frederick_2016]
+ELEVATION_CLASSES = [
+    ('submerged',  -np.inf, 0),
+    ('emergent',   0,       1000),
+    ('elevated',   1000,    np.inf),
+]
+
 BED_COLORS = {
     'chaotic':      '#d62728',
     'hard':         '#ff7f0e',
@@ -53,6 +60,13 @@ def classify_beta(beta):
 def classify_relief(relief):
     for name, lo, hi in RELIEF_CLASSES:
         if lo <= relief < hi:
+            return name
+    return 'unknown'
+
+
+def classify_elevation(elev):
+    for name, lo, hi in ELEVATION_CLASSES:
+        if lo <= elev < hi:
             return name
     return 'unknown'
 
@@ -102,7 +116,7 @@ def segment_summary(df):
         class_counts = g['bed_class'].value_counts()
         class_str = ', '.join(f"{c} {v}" for c, v in class_counts.items())
 
-        rows.append({
+        row = {
             'trajectory': traj,
             'segment': seg,
             'n_windows': n,
@@ -113,7 +127,11 @@ def segment_summary(df):
             'agreement': agreement,
             'class_detail': class_str,
             'relief_class': classify_relief(g['relief_m'].median()),
-        })
+        }
+        if 'bed_elev_mean' in g.columns:
+            row['bed_elev_median'] = g['bed_elev_mean'].median()
+            row['elevation_class'] = classify_elevation(g['bed_elev_mean'].median())
+        rows.append(row)
     return pd.DataFrame(rows)
 
 
@@ -243,8 +261,8 @@ def plot_beta_along_track(df, region_name, csv_path):
     """Beta vs along-track distance per segment, colored by bed class."""
     step_km = parse_window_km(csv_path) / 2  # 50% overlap
 
-    # Only plot segments with >1 window
-    groups = [(k, g) for k, g in df.groupby(['trajectory', 'segment']) if len(g) > 1]
+    # Only plot segments with >3 windows
+    groups = [(k, g) for k, g in df.groupby(['trajectory', 'segment']) if len(g) > 3]
     if not groups:
         return
 
@@ -290,6 +308,59 @@ def plot_beta_along_track(df, region_name, csv_path):
     print(f"  Along-track plot saved: {out_path}")
 
 
+ELEV_COLORS = {
+    'submerged': '#2166ac',
+    'emergent':  '#b2182b',
+    'elevated':  '#762a83',
+}
+
+
+def plot_bed_elevation_heatmap(df, region_name):
+    """Contingency heatmap of bed_class vs elevation_class (window counts)."""
+    if 'elevation_class' not in df.columns:
+        return
+
+    bed_order = [name for name, _, _ in BED_CLASSES]
+    elev_order = [name for name, _, _ in ELEVATION_CLASSES]
+
+    # Build counts matrix
+    counts = pd.crosstab(df['bed_class'], df['elevation_class'])
+    counts = counts.reindex(index=bed_order, columns=elev_order, fill_value=0)
+
+    # Drop empty rows/columns
+    counts = counts.loc[counts.sum(axis=1) > 0, counts.sum(axis=0) > 0]
+    if counts.empty:
+        return
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+    im = ax.imshow(counts.values, cmap='YlOrRd', aspect='auto')
+
+    # Annotate cells with count and percentage
+    total = counts.values.sum()
+    for i in range(counts.shape[0]):
+        for j in range(counts.shape[1]):
+            val = counts.values[i, j]
+            pct = val / total * 100
+            color = 'white' if val > total * 0.3 else 'black'
+            ax.text(j, i, f'{val}\n({pct:.0f}%)', ha='center', va='center',
+                    fontsize=10, color=color, fontweight='bold')
+
+    ax.set_xticks(range(counts.shape[1]))
+    ax.set_xticklabels(counts.columns, fontsize=11)
+    ax.set_yticks(range(counts.shape[0]))
+    ax.set_yticklabels(counts.index, fontsize=11)
+    ax.set_xlabel('Elevation class', fontsize=12)
+    ax.set_ylabel('Bed class (β)', fontsize=12)
+    ax.set_title(f'Bed class × Elevation — {region_name}\n(n={total} windows)', fontsize=13)
+    fig.colorbar(im, ax=ax, label='Window count', shrink=0.8)
+    plt.tight_layout()
+
+    out_path = os.path.join(OUTPUT_DIR, f'{region_name}_bed_elevation_heatmap.png')
+    plt.savefig(out_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"  Elevation heatmap saved: {out_path}")
+
+
 def process_region(region_name, csv_path):
     print(f"\nProcessing: {region_name}")
     df = pd.read_csv(csv_path).dropna(subset=['beta'])
@@ -301,6 +372,8 @@ def process_region(region_name, csv_path):
     # Classify windows
     df['bed_class'] = df['beta'].apply(classify_beta)
     df['relief_class'] = df['relief_m'].apply(classify_relief)
+    if 'bed_elev_mean' in df.columns:
+        df['elevation_class'] = df['bed_elev_mean'].apply(classify_elevation)
 
     # Write updated window CSV with classification columns
     df.to_csv(csv_path, index=False)
@@ -319,6 +392,7 @@ def process_region(region_name, csv_path):
     # Plots
     plot_bed_character(df, summary, region_name)
     plot_beta_along_track(df, region_name, csv_path)
+    plot_bed_elevation_heatmap(df, region_name)
 
 
 if __name__ == "__main__":

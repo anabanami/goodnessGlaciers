@@ -261,15 +261,61 @@ def plot_anisotropy(csv_path, level='window'):
 
     _print_comparison(fit_unw, fit_w)
     print(f"\nSaved to {output_path}")
+    return {'unweighted': fit_unw, 'weighted': fit_w, 'n': n_total, 'n_valid': int(n_valid)}
+
+
+def _cross_scale_comparison(win_fits, seg_fits, n_win=0, n_seg=0,
+                            n_win_valid=0, n_seg_valid=0, min_n=20):
+    """Compare Δβ between window and segment scales via z-score."""
+    print(f"\n{'='*55}")
+    print("CROSS-SCALE COMPARISON  (window vs segment Δβ)")
+    print(f"{'-'*55}")
+    low_n = []
+    if n_win < min_n:
+        low_n.append(f"windows (n={n_win})")
+    if n_seg < min_n:
+        low_n.append(f"segments (n={n_seg})")
+    if low_n:
+        print(f"  ** LOW SAMPLE SIZE: {', '.join(low_n)} < {min_n} — "
+              f"bootstrap SEs unreliable, interpret with caution **")
+    low_n_eff = []
+    if n_win_valid < min_n:
+        low_n_eff.append(f"windows (n_eff={n_win_valid})")
+    if n_seg_valid < min_n:
+        low_n_eff.append(f"segments (n_eff={n_seg_valid})")
+    for label, key in [('Unweighted', 'unweighted'), ('Weighted', 'weighted')]:
+        fw, fs = win_fits.get(key), seg_fits.get(key)
+        if fw is None or fs is None:
+            print(f"  {label}: fit missing — skipped")
+            continue
+        if key == 'weighted' and low_n_eff:
+            print(f"  ** LOW EFFECTIVE SAMPLE SIZE: {', '.join(low_n_eff)} < {min_n} — "
+                  f"weighted bootstrap SEs unreliable, interpret with caution **")
+        diff = fw['delta'] - fs['delta']
+        se = np.sqrt(fw['delta_se']**2 + fs['delta_se']**2)
+        z = diff / se if se > 0 else np.inf
+        verdict = 'CONSISTENT' if abs(z) < 2 else 'INCONSISTENT'
+        print(f"  {label}:")
+        print(f"    Window  Δβ = {fw['delta']:+.3f} ± {fw['delta_se']:.3f}")
+        print(f"    Segment Δβ = {fs['delta']:+.3f} ± {fs['delta_se']:.3f}")
+        print(f"    Difference  = {diff:+.3f},  z = {abs(z):.2f}  →  {verdict} (|z|<2)")
+    print(f"{'='*55}")
 
 
 def process_region(region_name, files):
     print(f"\n{'='*60}\nProcessing: {region_name}\n{'='*60}")
+    fits = {}
     for level in ['window', 'segment']:
         if level in files:
-            plot_anisotropy(files[level], level=level)
+            fits[level] = plot_anisotropy(files[level], level=level)
         else:
             print(f"  No {level} stats file for {region_name}")
+    if 'window' in fits and 'segment' in fits and fits['window'] and fits['segment']:
+        _cross_scale_comparison(fits['window'], fits['segment'],
+                                n_win=fits['window']['n'],
+                                n_seg=fits['segment']['n'],
+                                n_win_valid=fits['window']['n_valid'],
+                                n_seg_valid=fits['segment']['n_valid'])
 
 
 if __name__ == "__main__":
