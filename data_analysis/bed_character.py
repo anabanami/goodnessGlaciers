@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
-from bed_analysis_22 import Tee
+from config import Tee
 
 """
 Bed character classification from window-level spectral data.

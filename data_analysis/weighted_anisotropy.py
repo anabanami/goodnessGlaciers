@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy import optimize
-from bed_analysis_22 import Tee
+from config import Tee
 
 # Output configuration - creates folders in same directory as this script
 OUTPUT_BASE_PATH = os.path.join(

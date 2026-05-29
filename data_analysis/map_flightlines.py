@@ -13,7 +13,8 @@ from pyproj import Transformer
 import os
 
 import sys
-from bed_analysis_22 import Tee, load_datasets
+from config import Tee
+from loading import load_datasets
 
 
 # Output configuration - creates folders in same directory as this script

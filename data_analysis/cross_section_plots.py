@@ -16,7 +16,9 @@ from scipy.ndimage import uniform_filter1d
 import os
 import sys
 
-from bed_analysis_22 import Tee, load_datasets, detect_data_gaps, split_into_segments, split_by_landscape
+from config import Tee
+from loading import load_datasets
+from segmentation import detect_data_gaps, split_into_segments, split_by_landscape
 from REMA_extractor import extract_rema_elevation
 
 # ── Config ──────────────────────────────────────────────────────────────────
