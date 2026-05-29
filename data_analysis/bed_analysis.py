@@ -41,7 +41,9 @@ GRADIENT_THRESHOLD = 15  # m/km (split where smoothed elevation gradient exceeds
 OUTPUT_BASE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     # 'Ockenden-regions/',
-    'SMUG-regions/',
+    # 'SMUG-regions/',
+    'TEST-ONE-SMUG-region/',
+
     
     # 'sensitivity-window-size',
     # f'{WINDOW_SIZE/1000}km'
@@ -91,6 +93,29 @@ def ensure_output_dirs(base_path, region_folder):
     }
 
 
+_MIGRATED = {'2-D migration processing', '2-D Synthetic Aperture Radar processing',
+             '2-D Synthetic Aperture Radar focused processing'}
+_PARTIAL  = {'1-D Synthetic Aperture Radar processing',
+             'Synthetic Aperture Radar unfocused processing',
+             'pik1 (short coherent) processing',
+             'MUSIC (Swath) Processing'}
+
+def _parse_processing_flag(filepath):
+    """Extract #history from Bedmap3 CSV header → processing flag."""
+    with open(filepath) as f:
+        for line in f:
+            if not line.startswith('#'):
+                break
+            if line.startswith('#history:'):
+                hist = line.split(':', 1)[1].strip()
+                if hist in _MIGRATED:
+                    return 'migrated'
+                if hist in _PARTIAL:
+                    return 'partial'
+                return 'unmigrated_or_unknown'
+    return 'unmigrated_or_unknown'
+
+
 def load_datasets():
     base_path = 'all_data/bedmap3_data/bedmap*/Results/'
     all_dfs = []
@@ -103,28 +128,28 @@ def load_datasets():
             'subset': lambda df: df.iloc[8508112:8508112+17528].copy(),
         },
         
-        {
-            'file': 'PRIC_2016_CHA2_AIR_BM3.csv', 
-            'label': 'PEL_CHA2',
-            # skip the exact number of rows in 'Segment 1'
-            'subset': lambda df: df.iloc[410823 : 410823 + 54566].copy(),
-            'force_id': 'PRIC_2016_CHA2',
-        },
+        # {
+        #     'file': 'PRIC_2016_CHA2_AIR_BM3.csv', 
+        #     'label': 'PEL_CHA2',
+        #     # skip the exact number of rows in 'Segment 1'
+        #     'subset': lambda df: df.iloc[410823 : 410823 + 54566].copy(),
+        #     'force_id': 'PRIC_2016_CHA2',
+        # },
 
-        {
-            'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
-            'label': 'Moller_Stream'
-        },    # Institute-Möller Ice Stream
+        # {
+        #     'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
+        #     'label': 'Moller_Stream'
+        # },    # Institute-Möller Ice Stream
         
-        {
-            'file': 'BAS_2018_Thwaites_AIR_BM3.csv',
-            'label':'Thwaites_BAS'
-        },    # Thwaites Glacier
+        # {
+        #     'file': 'BAS_2018_Thwaites_AIR_BM3.csv',
+        #     'label':'Thwaites_BAS'
+        # },    # Thwaites Glacier
         
-        {
-          'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
-          'label': 'DML_AniRES'
-         },   # Dronning Maud Land
+        # {
+        #   'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
+        #   'label': 'DML_AniRES'
+        #  },   # Dronning Maud Land
     ###########################################################################
         # {
         #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
@@ -256,15 +281,16 @@ def load_datasets():
             if filepath not in file_cache:
                 print(f"  Reading {filename}...")
                 file_cache[filepath] = pd.read_csv(filepath, comment='#', low_memory=False)
-            
+                file_cache[filepath]['processing_flag'] = _parse_processing_flag(filepath)
+
             df = file_cache[filepath].copy()
-            
+
             if 'subset' in item:
                 df = item['subset'](df)
-            
+
             if 'force_id' in item:
                 df['trajectory_id'] = item['force_id']
-            
+
             # Clean Bedmap nulls (-9999)
             initial_len = len(df)
             has_valid_bed = df['bedrock_altitude (m)'] != -9999
@@ -274,7 +300,8 @@ def load_datasets():
             df['trajectory_id'] = df['trajectory_id'].astype(str)
             
             if len(df) > 0:
-                print(f"✓ {label} loaded: {len(df)} rows (Filtered {initial_len - len(df)} nulls)")
+                pflag = df['processing_flag'].iloc[0]
+                print(f"✓ {label} loaded: {len(df)} rows (Filtered {initial_len - len(df)} nulls) [{pflag}]")
                 all_dfs.append({'name': label, 'data': df})
             else:
                 print(f"---{label} resulted in 0 rows.---")
@@ -650,6 +677,8 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
             # C. Calculate per-window beta (power law exponent)
             window_beta = np.nan
             window_beta_uncertainty = np.nan
+            window_C = np.nan
+            window_C_uncertainty = np.nan
             if np.sum(mask) >= 2 and np.all(pgram > 0):
                 log_psd = np.log10(pgram)
                 try:
@@ -657,9 +686,12 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
                     if n_fit > 2:
                         coeffs, cov = np.polyfit(log_freqs[mask], log_psd[mask], 1, cov=True)
                         window_beta_uncertainty = np.sqrt(cov[0, 0])
+                        window_C_uncertainty = np.sqrt(cov[1, 1])
+
                     else:
                         coeffs = np.polyfit(log_freqs[mask], log_psd[mask], 1)
                     window_beta = -coeffs[0]
+                    window_C = coeffs[1]
                 except:
                     pass
 
@@ -678,6 +710,8 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
                 'roughness_rms': np.sqrt(np.mean(w_detrended**2)),
                 'window_beta': window_beta,
                 'window_beta_uncertainty': window_beta_uncertainty,
+                'window_C': window_C,
+                'window_C_uncertainty': window_C_uncertainty,
                 'window_hurst': window_hurst,
                 'window_hurst_uncertainty': window_hurst_uncertainty
             }
@@ -959,6 +993,8 @@ def analyse_bedrock():
 
                         beta = -slope # Power law exponent
                         beta_uncertainty = np.sqrt(cov[0, 0]) # beta std error
+                        C = intercept # powerlaw intercept
+                        C_uncertainty = np.sqrt(cov[1, 1]) # C std error
 
                         # Apply fit to the full range
                         fitted_psd = 10**(intercept + slope * log_freqs)
@@ -967,6 +1003,8 @@ def analyse_bedrock():
                     else: # fallback
                         beta = -slope_init
                         beta_uncertainty = np.nan
+                        C = intercept_init
+                        C_uncertainty = np.nan
                         fitted_psd = fitted_psd_init
 
                     dominant_wavelengths = wavelengths_calc[peaks] if len(peaks) > 0 else []
@@ -988,7 +1026,9 @@ def analyse_bedrock():
                         'candidate_wavelengths': confidence_flags['candidate'],
                         'confidence_threshold': confidence_flags['threshold'],
                         'power_law_exponent': beta,
-                        'beta_uncertainty': beta_uncertainty, 
+                        'beta_uncertainty': beta_uncertainty,
+                        'power_law_intercept': C,
+                        'C_uncertainty': C_uncertainty, 
                         'hurst_exponent': hurst_exponent,
                         'hurst_uncertainty': hurst_uncertainty
                     })
@@ -1013,7 +1053,7 @@ def analyse_bedrock():
                 list_keys = ['dominant_wavelengths', 'confirmed_wavelengths', 'candidate_wavelengths', 'window_stats']
                 
                 # Keys that are SINGLE VALUES in the segment dict, but we want to KEEP as a list 
-                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'flow_incidence_deg', 'flow_error_mean', 'flow_error_median', 'measures_speed_mean', 'elevation_min', 'elevation_max']
+                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'power_law_intercept', 'C_uncertainty', 'flow_incidence_deg', 'flow_error_mean', 'flow_error_median', 'measures_speed_mean', 'elevation_min', 'elevation_max']
 
                 for key in segment_results[0].keys():
                     # 1. Extract values for the CURRENT key immediately
@@ -1174,6 +1214,9 @@ if __name__=="__main__":
                     'incidence_deg': w.get('mean_window_incidence'),
                     'beta': w.get('window_beta'),
                     'beta_uncertainty': w.get('window_beta_uncertainty'),
+                    'C': w.get('window_C'),
+                    'C_uncertainty': w.get('window_C_uncertainty'),
+                    'psd_amplitude_1km': w.get('window_C', np.nan) + 3 * w.get('window_beta', np.nan),
                     'hurst': w.get('window_hurst'),
                     'hurst_uncertainty': w.get('window_hurst_uncertainty'),
                     'relief_m': w.get('local_relief_m'),
@@ -1197,6 +1240,8 @@ if __name__=="__main__":
         for traj_id, traj_data in region_results.items():
             betas = traj_data.get('power_law_exponent', [])
             beta_uncerts = traj_data.get('beta_uncertainty', [])
+            Cs = traj_data.get('power_law_intercept', [])
+            C_uncerts = traj_data.get('C_uncertainty', [])
             incidences = traj_data.get('flow_incidence_deg', [])
             hursts = traj_data.get('hurst_exponent', [])
             hurst_uncerts = traj_data.get('hurst_uncertainty', [])
@@ -1215,6 +1260,9 @@ if __name__=="__main__":
                     'incidence_deg': incidences[i],
                     'beta': betas[i],
                     'beta_uncertainty': beta_uncerts[i] if i < len(beta_uncerts) else np.nan,
+                    'C': Cs[i] if i < len(Cs) else np.nan,
+                    'C_uncertainty': C_uncerts[i] if i < len(C_uncerts) else np.nan,
+                    'psd_amplitude_1km': (Cs[i] if i < len(Cs) else np.nan) + 3 * betas[i],
                     'hurst': hursts[i] if i < len(hursts) else np.nan,
                     'hurst_uncertainty': hurst_uncerts[i] if i < len(hurst_uncerts) else np.nan,
                     'flow_error_mean': flow_err_means[i] if i < len(flow_err_means) else np.nan,
