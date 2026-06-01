@@ -5,10 +5,10 @@ from pyproj import Transformer
 import os
 import sys
 
-from config import (WINDOW_SIZE, STEP_SIZE, WINDOW_TYPE, OUTPUT_BASE_PATH,
+from config import (WINDOW_SIZE, STEP_SIZE, WINDOW_TYPE,
                     peak_masking_height_threshold, bin_buffer,
                     Tee, get_region_folder, ensure_output_dirs)
-from loading import load_datasets
+from loading import  OUTPUT_BASE_PATH, load_datasets
 from segmentation import detect_data_gaps, split_into_segments, split_by_landscape
 from plotting import plot_raw_data_with_segmentation_check, plot_spectra
 from REMA_extractor import extract_rema_elevation, extract_rema_flow_vector, calculate_ice_thickness, MEaSUREs_comparison
@@ -170,7 +170,7 @@ def analyse_bedrock():
         print(f"  Unique trajectories: {len(valid['trajectory_id'].unique())}")
 
         results = {}
-        plot_count = 0
+        # plot_count = 0
 
         for j, traj_id in enumerate(valid['trajectory_id'].unique()):
             if j > 0 and j % 10 == 0:
@@ -351,9 +351,7 @@ def analyse_bedrock():
                         'hurst_uncertainty': hurst_uncertainty
                     })
 
-                    if plot_count < 10:
-                        plot_spectra(segment_distance, detrended, wavelengths_calc, avg_psd, fitted_psd, beta, residual_psd, traj_id, dataset_name, segment_number=seg_idx+1, output_path=output_paths['psd'])
-                        plot_count += 1
+                    plot_spectra(segment_distance, detrended, wavelengths_calc, avg_psd, fitted_psd, beta, C, residual_psd, traj_id, dataset_name, segment_number=seg_idx+1, output_path=output_paths['psd'])
                 else:
                     print(f"Skipping Line {traj_id}: Not enough data points in 250m–50km range.")
 

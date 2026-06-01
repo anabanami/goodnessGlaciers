@@ -36,7 +36,7 @@ RELIEF_CLASSES = [
 # Elevation thresholds — absolute bed elevation (m a.s.l.) [Siegert_2004, Frederick_2016]
 ELEVATION_CLASSES = [
     ('submerged',  -np.inf, 0),
-    ('emergent',   0,       1000),
+    ('emerged',   0,       1000),
     ('elevated',   1000,    np.inf),
 ]
 
@@ -47,7 +47,9 @@ BED_COLORS = {
     'soft':         '#1f77b4',
 }
 
-OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bed_character/')
+# Output configuration - nested inside region output from loading.py
+from loading import OUTPUT_BASE_PATH as _REGION_BASE
+OUTPUT_DIR = os.path.join(_REGION_BASE, 'bed_character/')
 
 
 def classify_beta(beta):
@@ -128,6 +130,10 @@ def segment_summary(df):
             'class_detail': class_str,
             'relief_class': classify_relief(g['relief_m'].median()),
         }
+        if 'psd_amplitude_1km' in g.columns:
+            row['psd_amp_1km_median'] = g['psd_amplitude_1km'].median()
+            row['psd_amp_1km_iqr'] = (g['psd_amplitude_1km'].quantile(0.75)
+                                      - g['psd_amplitude_1km'].quantile(0.25)) if n > 1 else np.nan
         if 'bed_elev_mean' in g.columns:
             row['bed_elev_median'] = g['bed_elev_mean'].median()
             row['elevation_class'] = classify_elevation(g['bed_elev_mean'].median())
@@ -141,24 +147,28 @@ def print_summary(summary, region_name, df):
     print(f"  BED CHARACTER: {region_name}")
     print(f"{'='*80}")
     print(f"{'Traj':>8s} {'Seg':>4s} {'n':>3s} {'β_med':>6s} {'β_IQR':>6s} "
-          f"{'Relief':>7s} {'Bed Class':>14s} {'Agree':>6s}  Detail")
-    print(f"{'-'*80}")
+          f"{'Relief':>7s} {'A_1km':>6s} {'Bed Class':>14s} {'Agree':>6s}  Detail")
+    print(f"{'-'*90}")
     for _, r in summary.iterrows():
         iqr = f"{r['beta_iqr']:.2f}" if np.isfinite(r['beta_iqr']) else '—'
         agree = f"{r['agreement']:.0%}" if r['n_windows'] > 1 else '(1win)'
+        amp = f"{r['psd_amp_1km_median']:.1f}" if 'psd_amp_1km_median' in r and np.isfinite(r['psd_amp_1km_median']) else '—'
         print(f"{r['trajectory']:>8} {r['segment']:>4.0f} {r['n_windows']:>3.0f} "
               f"{r['beta_median']:>6.2f} {iqr:>6s} {r['relief_median']:>7.0f} "
-              f"{r['bed_class']:>14s} {agree:>6s}  {r['class_detail']}")
+              f"{amp:>6s} {r['bed_class']:>14s} {agree:>6s}  {r['class_detail']}")
 
     # Region totals
     n = len(df)
     counts = df['bed_class'].value_counts()
     parts = ' | '.join(f"{c} {v/n:.0%}" for c, v in counts.items())
-    print(f"{'-'*80}")
+    print(f"{'-'*90}")
     print(f"  Region: {n} windows | {parts}")
     print(f"  β: median {df['beta'].median():.2f}, "
           f"IQR [{df['beta'].quantile(0.25):.2f} – {df['beta'].quantile(0.75):.2f}]")
-    print(f"{'='*80}")
+    if 'psd_amplitude_1km' in df.columns:
+        print(f"  PSD amp @ 1 km: median {df['psd_amplitude_1km'].median():.2f}, "
+              f"IQR [{df['psd_amplitude_1km'].quantile(0.25):.2f} – {df['psd_amplitude_1km'].quantile(0.75):.2f}]")
+    print(f"{'='*90}")
 
 
 def plot_bed_character(df, summary, region_name):
@@ -310,7 +320,7 @@ def plot_beta_along_track(df, region_name, csv_path):
 
 ELEV_COLORS = {
     'submerged': '#2166ac',
-    'emergent':  '#b2182b',
+    'emerged':  '#b2182b',
     'elevated':  '#762a83',
 }
 
@@ -401,10 +411,10 @@ if __name__ == "__main__":
     sys.stdout = Tee(log_path)
 
     # Discover CSVs
-    csvs = discover_window_csvs('window_csvs')
+    csvs = discover_window_csvs(os.path.join(_REGION_BASE, 'window_csvs'))
     if not csvs:
-        # Try from current directory in case user is inside the results folder
-        csvs = discover_window_csvs('.')
+        # Try from region base directory in case of flat layout
+        csvs = discover_window_csvs(_REGION_BASE)
 
     if len(sys.argv) > 1:
         arg = sys.argv[1]

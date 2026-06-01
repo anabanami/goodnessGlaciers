@@ -22,7 +22,9 @@ from segmentation import detect_data_gaps, split_into_segments, split_by_landsca
 from REMA_extractor import extract_rema_elevation
 
 # ── Config ──────────────────────────────────────────────────────────────────
-OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cross_sections')
+# Output configuration - nested inside region output from loading.py
+from loading import OUTPUT_BASE_PATH as _REGION_BASE
+OUTPUT_DIR = os.path.join(_REGION_BASE, 'cross_sections')
 DEM_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         'all_data',
                         'rema_mosaic_100m_v2.0_filled_cop30',

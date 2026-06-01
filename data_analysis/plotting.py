@@ -36,7 +36,7 @@ def plot_raw_data_with_segmentation_check(dist, elev, segments, traj_id, gap_mas
     plt.close()
 
 
-def plot_spectra(dist, detrended, wavelengths, psd, fitted_psd, beta, residual_psd,
+def plot_spectra(dist, detrended, wavelengths, psd, fitted_psd, beta, C,  residual_psd,
                  traj_id, dataset_name, segment_number=None, output_path=None):
     fig = plt.figure(figsize=(20, 15))
     gs = fig.add_gridspec(2, 2)
@@ -51,7 +51,7 @@ def plot_spectra(dist, detrended, wavelengths, psd, fitted_psd, beta, residual_p
 
     ax2 = fig.add_subplot(gs[0, 1])
     ax2.loglog(wavelengths, psd, color='k', alpha=0.8, label='Power spectrum density')
-    ax2.plot(wavelengths, fitted_psd, color='C1', label=fR'Power-law fit: $\beta$={beta:.1f}')
+    ax2.plot(wavelengths, fitted_psd, color='C1', label=fR'Power-law fit: $\beta$={beta:.1f}, $C_{{\log}}$={C:.1f}')
     ax2.set_xlabel('Wavelength (m)')
     ax2.set_ylabel('Power Spectral Density ($m^3$)')
     ax2.set_title('Power Spectrum')

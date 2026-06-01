@@ -1,7 +1,9 @@
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
 
 # # test
-# path = "v22/Ockenden-regions/window_csvs/ASB_ICECAP_2010_Fig4_Aurora_SB_w50km_window_stats.csv"
+# path = "v23/Ockenden-regions/window_csvs/ASB_ICECAP_2010_Fig4_Aurora_SB_w50km_window_stats.csv"
 # df = pd.read_csv(path)
 # ct = pd.crosstab(df.bed_class, df.relief_class, normalize='all') * 100
 # print(ct.round(1))
@@ -9,14 +11,72 @@ import pandas as pd
 
 # Loop over regions:
 
-# NOTE THAT: if a bed_class category (e.g. "soft") has zero windows, its row is omitted entirely.   
+# NOTE THAT: if a bed_class category (e.g. "soft") has zero windows, its row is omitted entirely.
 from pathlib import Path
+from loading import OUTPUT_BASE_PATH
 
-for f in sorted(Path("v22/Ockenden-regions/window_csvs").glob("*_window_stats.csv")): 
+for f in sorted(Path(OUTPUT_BASE_PATH, "window_csvs").glob("*_window_stats.csv")):
     df = pd.read_csv(f)
     name = f.stem.replace("_w50km_window_stats", "")
     print(f"\n=== {name} ===")
+    print("bed_class × relief_class (%):")
     print(pd.crosstab(df.bed_class, df.relief_class, normalize='all').mul(100).round(2))
+
+    if 'psd_amplitude_1km' in df.columns:
+        tmp = df.dropna(subset=['psd_amplitude_1km'])
+        tmp = tmp.assign(amp_bin=pd.cut(tmp['psd_amplitude_1km'],
+                                        bins=[-np.inf, 2, 3, 4, 5, np.inf],
+                                        labels=['<2', '2–3', '3–4', '4–5', '>5']))
+        print("\nbed_class × psd_amplitude_1km bin (%):")
+        print(pd.crosstab(tmp.bed_class, tmp.amp_bin, normalize='all').mul(100).round(2))
+
+
+# ── Diagnostic: relief_m vs psd_amplitude_1km, colored by bed_class ──
+
+BED_COLORS = {
+    'chaotic': '#d62728', 'hard': '#ff7f0e',
+    'transitional': '#9467bd', 'soft': '#1f77b4',
+}
+
+csvs = sorted(Path(OUTPUT_BASE_PATH, "window_csvs").glob("*_window_stats.csv"))
+all_df = pd.concat([pd.read_csv(f).assign(
+    region=f.stem.replace("_w50km_window_stats", "")) for f in csvs], ignore_index=True)
+all_df = all_df.dropna(subset=['relief_m', 'psd_amplitude_1km', 'bed_class'])
+
+# Per-region panels + one combined
+regions = all_df['region'].unique()
+ncols = min(len(regions) + 1, 4)
+nrows = int(np.ceil((len(regions) + 1) / ncols))
+fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 4.5 * nrows), squeeze=False)
+axes_flat = axes.flatten()
+
+def scatter_panel(ax, df, title):
+    for cls in ['chaotic', 'hard', 'transitional', 'soft']:
+        sub = df[df['bed_class'] == cls]
+        if len(sub):
+            ax.scatter(sub['relief_m'], sub['psd_amplitude_1km'],
+                       c=BED_COLORS[cls], label=cls, s=15, alpha=0.6, edgecolors='none')
+    r = df[['relief_m', 'psd_amplitude_1km']].corr().iloc[0, 1]
+    ax.set_title(f'{title}  (r={r:.2f})', fontsize=10)
+    ax.set_xlabel('Relief (m)')
+    ax.set_ylabel('PSD amplitude @ 1 km')
+    ax.grid(True, alpha=0.3)
+
+for i, reg in enumerate(regions):
+    scatter_panel(axes_flat[i], all_df[all_df['region'] == reg], reg)
+scatter_panel(axes_flat[len(regions)], all_df, 'ALL REGIONS')
+axes_flat[len(regions)].legend(fontsize=8)
+
+for j in range(len(regions) + 1, len(axes_flat)):
+    axes_flat[j].set_visible(False)
+
+fig.suptitle('Relief vs PSD amplitude @ 1 km — does C add info beyond relief?', fontsize=13)
+plt.tight_layout()
+out = Path(OUTPUT_BASE_PATH, "bed_character", "relief_vs_psd_amplitude_diagnostic.png")
+out.parent.mkdir(parents=True, exist_ok=True)
+plt.savefig(out, dpi=200, bbox_inches='tight')
+plt.close()
+print(f"\nDiagnostic saved: {out}")
 
   # On interpreting these crosstabs for geological character:
 

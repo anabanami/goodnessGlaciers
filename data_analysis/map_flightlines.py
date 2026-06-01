@@ -17,11 +17,9 @@ from config import Tee
 from loading import load_datasets
 
 
-# Output configuration - creates folders in same directory as this script
-OUTPUT_BASE_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    'map_flightlines/'
-    )
+# Output configuration - nested inside region output from loading.py
+from loading import OUTPUT_BASE_PATH as _REGION_BASE
+OUTPUT_BASE_PATH = os.path.join(_REGION_BASE, 'map_flightlines/')
 
 def extract_coordinates(datasets):
     """

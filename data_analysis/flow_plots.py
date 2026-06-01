@@ -23,11 +23,9 @@ DEM_PATH = os.path.join(BASE_PATH, 'rema_mosaic_100m_v2.0_filled_cop30/rema_mosa
 _TRANSFORMER = Transformer.from_crs("EPSG:4326", "EPSG:3031", always_xy=True)
 
 
-# Output configuration - creates folders in same directory as this script
-OUTPUT_BASE_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    'flow_plots/',
-    )
+# Output configuration - nested inside region output from loading.py
+from loading import OUTPUT_BASE_PATH as _REGION_BASE
+OUTPUT_BASE_PATH = os.path.join(_REGION_BASE, 'flow_plots/')
 
 def extract_rema_subset(dem_path, bounds, buffer_km=20):
     """

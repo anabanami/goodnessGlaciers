@@ -5,10 +5,9 @@ import matplotlib.pyplot as plt
 from scipy import optimize
 from config import Tee
 
-# Output configuration - creates folders in same directory as this script
-OUTPUT_BASE_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    'anisotropy/')
+# Output configuration - nested inside region output from loading.py
+from loading import OUTPUT_BASE_PATH as _REGION_BASE
+OUTPUT_BASE_PATH = os.path.join(_REGION_BASE, 'anisotropy/')
 
 """
 Compares cos²(θ) anisotropy fits with and without MEaSUREs-based weighting.
@@ -319,7 +318,7 @@ def process_region(region_name, files):
 
 
 if __name__ == "__main__":
-    regions = discover_regions('.')
+    regions = discover_regions(_REGION_BASE)
     os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
     log_path = os.path.join(OUTPUT_BASE_PATH, 'weighted_anisotropy_log.txt')
     sys.stdout = Tee(log_path)

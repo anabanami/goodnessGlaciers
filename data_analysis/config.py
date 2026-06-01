@@ -16,13 +16,6 @@ bin_buffer = 5
 SMOOTHING_LENGTH = WINDOW_SIZE  # metres
 GRADIENT_THRESHOLD = 15  # m/km
 
-# Output configuration
-OUTPUT_BASE_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    'TEST-ONE-SMUG-region/',
-)
-
-
 class Tee:
     """Write to both stdout and a log file."""
     def __init__(self, filepath):

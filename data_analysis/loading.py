@@ -11,6 +11,14 @@ _PARTIAL  = {'1-D Synthetic Aperture Radar processing',
              'MUSIC (Swath) Processing'}
 
 
+# Output configuration
+OUTPUT_BASE_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    # 'TEST-ONE-SMUG-region/',
+    'SMUG-regions/',
+    # 'Ockenden-regions/',
+)
+
 def _parse_processing_flag(filepath):
     with open(filepath) as f:
         for line in f:
@@ -31,33 +39,33 @@ def load_datasets():
     all_dfs = []
 
     target_files = [
+        # {
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        #     'label': 'TEST_Aurora_SB',
+        #     'subset': lambda df: df.iloc[8508112:8508112+17528].copy(),
+        # },
+
         {
-            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-            'label': 'TEST_Aurora_SB',
-            'subset': lambda df: df.iloc[8508112:8508112+17528].copy(),
+            'file': 'PRIC_2016_CHA2_AIR_BM3.csv',
+            'label': 'PEL_CHA2',
+            'subset': lambda df: df.iloc[410823 : 410823 + 54566].copy(),
+            'force_id': 'PRIC_2016_CHA2',
         },
 
-        # {
-        #     'file': 'PRIC_2016_CHA2_AIR_BM3.csv',
-        #     'label': 'PEL_CHA2',
-        #     'subset': lambda df: df.iloc[410823 : 410823 + 54566].copy(),
-        #     'force_id': 'PRIC_2016_CHA2',
-        # },
+        {
+            'file': 'BAS_2010_IMAFI_AIR_BM3.csv',
+            'label': 'Moller_Stream'
+        },
 
-        # {
-        #     'file': 'BAS_2010_IMAFI_AIR_BM3.csv',
-        #     'label': 'Moller_Stream'
-        # },
+        {
+            'file': 'BAS_2018_Thwaites_AIR_BM3.csv',
+            'label':'Thwaites_BAS'
+        },
 
-        # {
-        #     'file': 'BAS_2018_Thwaites_AIR_BM3.csv',
-        #     'label':'Thwaites_BAS'
-        # },
-
-        # {
-        #   'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
-        #   'label': 'DML_AniRES'
-        #  },
+        {
+          'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
+          'label': 'DML_AniRES'
+         },
     ###########################################################################
         # {
         #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
