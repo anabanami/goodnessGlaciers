@@ -74,8 +74,8 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
 
             window_beta = np.nan
             window_beta_uncertainty = np.nan
-            window_C = np.nan
-            window_C_uncertainty = np.nan
+            window_psd_intercept = np.nan
+            window_psd_intercept_uncertainty = np.nan
             if np.sum(mask) >= 2 and np.all(pgram > 0):
                 log_psd = np.log10(pgram)
                 try:
@@ -83,11 +83,11 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
                     if n_fit > 2:
                         coeffs, cov = np.polyfit(log_freqs[mask], log_psd[mask], 1, cov=True)
                         window_beta_uncertainty = np.sqrt(cov[0, 0])
-                        window_C_uncertainty = np.sqrt(cov[1, 1])
+                        window_psd_intercept_uncertainty = np.sqrt(cov[1, 1])
                     else:
                         coeffs = np.polyfit(log_freqs[mask], log_psd[mask], 1)
                     window_beta = -coeffs[0]
-                    window_C = coeffs[1]
+                    window_psd_intercept = coeffs[1]
                 except:
                     pass
 
@@ -105,8 +105,8 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
                 'roughness_rms': np.sqrt(np.mean(w_detrended**2)),
                 'window_beta': window_beta,
                 'window_beta_uncertainty': window_beta_uncertainty,
-                'window_C': window_C,
-                'window_C_uncertainty': window_C_uncertainty,
+                'window_psd_intercept': window_psd_intercept,
+                'window_psd_intercept_uncertainty': window_psd_intercept_uncertainty,
                 'window_hurst': window_hurst,
                 'window_hurst_uncertainty': window_hurst_uncertainty,
             }
@@ -318,15 +318,15 @@ def analyse_bedrock():
                         (slope, intercept), cov = np.polyfit(log_freqs[clean_mask], log_psd[clean_mask], 1, w=w, cov=True)
                         beta = -slope
                         beta_uncertainty = np.sqrt(cov[0, 0])
-                        C = intercept
-                        C_uncertainty = np.sqrt(cov[1, 1])
+                        psd_intercept = intercept
+                        psd_intercept_uncertainty = np.sqrt(cov[1, 1])
                         fitted_psd = 10**(intercept + slope * log_freqs)
                         residual_psd = avg_psd / fitted_psd
                     else:
                         beta = -slope_init
                         beta_uncertainty = np.nan
-                        C = intercept_init
-                        C_uncertainty = np.nan
+                        psd_intercept = intercept_init
+                        psd_intercept_uncertainty = np.nan
                         fitted_psd = fitted_psd_init
 
                     dominant_wavelengths = wavelengths_calc[peaks] if len(peaks) > 0 else []
@@ -345,13 +345,13 @@ def analyse_bedrock():
                         'confidence_threshold': confidence_flags['threshold'],
                         'power_law_exponent': beta,
                         'beta_uncertainty': beta_uncertainty,
-                        'power_law_intercept': C,
-                        'C_uncertainty': C_uncertainty,
+                        'psd_intercept': psd_intercept,
+                        'psd_intercept_uncertainty': psd_intercept_uncertainty,
                         'hurst_exponent': hurst_exponent,
                         'hurst_uncertainty': hurst_uncertainty
                     })
 
-                    plot_spectra(segment_distance, detrended, wavelengths_calc, avg_psd, fitted_psd, beta, C, residual_psd, traj_id, dataset_name, segment_number=seg_idx+1, output_path=output_paths['psd'])
+                    plot_spectra(segment_distance, detrended, wavelengths_calc, avg_psd, fitted_psd, beta, psd_intercept, residual_psd, traj_id, dataset_name, segment_number=seg_idx+1, output_path=output_paths['psd'])
                 else:
                     print(f"Skipping Line {traj_id}: Not enough data points in 250m–50km range.")
 
@@ -363,7 +363,7 @@ def analyse_bedrock():
             if segment_results:
                 combined_stats = {}
                 list_keys = ['dominant_wavelengths', 'confirmed_wavelengths', 'candidate_wavelengths', 'window_stats']
-                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'power_law_intercept', 'C_uncertainty', 'flow_incidence_deg', 'flow_error_mean', 'flow_error_median', 'measures_speed_mean', 'elevation_min', 'elevation_max']
+                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'psd_intercept', 'psd_intercept_uncertainty', 'flow_incidence_deg', 'flow_error_mean', 'flow_error_median', 'measures_speed_mean', 'elevation_min', 'elevation_max']
 
                 for key in segment_results[0].keys():
                     values = [seg[key] for seg in segment_results if key in seg]
@@ -496,9 +496,9 @@ if __name__ == "__main__":
                     'incidence_deg': w.get('mean_window_incidence'),
                     'beta': w.get('window_beta'),
                     'beta_uncertainty': w.get('window_beta_uncertainty'),
-                    'C': w.get('window_C'),
-                    'C_uncertainty': w.get('window_C_uncertainty'),
-                    'psd_amplitude_1km': w.get('window_C', np.nan) + 3 * w.get('window_beta', np.nan),
+                    'psd_intercept': w.get('window_psd_intercept'),
+                    'psd_intercept_uncertainty': w.get('window_psd_intercept_uncertainty'),
+                    'psd_amplitude_1km': w.get('window_psd_intercept', np.nan) + 3 * w.get('window_beta', np.nan),
                     'hurst': w.get('window_hurst'),
                     'hurst_uncertainty': w.get('window_hurst_uncertainty'),
                     'relief_m': w.get('local_relief_m'),
@@ -521,8 +521,8 @@ if __name__ == "__main__":
         for traj_id, traj_data in region_results.items():
             betas = traj_data.get('power_law_exponent', [])
             beta_uncerts = traj_data.get('beta_uncertainty', [])
-            Cs = traj_data.get('power_law_intercept', [])
-            C_uncerts = traj_data.get('C_uncertainty', [])
+            psd_intercepts = traj_data.get('psd_intercept', [])
+            psd_intercept_uncerts = traj_data.get('psd_intercept_uncertainty', [])
             incidences = traj_data.get('flow_incidence_deg', [])
             hursts = traj_data.get('hurst_exponent', [])
             hurst_uncerts = traj_data.get('hurst_uncertainty', [])
@@ -541,9 +541,9 @@ if __name__ == "__main__":
                     'incidence_deg': incidences[i],
                     'beta': betas[i],
                     'beta_uncertainty': beta_uncerts[i] if i < len(beta_uncerts) else np.nan,
-                    'C': Cs[i] if i < len(Cs) else np.nan,
-                    'C_uncertainty': C_uncerts[i] if i < len(C_uncerts) else np.nan,
-                    'psd_amplitude_1km': (Cs[i] if i < len(Cs) else np.nan) + 3 * betas[i],
+                    'psd_intercept': psd_intercepts[i] if i < len(psd_intercepts) else np.nan,
+                    'psd_intercept_uncertainty': psd_intercept_uncerts[i] if i < len(psd_intercept_uncerts) else np.nan,
+                    'psd_amplitude_1km': (psd_intercepts[i] if i < len(psd_intercepts) else np.nan) + 3 * betas[i],
                     'hurst': hursts[i] if i < len(hursts) else np.nan,
                     'hurst_uncertainty': hurst_uncerts[i] if i < len(hurst_uncerts) else np.nan,
                     'flow_error_mean': flow_err_means[i] if i < len(flow_err_means) else np.nan,

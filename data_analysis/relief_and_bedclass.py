@@ -70,7 +70,7 @@ axes_flat[len(regions)].legend(fontsize=8)
 for j in range(len(regions) + 1, len(axes_flat)):
     axes_flat[j].set_visible(False)
 
-fig.suptitle('Relief vs PSD amplitude @ 1 km — does C add info beyond relief?', fontsize=13)
+fig.suptitle('Relief vs PSD amplitude @ 1 km — does psd_intercept add info beyond relief?', fontsize=13)
 plt.tight_layout()
 out = Path(OUTPUT_BASE_PATH, "bed_character", "relief_vs_psd_amplitude_diagnostic.png")
 out.parent.mkdir(parents=True, exist_ok=True)
