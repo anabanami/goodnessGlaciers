@@ -1,184 +1,147 @@
 """
 Subset Bedmap radar data to match Ockenden et al. (2025) figure regions.
 
-Uses lat/lon bounding boxes estimated from named features in the paper.
-These are approximate — refine by checking against the Metrics_v2/*.nc grids
-if needed (those contain x_ifpa.nc and y_ifpa.nc with PS71 coordinates).
+Uses the EXACT PS71 bounding boxes from the Zenodo code repository
+(Antarctic_FIGURES.ipynb, bounds2[0..8]) instead of approximate lat/lon
+guesses. Filtering is done in PS71 space to avoid polar lat/lon distortion.
 
 Usage:
-    1. Adjust BASE_DIR to the folder containing the datasets
-    2. Run: python subset_for_ockenden.py
-    3. Check which regions have data overlap
-    4. Copy the suggested 'subset' lambdas into the analysis pipeline
+    python ockenden_coords.py
 """
 
 import pandas as pd
 import numpy as np
+import netCDF4 as nc
+from pyproj import Transformer
 
-# ============================================================================
-# CONFIGURATION
-# ============================================================================
-BASE_DIR = '/home/ana/Desktop/code/Data/Bedmap/all_data/'
+BASE_DIR = '/home/ana/Desktop/code/Data/ODSA/all_data/bedmap3_data/bedmap3/Results/'
+METRICS_DIR = '/home/ana/Desktop/code/Data/ODSA/Ockenden/Data_Science_Zenodo/Data_Science_Zenodo/Metrics_v2/'
 
-# ============================================================================
-# OCKENDEN FIGURE REGIONS — lat/lon bounding boxes
-#
-# Approximate centers from named Antarctic features.
-# At ~75°S: 1° lat ≈ 111 km, 1° lon ≈ 29 km
-# At ~85°S: 1° lat ≈ 111 km, 1° lon ≈ 10 km
-# Paper states panels are 100x100 to 300x300 km.
-# ============================================================================
+# WGS84 <-> EPSG:3031 (Antarctic Polar Stereographic, PS71)
+to_ps71 = Transformer.from_crs("EPSG:4326", "EPSG:3031", always_xy=True)
 
+# ---------------------------------------------------------------------------
+# Exact PS71 bounds from Antarctic_FIGURES.ipynb  (bounds2, second block)
+#   format: [x_min, x_max, y_min, y_max] in metres
+# ---------------------------------------------------------------------------
 OCKENDEN_REGIONS = {
-    # Fig. 2A — Maud Subglacial Basin (300x300 km)
-    'Fig2A_Maud_SB': {
-        'lat_min': -76.5, 'lat_max': -73.5,
-        'lon_min': 5.0,   'lon_max': 25.0,
-        'description': 'Maud Subglacial Basin — 400km incised channel',
-    },
-    # Fig. 2D — Recovery Subglacial Basin (300x300 km)
-    'Fig2D_Recovery_SB': {
-        'lat_min': -83.5, 'lat_max': -80.5,
-        'lon_min': -35.0, 'lon_max': -15.0,
-        'description': 'Recovery Subglacial Basin — geological boundary',
-    },
-    # Fig. 2C — Hercules Dome (300x300 km)
     'Fig2C_Hercules_Dome': {
-        'lat_min': -87.5, 'lat_max': -85.0,
-        'lon_min': -120.0, 'lon_max': -100.0,
-        'description': 'Hercules Dome — U-shaped valleys',
+        'ps71': [-0.6e6, -0.3e6, -0.23e6, 0.07e6],
+        'description': 'Hercules Dome -- U-shaped valleys',
+        'ockenden_class': 'alpine',
+        'fig': 'Fig 2C',
     },
-    # Fig. 1B-D — Pensacola-Pole Basin (main showcase, larger region)
-    'Fig1_Pensacola_Pole': {
-        'lat_min': -88.0, 'lat_max': -82.0,
-        'lon_min': -60.0, 'lon_max': -20.0,
-        'description': 'Pensacola-Pole Basin — main comparison region (Fig 1)',
+    'Fig2A_Maud_SB': {
+        'ps71': [0.15e6, 0.45e6, 1.025e6, 1.325e6],
+        'description': 'Maud Subglacial Basin -- 400 km incised channel',
+        'ockenden_class': 'low-relief / selective erosion',
+        'fig': 'Fig 2A',
     },
-    # Fig. 2F — Resolution Subglacial Highlands (300x300 km)
-    'Fig2F_Resolution_SH': {
-        'lat_min': -76.0, 'lat_max': -73.0,
-        'lon_min': 135.0, 'lon_max': 150.0,
-        'description': 'Resolution Subglacial Highlands — alpine valleys',
+    'Fig2B_Wilhelm_II': {
+        'ps71': [2.02e6, 2.32e6, 0.05e6, 0.35e6],
+        'description': 'Wilhelm II Land',
+        'ockenden_class': 'alpine',
+        'fig': 'Fig 2B',
     },
-    # Fig. 2G — Highland A (300x300 km)
+    'Fig2D_Recovery_SB': {
+        'ps71': [0.0e6, 0.30e6, 0.6e6, 0.9e6],
+        'description': 'Recovery Subglacial Basin -- geological boundary',
+        'ockenden_class': 'low-relief / selective erosion',
+        'fig': 'Fig 2D',
+    },
     'Fig2G_Highland_A': {
-        'lat_min': -76.0, 'lat_max': -73.0,
-        'lon_min': 118.0, 'lon_max': 132.0,
-        'description': 'Highland A — paleo-river landscape',
+        'ps71': [1.90e6, 2.20e6, -0.725e6, -0.425e6],
+        'description': 'Highland A -- paleo-river landscape',
+        'ockenden_class': 'alpine',
+        'fig': 'Fig 2G',
     },
-    # Fig. 2H — Golicyna Subglacial Highlands (300x300 km)
-    'Fig2H_Golicyna_SH': {
-        'lat_min': -75.0, 'lat_max': -72.0,
-        'lon_min': 103.0, 'lon_max': 117.0,
-        'description': 'Golicyna Subglacial Highlands — dendritic valleys',
+    # Zhigalov (Fig 2E) omitted — no RES data overlap
+    'Gamburtsev_N': {
+        'ps71': [1.0e6, 1.25e6, 0.28e6, 0.50e6],
+        'description': 'Northern Gamburtsev Subglacial Mountains',
+        'ockenden_class': 'alpine (subaerial)',
+        'fig': 'not in Fig 2',
     },
-    # Aurora Subglacial Basin — low-relief, sedimentary (from Fig 4 classification)
-    'Fig4_Aurora_SB': {
-        'lat_min': -76.0, 'lat_max': -71.0,
-        'lon_min': 105.0, 'lon_max': 125.0,
-        'description': 'Aurora Subglacial Basin — classified as low-relief',
+    'Fig2H_Golicyna_SM': {
+        'ps71': [2.15e6, 2.45e6, -0.5e6, -0.2e6],
+        'description': 'Golicyna Subglacial Mountains -- dendritic valleys',
+        'ockenden_class': 'alpine',
+        'fig': 'Fig 2H',
+    },
+    'Fig2F_Resolution_SH': {
+        'ps71': [1.05e6, 1.35e6, -1.575e6, -1.275e6],
+        'description': 'Resolution Subglacial Highlands -- alpine valleys',
+        'ockenden_class': 'alpine',
+        'fig': 'Fig 2F',
+    },
+    'Fig4_Aurora_SB_lowrelief': {
+        'ps71': [1.05e6, 2.20e6, -0.80e6, 0.20e6],
+        'description': 'Aurora SB -- low-relief cells only (Ockenden metrics: hill50<=5, relief<=500m)',
+        'ockenden_class': 'low-relief',
+        'fig': 'Fig 4 classification region (filtered)',
+        'cell_mask': True,  # flag: use Ockenden metric grid instead of simple box
+    },
+    'Fig1_Pensacola_Pole': {
+        'ps71': [-0.9e6, 0.3e6, -0.6e6, 0.3e6],
+        'description': 'Pensacola-Pole Basin -- selective erosion',
+        'ockenden_class': 'selective erosion',
+        'fig': 'Fig 1B-D',
     },
 }
 
-# ============================================================================
-# MY DATASETS → candidate Ockenden regions
-# ============================================================================
 
 DATASETS = [
-    # {
-    #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-    #     'label': 'ASB_ICECAP_2010',
-    #     'candidate_regions': [
-    #         'Fig4_Aurora_SB', 'Fig2F_Resolution_SH',
-    #         'Fig2G_Highland_A', 'Fig2H_Golicyna_SH',
-    #     ],
-    # },
-    # {
-    #     'file': 'UTIG_2008_ICECAP_AIR_BM2.csv',
-    #     'label': 'ASB_ICECAP_2008',
-    #     'candidate_regions': [
-    #         'Fig4_Aurora_SB', 'Fig2F_Resolution_SH',
-    #         'Fig2G_Highland_A', 'Fig2H_Golicyna_SH',
-    #     ],
-    # },
-    ############################################################################
+    {
+        'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        'label': 'ASB_ICECAP_2010',
+        'candidate_regions': [
+            'Fig4_Aurora_SB_lowrelief', 'Fig2A_Maud_SB',
+            'Fig2F_Resolution_SH',
+            'Fig2G_Highland_A', 'Fig2H_Golicyna_SM',
+            'Fig2B_Wilhelm_II',
+        ],
+    },
     {
         'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
         'label': 'Rec_Catch',
-        'candidate_regions': [
-            'Fig2D_Recovery_SB', 'Fig1_Pensacola_Pole',
-        ],
+        'candidate_regions': ['Fig2D_Recovery_SB'],
     },
-
     {
-        'file': 'BAS_2010_IMAFI_AIR_BM3.csv',
-        'label': 'Rec__SB',
+        'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
+        'label': 'POLARGAP_2015',
         'candidate_regions': [
-            'Fig2D_Recovery_SB',
+            'Fig1_Pensacola_Pole', 'Fig2C_Hercules_Dome',
         ],
     },
-
-    {
-        'file': 'NASA_2014_ICEBRIDGE_AIR_BM3.csv',
-        'label': 'Rec__SB',
-        'candidate_regions': [
-            'Fig2D_Recovery_SB',
-        ],
-    },
-
-    {
-        'file': 'NASA_2016_ICEBRIDGE_AIR_BM3.csv',
-        'label': 'Rec__SB',
-        'candidate_regions': [
-            'Fig2D_Recovery_SB',
-        ],
-    },
-    
-    {
-        'file': 'NASA_2017_ICEBRIDGE_AIR_BM3.csv',
-        'label': 'Rec__SB',
-        'candidate_regions': [
-            'Fig2D_Recovery_SB',
-        ],
-    },
-    
-    {
-        'file': 'NASA_2018_ICEBRIDGE_AIR_BM3.csv',
-        'label': 'Rec__SB',
-        'candidate_regions': [
-            'Fig2D_Recovery_SB',
-        ],
-    },
-
-    {
-        'file': 'NASA_2019_ICEBRIDGE_AIR_BM3.csv',
-        'label': 'Rec__SB',
-        'candidate_regions': [
-            'Fig2D_Recovery_SB',
-        ],
-    },
-    
-    ############################################################################
-
-    # {
-    #     'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
-    #     'label': 'DML_AniRES',
-    #     'candidate_regions': [
-    #         'Fig2A_Maud_SB',
-    #     ],
-    # },
-    # {
-    #     'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
-    #     'label': 'POLARGAP_2015',
-    #     'candidate_regions': [
-    #         'Fig1_Pensacola_Pole', 'Fig2C_Hercules_Dome',
-    #     ],
-    # },
 ]
 
 
+def load_lowrelief_cells(ps71_bounds, hill_thresh=5, relief_thresh=500):
+    """Return (x, y) arrays of Ockenden grid cell centers classified as low-relief
+    within a PS71 bounding box. Uses Ockenden Metrics_v2 grids (50 km cells)."""
+    x_grid = nc.Dataset(METRICS_DIR + 'x_ifpa.nc')['data'][:].data
+    y_grid = nc.Dataset(METRICS_DIR + 'y_ifpa.nc')['data'][:].data
+    relief = nc.Dataset(METRICS_DIR + 'ifpa_relief.nc')['data'][:].data
+    hill50 = nc.Dataset(METRICS_DIR + 'ifpa_count_max_50.nc')['data'][:].data
+
+    xmin, xmax, ymin, ymax = ps71_bounds
+    mask = ((x_grid >= xmin) & (x_grid <= xmax) &
+            (y_grid >= ymin) & (y_grid <= ymax) &
+            (hill50 <= hill_thresh) & (relief <= relief_thresh))
+    return x_grid[mask], y_grid[mask]
+
+
+def cell_mask_subset(df, ps71_bounds, half_cell=25000):
+    """Filter RES points to those falling within low-relief Ockenden grid cells."""
+    lr_x, lr_y = load_lowrelief_cells(ps71_bounds)
+    hit = np.zeros(len(df), dtype=bool)
+    for cx, cy in zip(lr_x, lr_y):
+        hit |= (np.abs(df['x_ps71'].values - cx) <= half_cell) & \
+               (np.abs(df['y_ps71'].values - cy) <= half_cell)
+    return df[hit].copy()
+
+
 def load_bedmap_csv(filepath):
-    """Load a Bedmap CSV with standardized column names."""
     df = pd.read_csv(filepath, comment='#', header=0, low_memory=False)
     col_map = {}
     for c in df.columns:
@@ -191,34 +154,60 @@ def load_bedmap_csv(filepath):
             col_map[c] = 'bed'
         elif 'trajectory' in cl:
             col_map[c] = 'traj_id'
-    df = df.rename(columns=col_map)
+    return df.rename(columns=col_map)
+
+
+def add_ps71(df):
+    """Add x_ps71, y_ps71 columns (metres) from lat/lon."""
+    x, y = to_ps71.transform(df['lon'].values, df['lat'].values)
+    df['x_ps71'] = x
+    df['y_ps71'] = y
     return df
 
 
-def spatial_subset(df, region):
-    """Filter dataframe to a lat/lon bounding box."""
-    mask = (
-        (df['lat'] >= region['lat_min']) &
-        (df['lat'] <= region['lat_max']) &
-        (df['lon'] >= region['lon_min']) &
-        (df['lon'] <= region['lon_max'])
-    )
-    return df[mask].copy()
+def spatial_subset_ps71(df, ps71_bounds):
+    """Filter in PS71 space. bounds = [x_min, x_max, y_min, y_max]."""
+    xmin, xmax, ymin, ymax = ps71_bounds
+    return df[
+        (df['x_ps71'] >= xmin) & (df['x_ps71'] <= xmax) &
+        (df['y_ps71'] >= ymin) & (df['y_ps71'] <= ymax)
+    ].copy()
+
+
+def ps71_to_latlon_corners(ps71_bounds):
+    """Convert PS71 box corners to lat/lon for reference."""
+    from_ps71 = Transformer.from_crs("EPSG:3031", "EPSG:4326", always_xy=True)
+    xmin, xmax, ymin, ymax = ps71_bounds
+    corners_x = [xmin, xmax, xmin, xmax]
+    corners_y = [ymin, ymin, ymax, ymax]
+    lons, lats = from_ps71.transform(corners_x, corners_y)
+    return {
+        'lat_min': min(lats), 'lat_max': max(lats),
+        'lon_min': min(lons), 'lon_max': max(lons),
+    }
 
 
 def main():
     print("=" * 80)
-    print("SUBSET BEDMAP DATA FOR OCKENDEN et al. (2025) COMPARISON")
+    print("SUBSET BEDMAP DATA FOR OCKENDEN et al. (2025) -- PS71 BOUNDS")
     print("=" * 80)
+
+    # Print region summary
+    print("\nOckenden regions (from Zenodo PS71 bounds):")
+    for rkey, r in OCKENDEN_REGIONS.items():
+        ll = ps71_to_latlon_corners(r['ps71'])
+        print(f"  {rkey:30s}  [{r['ockenden_class']:25s}]  "
+              f"lat [{ll['lat_min']:7.2f}, {ll['lat_max']:7.2f}]  "
+              f"lon [{ll['lon_min']:8.2f}, {ll['lon_max']:8.2f}]")
 
     found_overlaps = []
 
     for ds in DATASETS:
         filepath = BASE_DIR + ds['file']
         label = ds['label']
-        print(f"\n{'━' * 70}")
+        print(f"\n{'~'*70}")
         print(f"  {label}  ({ds['file']})")
-        print(f"{'━' * 70}")
+        print(f"{'~'*70}")
 
         try:
             df = load_bedmap_csv(filepath)
@@ -226,80 +215,90 @@ def main():
             print(f"  *** FILE NOT FOUND ***")
             continue
 
-        n_total = len(df)
         has_bed = 'bed' in df.columns
         if has_bed:
-            df_valid = df[df['bed'] != -9999]
-            n_valid = len(df_valid)
-        else:
-            df_valid = df
-            n_valid = n_total
+            df = df[df['bed'] != -9999]
 
-        print(f"  Rows: {n_total:,}  |  Valid bed picks: {n_valid:,}")
-        print(f"  Lat:  [{df['lat'].min():.2f}, {df['lat'].max():.2f}]")
-        print(f"  Lon:  [{df['lon'].min():.2f}, {df['lon'].max():.2f}]")
+        df = add_ps71(df)
+        print(f"  Valid rows: {len(df):,}")
+        print(f"  PS71 x: [{df['x_ps71'].min():.0f}, {df['x_ps71'].max():.0f}]")
+        print(f"  PS71 y: [{df['y_ps71'].min():.0f}, {df['y_ps71'].max():.0f}]")
 
         for rkey in ds['candidate_regions']:
             region = OCKENDEN_REGIONS[rkey]
-            sub = spatial_subset(df_valid, region) if has_bed else spatial_subset(df, region)
+
+            if region.get('cell_mask'):
+                sub = cell_mask_subset(df, region['ps71'])
+            else:
+                sub = spatial_subset_ps71(df, region['ps71'])
 
             if len(sub) == 0:
-                print(f"\n  ✗ {rkey}: no overlap")
+                print(f"\n  x {rkey}: no overlap")
                 continue
 
-            n_sub = len(sub)
-            print(f"\n  ✓ {rkey}: {n_sub:,} valid points")
-            print(f"    {region['description']}")
-            print(f"    Subset lat: [{sub['lat'].min():.3f}, {sub['lat'].max():.3f}]")
-            print(f"    Subset lon: [{sub['lon'].min():.3f}, {sub['lon'].max():.3f}]")
+            ll = ps71_to_latlon_corners(region['ps71'])
+            print(f"\n  >> {rkey}: {len(sub):,} pts  [{region['ockenden_class']}]")
+            print(f"     {region['description']}")
+            print(f"     PS71 box: {region['ps71']}")
+            if region.get('cell_mask'):
+                lr_x, lr_y = load_lowrelief_cells(region['ps71'])
+                print(f"     Cell mask: {len(lr_x)} low-relief cells (50 km grid)")
+            print(f"     ~lat [{ll['lat_min']:.2f}, {ll['lat_max']:.2f}]  "
+                  f"~lon [{ll['lon_min']:.2f}, {ll['lon_max']:.2f}]")
 
             if has_bed:
-                print(f"    Bed elev:   [{sub['bed'].min():.0f}, {sub['bed'].max():.0f}] m")
-
+                print(f"     Bed elev: [{sub['bed'].min():.0f}, {sub['bed'].max():.0f}] m")
             if 'traj_id' in sub.columns:
                 trajs = sub[sub['traj_id'] != -9999]['traj_id'].unique()
-                print(f"    Trajectories: {len(trajs)}")
+                print(f"     Trajectories: {len(trajs)}")
 
             found_overlaps.append({
-                'dataset': label,
-                'file': ds['file'],
-                'region': rkey,
-                'n_points': n_sub,
+                'dataset': label, 'file': ds['file'],
+                'region': rkey, 'n_points': len(sub),
+                'class': region['ockenden_class'],
             })
 
-            # Print ready-to-use subset definition
-            r = region
-            print(f"\n    ┌─ COPY INTO YOUR ANALYSIS PIPELINE ───────────────┐")
-            print(f"    {{")
-            print(f"        'file': '{ds['file']}',")
-            print(f"        'label': '{label}_{rkey}',")
-            print(f"        'subset': lambda df, _r={{")
-            print(f"            'lat_min': {r['lat_min']}, 'lat_max': {r['lat_max']},")
-            print(f"            'lon_min': {r['lon_min']}, 'lon_max': {r['lon_max']},")
-            print(f"        }}: df[")
-            print(f"            (df['latitude (degree_north)'] >= _r['lat_min']) &")
-            print(f"            (df['latitude (degree_north)'] <= _r['lat_max']) &")
-            print(f"            (df['longitude (degree_east)']  >= _r['lon_min']) &")
-            print(f"            (df['longitude (degree_east)']  <= _r['lon_max'])")
-            print(f"        ].copy(),")
-            print(f"    }},")
-            print(f"    └────────────────────────────────────────────────────┘")
+            # Ready-to-use subset for loading.py
+            b = region['ps71']
+            print(f"\n     COPY FOR loading.py:")
+            print(f"     {{")
+            print(f"         'file': '{ds['file']}',")
+            print(f"         'label': '{label}_{rkey}',")
+            print(f"         'subset': lambda df, _b={b}: _ps71_subset(df, _b),")
+            print(f"     }},")
 
     # Summary
-    print(f"\n\n{'=' * 80}")
+    print(f"\n\n{'='*80}")
     print("SUMMARY")
-    print(f"{'=' * 80}")
+    print(f"{'='*80}")
     if found_overlaps:
         for ov in found_overlaps:
-            print(f"  {ov['dataset']:20s} × {ov['region']:25s} → {ov['n_points']:>8,} pts")
+            print(f"  {ov['dataset']:20s} x {ov['region']:30s} "
+                  f"[{ov['class']:25s}] -> {ov['n_points']:>8,} pts")
     else:
         print("  No overlaps found.")
 
-    print(f"""
-NEXT STEPS:
-  1. If a region shows 0 overlap, try expanding the box by 1-2 degrees.
-""")
-
 
 if __name__ == '__main__':
+    import sys, io, os
+
+    log_path = os.path.join(os.path.dirname(__file__), 'ockenden_coords-results.log')
+    tee = io.StringIO()
+
+    class Tee:
+        def __init__(self, *streams):
+            self.streams = streams
+        def write(self, s):
+            for st in self.streams:
+                st.write(s)
+        def flush(self):
+            for st in self.streams:
+                st.flush()
+
+    sys.stdout = Tee(sys.__stdout__, tee)
     main()
+    sys.stdout = sys.__stdout__
+
+    with open(log_path, 'w') as f:
+        f.write(tee.getvalue())
+    print(f"\nLog written to {log_path}")
