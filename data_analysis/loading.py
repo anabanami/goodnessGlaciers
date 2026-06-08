@@ -1,6 +1,9 @@
 import glob
 import os
+import numpy as np
 import pandas as pd
+import netCDF4 as nc
+from pyproj import Transformer
 
 
 _MIGRATED = {'2-D migration processing', '2-D Synthetic Aperture Radar processing',
@@ -10,14 +13,54 @@ _PARTIAL  = {'1-D Synthetic Aperture Radar processing',
              'pik1 (short coherent) processing',
              'MUSIC (Swath) Processing'}
 
+_to_ps71 = Transformer.from_crs("EPSG:4326", "EPSG:3031", always_xy=True)
 
 # Output configuration
 OUTPUT_BASE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     # 'TEST-ONE-SMUG-region/',
-    'SMUG-regions/',
-    # 'Ockenden-regions/',
+    # 'SMUG-regions/',
+    'Ockenden-regions/',
 )
+
+
+def _ps71_subset(df, ps71_bounds):
+    """Subset a Bedmap dataframe to a PS71 bounding box [xmin, xmax, ymin, ymax]."""
+    x, y = _to_ps71.transform(
+        df['longitude (degree_east)'].values,
+        df['latitude (degree_north)'].values,
+    )
+    xmin, xmax, ymin, ymax = ps71_bounds
+    mask = (x >= xmin) & (x <= xmax) & (y >= ymin) & (y <= ymax)
+    return df[mask].copy()
+
+
+def _ps71_lowrelief_subset(df, ps71_bounds,
+                           metrics_dir=None, hill_thresh=5, relief_thresh=500):
+    """Subset to RES points falling within Ockenden low-relief grid cells (50 km)."""
+    if metrics_dir is None:
+        metrics_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            'Ockenden/Data_Science_Zenodo/Data_Science_Zenodo/Metrics_v2/')
+    x_grid = nc.Dataset(metrics_dir + 'x_ifpa.nc')['data'][:].data
+    y_grid = nc.Dataset(metrics_dir + 'y_ifpa.nc')['data'][:].data
+    relief = nc.Dataset(metrics_dir + 'ifpa_relief.nc')['data'][:].data
+    hill50 = nc.Dataset(metrics_dir + 'ifpa_count_max_50.nc')['data'][:].data
+
+    xmin, xmax, ymin, ymax = ps71_bounds
+    cell_mask = ((x_grid >= xmin) & (x_grid <= xmax) &
+                 (y_grid >= ymin) & (y_grid <= ymax) &
+                 (hill50 <= hill_thresh) & (relief <= relief_thresh))
+    lr_x, lr_y = x_grid[cell_mask], y_grid[cell_mask]
+
+    px, py = _to_ps71.transform(
+        df['longitude (degree_east)'].values,
+        df['latitude (degree_north)'].values,
+    )
+    hit = np.zeros(len(df), dtype=bool)
+    for cx, cy in zip(lr_x, lr_y):
+        hit |= (np.abs(px - cx) <= 25000) & (np.abs(py - cy) <= 25000)
+    return df[hit].copy()
 
 def _parse_processing_flag(filepath):
     with open(filepath) as f:
@@ -39,145 +82,81 @@ def load_datasets():
     all_dfs = []
 
     target_files = [
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'TEST_Aurora_SB',
-        #     'subset': lambda df: df.iloc[8508112:8508112+17528].copy(),
-        # },
+        # =================================================================
+        # Ockenden et al. (2025) regions — PS71 bounds from Zenodo
+        # =================================================================
 
+        # LOW-RELIEF: Aurora SB filtered to Ockenden low-relief cells
         {
-            'file': 'PRIC_2016_CHA2_AIR_BM3.csv',
-            'label': 'PEL_CHA2',
-            'subset': lambda df: df.iloc[410823 : 410823 + 54566].copy(),
-            'force_id': 'PRIC_2016_CHA2',
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+            'label': 'ASB_ICECAP_2010_Fig4_Aurora_SB_lowrelief',
+            'subset': lambda df: _ps71_lowrelief_subset(
+                df, [1.05e6, 2.20e6, -0.80e6, 0.20e6]),
         },
 
+        # LOW-RELIEF / SELECTIVE EROSION: Maud Subglacial Basin
         {
-            'file': 'BAS_2010_IMAFI_AIR_BM3.csv',
-            'label': 'Moller_Stream'
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+            'label': 'ASB_ICECAP_2010_Fig2A_Maud_SB',
+            'subset': lambda df: _ps71_subset(
+                df, [0.15e6, 0.45e6, 1.025e6, 1.325e6]),
         },
 
+        # LOW-RELIEF / SELECTIVE EROSION: Recovery Subglacial Basin
         {
-            'file': 'BAS_2018_Thwaites_AIR_BM3.csv',
-            'label':'Thwaites_BAS'
+            'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
+            'label': 'Rec_Catch_Fig2D_Recovery_SB',
+            'subset': lambda df: _ps71_subset(
+                df, [0.0e6, 0.30e6, 0.6e6, 0.9e6]),
         },
 
+        # ALPINE: Resolution Subglacial Highlands
         {
-          'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
-          'label': 'DML_AniRES'
-         },
-    ###########################################################################
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'ASB_ICECAP_2010_Fig4_Aurora_SB',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -76.0, 'lat_max': -71.0,
-        #         'lon_min': 105.0, 'lon_max': 125.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+            'label': 'ASB_ICECAP_2010_Fig2F_Resolution_SH',
+            'subset': lambda df: _ps71_subset(
+                df, [1.05e6, 1.35e6, -1.575e6, -1.275e6]),
+        },
 
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'ASB_ICECAP_2010_Fig2F_Resolution_SH',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -76.0, 'lat_max': -73.0,
-        #         'lon_min': 135.0, 'lon_max': 150.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
+        # ALPINE: Highland A
+        {
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+            'label': 'ASB_ICECAP_2010_Fig2G_Highland_A',
+            'subset': lambda df: _ps71_subset(
+                df, [1.90e6, 2.20e6, -0.725e6, -0.425e6]),
+        },
 
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'ASB_ICECAP_2010_Fig2G_Highland_A',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -76.0, 'lat_max': -73.0,
-        #         'lon_min': 118.0, 'lon_max': 132.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
+        # ALPINE: Golicyna Subglacial Mountains
+        {
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+            'label': 'ASB_ICECAP_2010_Fig2H_Golicyna_SM',
+            'subset': lambda df: _ps71_subset(
+                df, [2.15e6, 2.45e6, -0.5e6, -0.2e6]),
+        },
 
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'ASB_ICECAP_2010_Fig2H_Golicyna_SH',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -75.0, 'lat_max': -72.0,
-        #         'lon_min': 103.0, 'lon_max': 117.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
+        # ALPINE: Wilhelm II Land
+        {
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+            'label': 'ASB_ICECAP_2010_Fig2B_Wilhelm_II',
+            'subset': lambda df: _ps71_subset(
+                df, [2.02e6, 2.32e6, 0.05e6, 0.35e6]),
+        },
 
-        # {
-        #     'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
-        #     'label': 'Rec_Catch_Fig2D_Recovery_SB',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -83.5, 'lat_max': -80.5,
-        #         'lon_min': -35.0, 'lon_max': -15.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
+        # ALPINE: Hercules Dome
+        {
+            'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
+            'label': 'POLARGAP_2015_Fig2C_Hercules_Dome',
+            'subset': lambda df: _ps71_subset(
+                df, [-0.6e6, -0.3e6, -0.23e6, 0.07e6]),
+        },
 
-        # {
-        #     'file': 'NASA_2018_ICEBRIDGE_AIR_BM3.csv',
-        #     'label': '2018_Rec_SB_Fig2D_Recovery_SB',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -83.5, 'lat_max': -80.5,
-        #         'lon_min': -35.0, 'lon_max': -15.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
-
-        # {
-        #     'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
-        #     'label': 'POLARGAP_2015_Fig1_Pensacola_Pole',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -88.0, 'lat_max': -82.0,
-        #         'lon_min': -60.0, 'lon_max': -20.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
-
-        # {
-        #     'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
-        #     'label': 'POLARGAP_2015_Fig2C_Hercules_Dome',
-        #     'subset': lambda df, _r={
-        #         'lat_min': -87.5, 'lat_max': -85.0,
-        #         'lon_min': -120.0, 'lon_max': -100.0,
-        #     }: df[
-        #         (df['latitude (degree_north)'] >= _r['lat_min']) &
-        #         (df['latitude (degree_north)'] <= _r['lat_max']) &
-        #         (df['longitude (degree_east)']  >= _r['lon_min']) &
-        #         (df['longitude (degree_east)']  <= _r['lon_max'])
-        #     ].copy(),
-        # },
+        # SELECTIVE EROSION: Pensacola-Pole Basin
+        {
+            'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
+            'label': 'POLARGAP_2015_Fig1_Pensacola_Pole',
+            'subset': lambda df: _ps71_subset(
+                df, [-0.9e6, 0.3e6, -0.6e6, 0.3e6]),
+        },
     ]
 
     file_cache = {}

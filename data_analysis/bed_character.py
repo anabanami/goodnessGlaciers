@@ -21,15 +21,15 @@ Usage:
 # Beta thresholds for bed character classification
 BED_CLASSES = [
     ('chaotic',       -np.inf, 1.5),
-    ('hard',          1.5,     2.1),
-    ('transitional',  2.1,     2.5),
+    ('hard',          1.5,     2.0),
+    ('transitional',  2.0,     2.5),
     ('soft',          2.5,     np.inf),
 ]
 
-# Relief thresholds — anchored to reference landscapes (DML_AniRES, Aurora/Golicyna, Moller/Recovery)
+# Relief thresholds — anchored to Ockenden et al. (2025) reference regions
 RELIEF_CLASSES = [
-    ('flat',        -np.inf, 350),
-    ('subdued',     350,     800),
+    ('flat',        -np.inf, 300),
+    ('subdued',     300,     800),
     ('mountainous', 800,     np.inf),
 ]
 
@@ -178,7 +178,7 @@ def plot_bed_character(df, summary, region_name):
 
     # --- Left: beta histogram colored by class ---
     # Build bin edges that always include the class boundaries
-    boundaries = [1.5, 2.1, 2.5]
+    boundaries = [1.5, 2.0, 2.5]
     beta_min, beta_max = df['beta'].min() - 0.1, df['beta'].max() + 0.1
     bin_width = 0.1
     bin_edges = np.arange(beta_min, beta_max + bin_width, bin_width)
@@ -279,7 +279,7 @@ def plot_beta_along_track(df, region_name, csv_path):
     n = len(groups)
     fig, axes = plt.subplots(n, 1, figsize=(14, max(2.5 * n, 4)), squeeze=False, sharex=False)
 
-    boundaries = [1.5, 2.1, 2.5]
+    boundaries = [1.5, 2.0, 2.5]
 
     for ax, ((traj, seg), g) in zip(axes[:, 0], groups):
         g = g.sort_values('window_id')
