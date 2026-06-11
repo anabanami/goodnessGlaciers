@@ -82,6 +82,35 @@ def load_datasets():
     all_dfs = []
 
     target_files = [
+        # {
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        #     'label': 'TEST_Aurora_SB',
+        #     'subset': lambda df: df.iloc[8508112:8508112+17528].copy(),
+        # },
+        
+        # {
+        #     'file': 'PRIC_2016_CHA2_AIR_BM3.csv', 
+        #     'label': 'PEL_CHA2',
+        #     # skip the exact number of rows in 'Segment 1'
+        #     'subset': lambda df: df.iloc[410823 : 410823 + 54566].copy(),
+        #     'force_id': 'PRIC_2016_CHA2',
+        # },
+
+        # {
+        #     'file': 'BAS_2010_IMAFI_AIR_BM3.csv', 
+        #     'label': 'Moller_Stream'
+        # },    # Institute-Möller Ice Stream
+        
+        # {
+        #     'file': 'BAS_2018_Thwaites_AIR_BM3.csv',
+        #     'label':'Thwaites_BAS'
+        # },    # Thwaites Glacier
+        
+        # {
+        #   'file': 'AWI_2018_ANIRES_AIR_BM3.csv',
+        #   'label': 'DML_AniRES'
+        #  },   # Dronning Maud Land
+
         # =================================================================
         # Ockenden et al. (2025) regions — PS71 bounds from Zenodo
         # =================================================================
@@ -94,53 +123,53 @@ def load_datasets():
                 df, [1.05e6, 2.20e6, -0.80e6, 0.20e6]),
         },
 
-        # LOW-RELIEF / SELECTIVE EROSION: Maud Subglacial Basin
-        {
-            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-            'label': 'ASB_ICECAP_2010_Fig2A_Maud_SB',
-            'subset': lambda df: _ps71_subset(
-                df, [0.15e6, 0.45e6, 1.025e6, 1.325e6]),
-        },
+        # # LOW-RELIEF / SELECTIVE EROSION: Maud Subglacial Basin
+        # {
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        #     'label': 'ASB_ICECAP_2010_Fig2A_Maud_SB',
+        #     'subset': lambda df: _ps71_subset(
+        #         df, [0.15e6, 0.45e6, 1.025e6, 1.325e6]),
+        # },
 
-        # LOW-RELIEF / SELECTIVE EROSION: Recovery Subglacial Basin
-        {
-            'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
-            'label': 'Rec_Catch_Fig2D_Recovery_SB',
-            'subset': lambda df: _ps71_subset(
-                df, [0.0e6, 0.30e6, 0.6e6, 0.9e6]),
-        },
+        # # LOW-RELIEF / SELECTIVE EROSION: Recovery Subglacial Basin
+        # {
+        #     'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
+        #     'label': 'Rec_Catch_Fig2D_Recovery_SB',
+        #     'subset': lambda df: _ps71_subset(
+        #         df, [0.0e6, 0.30e6, 0.6e6, 0.9e6]),
+        # },
 
-        # ALPINE: Resolution Subglacial Highlands
-        {
-            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-            'label': 'ASB_ICECAP_2010_Fig2F_Resolution_SH',
-            'subset': lambda df: _ps71_subset(
-                df, [1.05e6, 1.35e6, -1.575e6, -1.275e6]),
-        },
+        # # ALPINE: Resolution Subglacial Highlands
+        # {
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        #     'label': 'ASB_ICECAP_2010_Fig2F_Resolution_SH',
+        #     'subset': lambda df: _ps71_subset(
+        #         df, [1.05e6, 1.35e6, -1.575e6, -1.275e6]),
+        # },
 
-        # ALPINE: Highland A
-        {
-            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-            'label': 'ASB_ICECAP_2010_Fig2G_Highland_A',
-            'subset': lambda df: _ps71_subset(
-                df, [1.90e6, 2.20e6, -0.725e6, -0.425e6]),
-        },
+        # # ALPINE: Highland A
+        # {
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        #     'label': 'ASB_ICECAP_2010_Fig2G_Highland_A',
+        #     'subset': lambda df: _ps71_subset(
+        #         df, [1.90e6, 2.20e6, -0.725e6, -0.425e6]),
+        # },
 
-        # ALPINE: Golicyna Subglacial Mountains
-        {
-            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-            'label': 'ASB_ICECAP_2010_Fig2H_Golicyna_SM',
-            'subset': lambda df: _ps71_subset(
-                df, [2.15e6, 2.45e6, -0.5e6, -0.2e6]),
-        },
+        # # ALPINE: Golicyna Subglacial Mountains
+        # {
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        #     'label': 'ASB_ICECAP_2010_Fig2H_Golicyna_SM',
+        #     'subset': lambda df: _ps71_subset(
+        #         df, [2.15e6, 2.45e6, -0.5e6, -0.2e6]),
+        # },
 
         # ALPINE: Wilhelm II Land
-        {
-            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-            'label': 'ASB_ICECAP_2010_Fig2B_Wilhelm_II',
-            'subset': lambda df: _ps71_subset(
-                df, [2.02e6, 2.32e6, 0.05e6, 0.35e6]),
-        },
+        # {
+        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        #     'label': 'ASB_ICECAP_2010_Fig2B_Wilhelm_II',
+        #     'subset': lambda df: _ps71_subset(
+        #         df, [2.02e6, 2.32e6, 0.05e6, 0.35e6]),
+        # },
 
         # ALPINE: Hercules Dome
         {

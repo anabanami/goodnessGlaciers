@@ -385,9 +385,15 @@ def process_region(region_name, csv_path):
     if 'bed_elev_mean' in df.columns:
         df['elevation_class'] = df['bed_elev_mean'].apply(classify_elevation)
 
-    # Write updated window CSV with classification columns
+    # Write updated window CSV with classification columns (all windows)
     df.to_csv(csv_path, index=False)
     print(f"  Updated {csv_path} with bed_class, relief_class columns")
+
+    # Exclude transition windows from β analysis
+    n_trans = df['is_transition'].sum() if 'is_transition' in df.columns else 0
+    if n_trans:
+        df = df[~df['is_transition']].copy()
+        print(f"  Excluded {n_trans} transition windows from β analysis ({len(df)} remain)")
 
     # Segment summary
     summary = segment_summary(df)

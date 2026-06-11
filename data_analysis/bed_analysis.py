@@ -203,14 +203,13 @@ def analyse_bedrock():
             for seg_data, seg_dist in gap_segments:
                 segments.extend(split_by_landscape(seg_data, seg_dist))
 
-            n_landscape_splits = len(segments) - len(gap_segments)
-            print(f"{len(gap_segments)} gap segments -> {len(segments)} after landscape splitting"
-                  + (f" (+{n_landscape_splits} landscape splits)" if n_landscape_splits > 0 else ""))
+            n_trans = sum(1 for *_, t in segments if t)
+            print(f"{len(segments)} segments ({n_trans} transition zones)")
 
             valid_segments = []
             segment_results = []
 
-            for seg_idx, (segment_data, segment_distance) in enumerate(segments):
+            for seg_idx, (segment_data, segment_distance, is_transition) in enumerate(segments):
                 bedrock_segment_elev = segment_data['bedrock_altitude (m)'].values
                 detrended = signal.detrend(bedrock_segment_elev)
 
@@ -281,7 +280,8 @@ def analyse_bedrock():
                     'flow_error_mean': np.nanmean(angular_diff),
                     'flow_error_median': np.nanmedian(angular_diff),
                     'measures_speed_mean': np.nanmean(measures_speed),
-                    'window_stats': [{**w, 'segment': seg_idx + 1} for w in window_stats]
+                    'is_transition': is_transition,
+                    'window_stats': [{**w, 'segment': seg_idx + 1, 'is_transition': is_transition} for w in window_stats]
                 }
 
                 if avg_psd is None or np.all(avg_psd == 0) or np.any(avg_psd < 0):
@@ -303,31 +303,42 @@ def analyse_bedrock():
                     peaks, _ = signal.find_peaks(residual_psd, height=peak_masking_height_threshold)
 
                     # PASS 2: mask peaks, refit
-                    clean_mask = fit_mask.copy()
-                    if len(peaks) > 0:
-                        for p_idx in peaks:
-                            start = max(0, p_idx - bin_buffer)
-                            end = min(len(clean_mask), p_idx + bin_buffer + 1)
-                            clean_mask[start:end] = False
-
-                    if np.sum(clean_mask) >= 2:
-                        psd_weights[~np.isfinite(psd_weights)] = 0
-                        w = psd_weights[clean_mask]
-                        if np.all(w == 0):
-                            w = None
-                        (slope, intercept), cov = np.polyfit(log_freqs[clean_mask], log_psd[clean_mask], 1, w=w, cov=True)
-                        beta = -slope
-                        beta_uncertainty = np.sqrt(cov[0, 0])
-                        psd_intercept = intercept
-                        psd_intercept_uncertainty = np.sqrt(cov[1, 1])
-                        fitted_psd = 10**(intercept + slope * log_freqs)
+                    # Single-window segments: skip two-pass (weights degenerate
+                    # to unweighted OLS, +0.20 artifact). Use window first-pass
+                    # OLS directly as segment beta.
+                    if len(window_stats) == 1:
+                        beta = window_stats[0]['window_beta']
+                        beta_uncertainty = window_stats[0]['window_beta_uncertainty']
+                        psd_intercept = window_stats[0]['window_psd_intercept']
+                        psd_intercept_uncertainty = window_stats[0]['window_psd_intercept_uncertainty']
+                        fitted_psd = 10**(psd_intercept + (-beta) * log_freqs)
                         residual_psd = avg_psd / fitted_psd
                     else:
-                        beta = -slope_init
-                        beta_uncertainty = np.nan
-                        psd_intercept = intercept_init
-                        psd_intercept_uncertainty = np.nan
-                        fitted_psd = fitted_psd_init
+                        clean_mask = fit_mask.copy()
+                        if len(peaks) > 0:
+                            for p_idx in peaks:
+                                start = max(0, p_idx - bin_buffer)
+                                end = min(len(clean_mask), p_idx + bin_buffer + 1)
+                                clean_mask[start:end] = False
+
+                        if np.sum(clean_mask) >= 2:
+                            psd_weights[~np.isfinite(psd_weights)] = 0
+                            w = psd_weights[clean_mask]
+                            if np.all(w == 0):
+                                w = None
+                            (slope, intercept), cov = np.polyfit(log_freqs[clean_mask], log_psd[clean_mask], 1, w=w, cov=True)
+                            beta = -slope
+                            beta_uncertainty = np.sqrt(cov[0, 0])
+                            psd_intercept = intercept
+                            psd_intercept_uncertainty = np.sqrt(cov[1, 1])
+                            fitted_psd = 10**(intercept + slope * log_freqs)
+                            residual_psd = avg_psd / fitted_psd
+                        else:
+                            beta = -slope_init
+                            beta_uncertainty = np.nan
+                            psd_intercept = intercept_init
+                            psd_intercept_uncertainty = np.nan
+                            fitted_psd = fitted_psd_init
 
                     dominant_wavelengths = wavelengths_calc[peaks] if len(peaks) > 0 else []
                     profile_length = segment_distance.max() - segment_distance.min()
@@ -363,7 +374,7 @@ def analyse_bedrock():
             if segment_results:
                 combined_stats = {}
                 list_keys = ['dominant_wavelengths', 'confirmed_wavelengths', 'candidate_wavelengths', 'window_stats']
-                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'psd_intercept', 'psd_intercept_uncertainty', 'flow_incidence_deg', 'flow_error_mean', 'flow_error_median', 'measures_speed_mean', 'elevation_min', 'elevation_max']
+                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'psd_intercept', 'psd_intercept_uncertainty', 'flow_incidence_deg', 'flow_error_mean', 'flow_error_median', 'measures_speed_mean', 'elevation_min', 'elevation_max', 'is_transition']
 
                 for key in segment_results[0].keys():
                     values = [seg[key] for seg in segment_results if key in seg]
@@ -506,7 +517,8 @@ if __name__ == "__main__":
                     'rms_roughness': w.get('roughness_rms'),
                     'flow_error_mean': w.get('flow_error_mean'),
                     'flow_error_median': w.get('flow_error_median'),
-                    'measures_speed_mean': w.get('measures_speed_mean')
+                    'measures_speed_mean': w.get('measures_speed_mean'),
+                    'is_transition': w.get('is_transition', False)
                 })
         csv_suffix = f"_w{WINDOW_SIZE // 1000}km" if WINDOW_TYPE == 'rectangular' else f"_w{WINDOW_SIZE // 1000}km_{WINDOW_TYPE}"
         region_output = os.path.join(OUTPUT_BASE_PATH, f'{get_region_folder(region_name)}{csv_suffix}')
@@ -531,6 +543,7 @@ if __name__ == "__main__":
             speed_means = traj_data.get('measures_speed_mean', [])
             elev_mins = traj_data.get('elevation_min', [])
             elev_maxs = traj_data.get('elevation_max', [])
+            is_trans = traj_data.get('is_transition', [])
 
             n_segs = min(len(betas), len(incidences))
             for i in range(n_segs):
@@ -551,6 +564,7 @@ if __name__ == "__main__":
                     'measures_speed_mean': speed_means[i] if i < len(speed_means) else np.nan,
                     'elevation_min': elev_mins[i] if i < len(elev_mins) else np.nan,
                     'elevation_max': elev_maxs[i] if i < len(elev_maxs) else np.nan,
+                    'is_transition': is_trans[i] if i < len(is_trans) else False,
                 }
 
                 if len(window_df) > 0:

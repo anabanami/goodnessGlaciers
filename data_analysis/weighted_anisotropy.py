@@ -168,6 +168,11 @@ def _print_comparison(fit_unw, fit_w):
 def plot_anisotropy(csv_path, level='window'):
     """Unified anisotropy comparison plot for window or segment level data."""
     df = pd.read_csv(csv_path).dropna(subset=['incidence_deg', 'beta'])
+    if 'is_transition' in df.columns:
+        n_tz = int(df['is_transition'].sum())
+        if n_tz:
+            df = df[~df['is_transition']].copy()
+            print(f"  Excluded {n_tz} transition windows from anisotropy fit ({len(df)} remain)")
     if len(df) == 0:
         print("No valid data."); return
 

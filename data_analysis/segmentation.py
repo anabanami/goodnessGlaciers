@@ -45,7 +45,7 @@ def split_by_landscape(segment_data, segment_distance, smoothing_length=SMOOTHIN
             dist[i] = dist[i - 1] + 1e-3
 
     if len(dist) < 2:
-        return [(segment_data, segment_distance)]
+        return [(segment_data, segment_distance, False)]
 
     dx_median = np.median(np.diff(dist))
     if dx_median <= 0:
@@ -58,7 +58,7 @@ def split_by_landscape(segment_data, segment_distance, smoothing_length=SMOOTHIN
     in_transition = np.abs(grad) > gradient_threshold
 
     if not np.any(in_transition):
-        return [(segment_data, segment_distance)]
+        return [(segment_data, segment_distance, False)]
 
     changes = np.diff(in_transition.astype(int))
     t_starts = np.where(changes == 1)[0] + 1
@@ -69,7 +69,7 @@ def split_by_landscape(segment_data, segment_distance, smoothing_length=SMOOTHIN
     if in_transition[-1]:
         t_ends = np.concatenate([t_ends, [len(in_transition)]])
 
-    merge_gap_km = 5.0
+    merge_gap_km = 5.0 # [2, 5,10]km for sensitivity testing
     merged_starts, merged_ends = [t_starts[0]], [t_ends[0]]
     for s, e in zip(t_starts[1:], t_ends[1:]):
         gap_km = (dist[s] - dist[merged_ends[-1]]) / 1000
@@ -79,25 +79,26 @@ def split_by_landscape(segment_data, segment_distance, smoothing_length=SMOOTHIN
             merged_starts.append(s)
             merged_ends.append(e)
 
-    boundaries = set([0, len(dist)])
+    transition_set = set()
     for s, e in zip(merged_starts, merged_ends):
-        boundaries.add(s)
-        boundaries.add(e)
         peak_grad_idx = s + np.argmax(np.abs(grad[s:e]))
         print(f"      transition zone km {dist[s]/1000:.1f}-{dist[min(e,len(dist)-1)]/1000:.1f}, "
               f"peak gradient = {grad[peak_grad_idx]:.1f} m/km")
-    boundaries = sorted(boundaries)
+        transition_set.add((s, e))
+
+    boundaries = sorted({0, len(dist)} | {s for s, _ in transition_set} | {e for _, e in transition_set})
 
     sub_segments = []
     for i in range(len(boundaries) - 1):
         s, e = boundaries[i], boundaries[i + 1]
         if e <= s:
             continue
+        is_trans = (s, e) in transition_set
         length_km = (dist[e - 1] - dist[s]) / 1000
         if e - s >= min_segment_pts and length_km >= min_segment_km:
-            sub_segments.append((segment_data.iloc[s:e].copy(), dist[s:e]))
+            sub_segments.append((segment_data.iloc[s:e].copy(), dist[s:e], is_trans))
 
     if not sub_segments:
-        return [(segment_data, segment_distance)]
+        return [(segment_data, segment_distance, False)]
 
     return sub_segments

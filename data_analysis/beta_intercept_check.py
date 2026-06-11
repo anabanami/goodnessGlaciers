@@ -61,6 +61,9 @@ from config import Tee
 
 ### --------------------------------------------------------------------------------------
 
+OUT = Path(OUTPUT_BASE_PATH, "bed_character", "beta_intercept_check")
+OUT.mkdir(parents=True, exist_ok=True)
+sys.stdout = Tee(OUT / "beta_intercept_check_log.txt")
 
 for f in sorted(Path(OUTPUT_BASE_PATH, "window_csvs").glob("*_window_stats.csv")):
     df = pd.read_csv(f)
@@ -79,10 +82,6 @@ BED_COLORS = {
     'chaotic': '#d62728', 'hard': '#ff7f0e',
     'transitional': '#9467bd', 'soft': '#1f77b4',
 }
-
-OUT = Path(OUTPUT_BASE_PATH, "bed_character", "beta_intercept_check")
-OUT.mkdir(parents=True, exist_ok=True)
-sys.stdout = Tee(OUT / "beta_intercept_check_log.txt")
 
 csvs = sorted(Path(OUTPUT_BASE_PATH, "window_csvs").glob("*_window_stats.csv"))
 all_df = pd.concat([pd.read_csv(f).assign(

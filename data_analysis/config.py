@@ -14,7 +14,7 @@ bin_buffer = 5
 
 # Landscape splitting parameters
 SMOOTHING_LENGTH = WINDOW_SIZE  # metres
-GRADIENT_THRESHOLD = 15  # m/km
+GRADIENT_THRESHOLD = 15 # m/km
 
 class Tee:
     """Write to both stdout and a log file."""
