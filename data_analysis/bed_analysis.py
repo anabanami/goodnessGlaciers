@@ -23,6 +23,28 @@ def flag_wavelength_confidence(wavelengths, profile_length, min_cycles=2.0):
     return {'confirmed': confirmed.tolist(), 'candidate': candidate.tolist(), 'threshold': threshold}
 
 
+def _window_azimuth(x, y):
+    """Track heading within a window via PCA principal axis, orientation-only (0-180 deg)."""
+    if len(x) < 2:
+        return np.nan
+    cov = np.cov(x - x.mean(), y - y.mean())
+    if not np.all(np.isfinite(cov)):
+        return np.nan
+    vx, vy = np.linalg.eigh(cov)[1][:, -1]
+    return float(np.degrees(np.arctan2(vy, vx)) % 180.0)
+
+
+def _downsample_idx(x, y, step_m=1000.0):
+    """Indices of points spaced ~step_m apart along-track (for the coverage point cloud)."""
+    d = np.concatenate([[0.0], np.cumsum(np.hypot(np.diff(x), np.diff(y)))])
+    keep, last = [0], 0.0
+    for i in range(1, len(d)):
+        if d[i] - last >= step_m:
+            keep.append(i)
+            last = d[i]
+    return np.asarray(keep)
+
+
 def calculate_flow_incidence(x, y, flow_x, flow_y):
     flight_dx = np.gradient(x)
     flight_dy = np.gradient(y)
@@ -35,7 +57,7 @@ def calculate_flow_incidence(x, y, flow_x, flow_y):
     return np.minimum(angle, 180 - angle)
 
 
-def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size, flow_angular_diff=None, flow_speed=None):
+def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size, flow_angular_diff=None, flow_speed=None, seg_x=None, seg_y=None):
     dx_median = np.median(np.diff(dist)) if len(dist) > 1 else 100
     if dx_median == 0: dx_median = 15.0
 
@@ -114,6 +136,16 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
             window_incidence = incidence_array[fit_mask]
             feature_stats['mean_window_incidence'] = np.nanmean(window_incidence)
 
+            if seg_x is not None and seg_y is not None:
+                wx, wy = seg_x[fit_mask], seg_y[fit_mask]
+                feature_stats['center_x'] = float(np.mean(wx))
+                feature_stats['center_y'] = float(np.mean(wy))
+                feature_stats['azimuth_deg'] = _window_azimuth(wx, wy)
+            else:
+                feature_stats['center_x'] = np.nan
+                feature_stats['center_y'] = np.nan
+                feature_stats['azimuth_deg'] = np.nan
+
             if flow_angular_diff is not None:
                 w_flow_diff = flow_angular_diff[fit_mask]
                 feature_stats['flow_error_mean'] = np.nanmean(w_flow_diff)
@@ -153,6 +185,7 @@ def analyse_bedrock():
     dem_path = os.path.join(base_path, 'rema_mosaic_100m_v2.0_filled_cop30/rema_mosaic_100m_v2.0_filled_cop30_dem.tif')
 
     all_results = {}
+    region_point_clouds = {}
 
     for bundle in datasets_bundle:
         dataset_name = bundle['name']
@@ -170,8 +203,7 @@ def analyse_bedrock():
         print(f"  Unique trajectories: {len(valid['trajectory_id'].unique())}")
 
         results = {}
-        # plot_count = 0
-
+        region_pc = []
         for j, traj_id in enumerate(valid['trajectory_id'].unique()):
             if j > 0 and j % 10 == 0:
                 print(f"  Processed {j} trajectories")
@@ -182,6 +214,11 @@ def analyse_bedrock():
             longs = line['longitude (degree_east)'].values
             lats = line['latitude (degree_north)'].values
             x, y = transformer.transform(longs, lats)
+
+            keep = _downsample_idx(np.asarray(x), np.asarray(y))
+            region_pc.append(pd.DataFrame({'x': np.asarray(x)[keep],
+                                           'y': np.asarray(y)[keep],
+                                           'trajectory_id': traj_id}))
 
             dx_seg = np.diff(x)
             dy_seg = np.diff(y)
@@ -246,12 +283,14 @@ def analyse_bedrock():
                     avg_psd, freqs, window_stats, dx_median, psd_weights = analyse_sliding_windows(
                         segment_distance, bedrock_segment_elev, incidence_array,
                         window_size=segment_len_m, step_size=segment_len_m,
-                        flow_angular_diff=angular_diff, flow_speed=measures_speed)
+                        flow_angular_diff=angular_diff, flow_speed=measures_speed,
+                        seg_x=seg_x, seg_y=seg_y)
                 else:
                     avg_psd, freqs, window_stats, dx_median, psd_weights = analyse_sliding_windows(
                         segment_distance, bedrock_segment_elev, incidence_array,
                         window_size=WINDOW_SIZE, step_size=STEP_SIZE,
-                        flow_angular_diff=angular_diff, flow_speed=measures_speed)
+                        flow_angular_diff=angular_diff, flow_speed=measures_speed,
+                        seg_x=seg_x, seg_y=seg_y)
 
                 if window_stats:
                     max_relief_window = max(window_stats, key=lambda x: x['local_relief_m'])
@@ -404,9 +443,11 @@ def analyse_bedrock():
                 print(f"  Trajectory {traj_id}: {len(segments)} segments, combined median spacing = {combined_stats.get('median_spacing', 0):.1f}m, Nyquist = {2*combined_stats.get('median_spacing', 0):.1f}m")
 
         all_results[dataset_name] = results
+        region_point_clouds[dataset_name] = (pd.concat(region_pc, ignore_index=True)
+                                             if region_pc else pd.DataFrame(columns=['x', 'y', 'trajectory_id']))
         print(f"{dataset_name} is finished processing")
 
-    return all_results
+    return all_results, region_point_clouds
 
 
 def results_summary(results):
@@ -488,7 +529,7 @@ if __name__ == "__main__":
     os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
     sys.stdout = Tee(log_path)
 
-    results = analyse_bedrock()
+    results, region_point_clouds = analyse_bedrock()
     print(f"\n---")
     print(f"Analysed {len(results)} regions")
 
@@ -518,6 +559,9 @@ if __name__ == "__main__":
                     'flow_error_mean': w.get('flow_error_mean'),
                     'flow_error_median': w.get('flow_error_median'),
                     'measures_speed_mean': w.get('measures_speed_mean'),
+                    'center_x': w.get('center_x'),
+                    'center_y': w.get('center_y'),
+                    'azimuth_deg': w.get('azimuth_deg'),
                     'is_transition': w.get('is_transition', False)
                 })
         csv_suffix = f"_w{WINDOW_SIZE // 1000}km" if WINDOW_TYPE == 'rectangular' else f"_w{WINDOW_SIZE // 1000}km_{WINDOW_TYPE}"
@@ -525,6 +569,13 @@ if __name__ == "__main__":
         window_csv_dir = os.path.join(OUTPUT_BASE_PATH, 'window_csvs')
         os.makedirs(window_csv_dir, exist_ok=True)
         pd.DataFrame(all_window_data).to_csv(os.path.join(window_csv_dir, f'{region_name}{csv_suffix}_window_stats.csv'), index=False)
+
+        # --- Coverage point cloud (~1 km), for data-intrinsic coverage tags ---
+        pc = region_point_clouds.get(region_name)
+        if pc is not None and len(pc):
+            coverage_csv_dir = os.path.join(OUTPUT_BASE_PATH, 'coverage_csvs')
+            os.makedirs(coverage_csv_dir, exist_ok=True)
+            pc.to_csv(os.path.join(coverage_csv_dir, f'{region_name}{csv_suffix}_track_points.csv'), index=False)
 
         # --- Segment-level CSV ---
         window_df = pd.DataFrame(all_window_data)
@@ -596,3 +647,11 @@ if __name__ == "__main__":
         pd.DataFrame(all_wavelength_data).to_csv(os.path.join(region_output, f'{region_name}{csv_suffix}_wavelength_detections.csv'), index=False)
 
         print(f"Exported {len(all_window_data)} window rows, {len(all_segment_data)} segment rows, {len(all_wavelength_data)} wavelength detections")
+
+    # --- Data-intrinsic coverage tags across all regions ---
+    print("\n=== COVERAGE TAGS ===")
+    try:
+        import coverage_tags
+        coverage_tags.run_all(directory=OUTPUT_BASE_PATH)
+    except Exception as e:
+        print(f"  coverage tagging skipped: {e}")

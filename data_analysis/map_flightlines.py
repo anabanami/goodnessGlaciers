@@ -296,7 +296,7 @@ def plot_tracks_on_ockenden(coords, output_path='tracks_on_ockenden.png',
     # Plot classification (same colors as Ockenden source)
     xlim, ylim = (-2.55e6, 2.7e6), (-2.2e6, 2.2e6)
     fig, ax = plt.subplots(figsize=(12, 10))
-    s = 12
+    s = 30
     ax.scatter(x_ifpa[poordetail_mask], y_ifpa[poordetail_mask], c='#f3e738', s=s, label='Low relief landscape')
     ax.scatter(x_ifpa[SGM_mask | SGM_mask2], y_ifpa[SGM_mask | SGM_mask2], c='#ff9248', s=s, label='Alpine landscape (subglacial)')
     ax.scatter(x_ifpa[mountain_mask], y_ifpa[mountain_mask], c='#e75921', s=s, label='Alpine landscape (subaerial)')
@@ -313,8 +313,8 @@ def plot_tracks_on_ockenden(coords, output_path='tracks_on_ockenden.png',
     to_ps = Transformer.from_crs('EPSG:4326', 'EPSG:3031', always_xy=True)
     for name, data in coords.items():
         x, y = to_ps.transform(data['lon'], data['lat'])
-        ax.plot(x, y, '.', color='white', ms=4, zorder=3)
-        ax.plot(x, y, '.', color='black', ms=2, alpha=0.9, label=name, zorder=4)
+        ax.plot(x, y, '.', color='white', ms=2, zorder=3)
+        ax.plot(x, y, '.', color='black', ms=1, alpha=0.3, label=name, zorder=4)
 
     ax.set_xlim(xlim); ax.set_ylim(ylim)
     ax.set_aspect('equal')

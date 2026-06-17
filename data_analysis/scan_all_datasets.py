@@ -27,7 +27,7 @@ OCKENDEN_REGIONS = {
         'ps71': [2.02e6, 2.32e6, 0.05e6, 0.35e6],
         'ockenden_class': 'alpine',
     },
-    'Fig2D_Recovery_SB': {
+    'Fig2D_Recovery_SL': {
         'ps71': [0.0e6, 0.30e6, 0.6e6, 0.9e6],
         'ockenden_class': 'low-relief / selective erosion',
     },
