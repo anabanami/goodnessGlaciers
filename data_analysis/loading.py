@@ -10,7 +10,7 @@ import pandas as pd
 # -> everything else), which also prints the "COPY FOR loading.py" entries that
 # reference them. If you switch to other datasets, this import (and the entries
 # that use it) can be removed.
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Ockenden'))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'all_data', 'Ockenden'))
 from ockenden_coords import (  # noqa: E402
     _ps71_subset, _ppb_core_subset, _ps71_lowrelief_subset)
 # =================================================================================

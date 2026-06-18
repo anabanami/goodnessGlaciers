@@ -15,7 +15,7 @@ import netCDF4 as nc
 from pyproj import Transformer
 
 BASE_DIR = '/home/ana/Desktop/code/Data/ODSA/all_data/bedmap3_data/bedmap3/Results/'
-METRICS_DIR = '/home/ana/Desktop/code/Data/ODSA/Ockenden/Data_Science_Zenodo/Data_Science_Zenodo/Metrics_v2/'
+METRICS_DIR = '/home/ana/Desktop/code/Data/ODSA/all_data/Ockenden/Data_Science_Zenodo/Data_Science_Zenodo/Metrics_v2/'
 
 # WGS84 <-> EPSG:3031 (Antarctic Polar Stereographic, PS71)
 to_ps71 = Transformer.from_crs("EPSG:4326", "EPSG:3031", always_xy=True)

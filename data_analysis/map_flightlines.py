@@ -250,7 +250,7 @@ def print_coordinate_summary(coords):
 
 
 def plot_tracks_on_ockenden(coords, output_path='tracks_on_ockenden.png',
-                            metrics_dir='Ockenden/Data_Science_Zenodo/Data_Science_Zenodo/Metrics/'):
+                            metrics_dir='all_data/Ockenden/Data_Science_Zenodo/Data_Science_Zenodo/Metrics/'):
     """
     Overlay flight tracks on Ockenden et al. Fig 4 landscape classification,
     recreated natively from the published metrics data (no image needed).

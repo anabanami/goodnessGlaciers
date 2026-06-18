@@ -22,10 +22,10 @@ from scipy.spatial import ConvexHull, Delaunay, cKDTree
 from config import Tee
 from loading import OUTPUT_BASE_PATH
 
-# --- tier thresholds (editable; provisional, tuned to RES line spacings) ---
-GAP_GOOD_KM, GAP_POOR_KM = 15.0, 35.0   # 90th-pct interpolation distance
-R_GOOD, R_POOR           = 0.40, 0.70   # axial azimuth concentration (0=isotropic,1=uni-directional)
-N_GOOD, N_POOR           = 50, 20       # homogeneous windows entering beta
+# --- tier thresholds (placed in the empirical gaps of the region set) ---
+GAP_GOOD_KM, GAP_POOR_KM = 20.0, 45.0   # 90th-pct interpolation distance; breaks at 17.5|24 and 29|66
+R_GOOD, R_POOR           = 0.40, 0.80   # axial azimuth concentration (0=isotropic,1=uni-directional); breaks at 0.35|0.46 and 0.63|0.96
+N_GOOD, N_POOR           = 80, 25       # homogeneous windows entering beta; breaks at 21|30 and 52|110
 GRID_KM                  = 5.0          # interpolation-distance sampling grid
 
 

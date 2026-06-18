@@ -51,7 +51,7 @@ def plot_cross_section(dist, elev, segments, surface_segments, traj_id, output_p
 
     # Per-segment: bedrock, surface, and fill
     colors = plt.cm.tab10.colors
-    for i, ((seg_data, seg_dist), surf_elev) in enumerate(zip(segments, surface_segments)):
+    for i, ((seg_data, seg_dist, _), surf_elev) in enumerate(zip(segments, surface_segments)):
         c = colors[i % len(colors)]
         d_km = seg_dist / 1000
         bed = seg_data['bedrock_altitude (m)'].values
@@ -117,7 +117,7 @@ def main():
 
             # Extract REMA surface per segment
             surface_segments = []
-            for seg_data, seg_dist in segments:
+            for seg_data, seg_dist, _ in segments:
                 sx, sy = transformer.transform(
                     seg_data['longitude (degree_east)'].values,
                     seg_data['latitude (degree_north)'].values,
