@@ -5,18 +5,16 @@ from matplotlib.lines import Line2D
 
 BASE = Path(__file__).parent
 OCKENDEN = Path(__file__).resolve().parent.parent / 'Ockenden-regions'
-THRESHOLDS = [350, 800]  # initial values — to be revised from this analysis
+# THRESHOLDS = [350, 800]  # initial values — to be revised from this analysis
 THRESHOLDS = [300, 800]  # testing: 300m anchored to Aurora/Maud low-relief medians
 
 
 LANDSCAPE_CLASS = {
     'Fig4_Aurora_SB_lowrelief': 'low-relief',
     'Fig2A_Maud_SB': 'low-relief',
-    'Fig2D_Recovery_SB': 'low-relief',
-    'Fig2F_Resolution_SH': 'alpine',
+    'Fig2D_Recovery_SL': 'low-relief',
     'Fig2G_Highland_A': 'alpine',
     'Fig2H_Golicyna_SM': 'alpine',
-    'Fig2B_Wilhelm_II': 'alpine',
     'Fig2C_Hercules_Dome': 'alpine',
     'Fig1_Pensacola_Pole': 'selective erosion',
 }
