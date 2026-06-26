@@ -69,7 +69,7 @@ def split_by_landscape(segment_data, segment_distance, smoothing_length=SMOOTHIN
     if in_transition[-1]:
         t_ends = np.concatenate([t_ends, [len(in_transition)]])
 
-    merge_gap_km = 5.0 # [2, 5,10]km for sensitivity testing
+    merge_gap_km = 5.0 # [2, 5, 10]km for sensitivity testing
     merged_starts, merged_ends = [t_starts[0]], [t_ends[0]]
     for s, e in zip(t_starts[1:], t_ends[1:]):
         gap_km = (dist[s] - dist[merged_ends[-1]]) / 1000

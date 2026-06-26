@@ -3,10 +3,18 @@ import pandas as pd, numpy as np, matplotlib.pyplot as plt
 from pathlib import Path
 from matplotlib.lines import Line2D
 
-BASE = Path(__file__).parent
-OCKENDEN = Path(__file__).resolve().parent.parent / 'Ockenden-regions'
-# THRESHOLDS = [350, 800]  # initial values — to be revised from this analysis
-THRESHOLDS = [300, 800]  # testing: 300m anchored to Aurora/Maud low-relief medians
+HERE = Path(__file__).resolve().parent          # .../v23
+ODSA = HERE.parent                               # .../ODSA
+OCKENDEN = ODSA / 'Ockenden-regions'
+THRESHOLDS = [200, 600]  # initial values — to be revised from this analysis
+# THRESHOLDS = [350, 800]
+# THRESHOLDS = [300, 800]
+# THRESHOLDS = [350, 900]
+
+
+# Results for this run go to v23/relief_thresholds/<thresholds joined by '-'>/
+OUT = HERE / 'relief_thresholds' / '-'.join(str(t) for t in THRESHOLDS)
+OUT.mkdir(parents=True, exist_ok=True)
 
 
 LANDSCAPE_CLASS = {
@@ -125,7 +133,7 @@ ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=8)
 ax.set_ylabel('Relief (m)')
 ax.set_title('Relief by region (boxes = IQR, whiskers = 1.5xIQR)')
 fig.tight_layout()
-fig.savefig(BASE / 'relief_distribution.png', dpi=150)
+fig.savefig(OUT / 'relief_distribution.png', dpi=150)
 print(f"\nSaved: relief_distribution.png")
 
 # ── FIGURE 2: Beta vs Relief, RMS vs Relief ──
@@ -153,7 +161,7 @@ ax.set_xlabel('Relief (m)')
 ax.set_ylabel('RMS roughness (m)')
 ax.set_title('RMS roughness vs Relief')
 fig2.tight_layout()
-fig2.savefig(BASE / 'relief_vs_metrics.png', dpi=150)
+fig2.savefig(OUT / 'relief_vs_metrics.png', dpi=150)
 print(f"Saved: relief_vs_metrics.png")
 
 # ── FIGURE 3: Relief CDF ──
@@ -176,12 +184,12 @@ ax3.set_title('Relief CDF — all windows + per class')
 ax3.legend()
 ax3.grid(True, alpha=0.3)
 fig3.tight_layout()
-fig3.savefig(BASE / 'relief_cdf.png', dpi=150)
+fig3.savefig(OUT / 'relief_cdf.png', dpi=150)
 print(f"Saved: relief_cdf.png")
 
 sys.stdout = sys.__stdout__
-with open(BASE / 'relief_distribution.log', 'w') as f:
+with open(OUT / 'relief_distribution.log', 'w') as f:
     f.write(_tee_buf.getvalue())
-print(f"Log written to {BASE / 'relief_distribution.log'}")
+print(f"Log written to {OUT / 'relief_distribution.log'}")
 
 plt.show()

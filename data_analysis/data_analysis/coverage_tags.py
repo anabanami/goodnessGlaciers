@@ -19,7 +19,7 @@ import os, sys, glob
 import numpy as np
 import pandas as pd
 from scipy.spatial import ConvexHull, Delaunay, cKDTree
-from config import Tee
+from config import Tee, processing_flag_of
 from loading import OUTPUT_BASE_PATH
 
 # --- tier thresholds (placed in the empirical gaps of the region set) ---
@@ -107,6 +107,7 @@ def coverage_for_region(track_csv, window_csv):
     res.update(_interp_distance(x, y))
 
     win = pd.read_csv(window_csv) if window_csv and os.path.exists(window_csv) else pd.DataFrame()
+    res['processing_flag'] = processing_flag_of(win) if len(win) else None
     az_R = _axial_R(win['azimuth_deg']) if 'azimuth_deg' in win else np.nan
     res['azimuth_R'] = az_R
 
@@ -161,7 +162,7 @@ def run_all(directory=None, region_filter=None):
               f"gap_p90 {r.get('gap_p90_km', float('nan')):.0f} km | R {r['azimuth_R']:.2f} | "
               f"n_homog {r['n_homog']} | spacing {r['line_spacing_km']:.0f} km")
 
-    cols = ['region', 'tier', 'tier_driver', 'n_homog', 'n_trajectories',
+    cols = ['region', 'tier', 'tier_driver', 'processing_flag', 'n_homog', 'n_trajectories',
             'gap_median_km', 'gap_p90_km', 'gap_max_km', 'line_spacing_km',
             'azimuth_R', 'footprint_km2', 'beta_footprint_frac',
             'grade_gap', 'grade_dir', 'grade_n', 'n_track_points']

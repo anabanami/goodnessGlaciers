@@ -3,7 +3,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy import optimize
-from config import Tee
+from config import Tee, PROCESSING_FLAG_NOTE, processing_flag_of
+from plotting import flag_suptitle
 
 # Output configuration - nested inside region output from loading.py
 from loading import OUTPUT_BASE_PATH as _REGION_BASE
@@ -176,6 +177,10 @@ def plot_anisotropy(csv_path, level='window'):
     if len(df) == 0:
         print("No valid data."); return
 
+    pflag = processing_flag_of(df)
+    if pflag:
+        print(f"  processing: {PROCESSING_FLAG_NOTE.get(pflag, pflag)}")
+
     if 'flow_error_mean' not in df.columns:
         print(f"No flow_error_mean column in {csv_path} — cannot compute weighted fit.")
         print("Run bed_analysis_20.py with MEaSUREs validation enabled first.")
@@ -246,11 +251,12 @@ def plot_anisotropy(csv_path, level='window'):
 
     if fit_unw and fit_w:
         lvl = 'Segment' if is_seg else 'Window'
-        fig.suptitle(
+        flag_suptitle(
+            fig,
             f'{lvl}-Level Weighted Anisotropy Comparison (n={n_total} {level}s)\n'
             f'$\\Delta\\beta$ unweighted: {fit_unw["delta"]:+.3f}  |  '
             f'$\\Delta\\beta$ weighted: {fit_w["delta"]:+.3f}',
-            fontsize=13, y=1.02)
+            pflag, fontsize=13)
 
     plt.tight_layout()
     os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)

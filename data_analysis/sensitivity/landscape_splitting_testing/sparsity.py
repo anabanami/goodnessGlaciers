@@ -4,12 +4,13 @@ N_band = # of geomspace(1/L, 1/(2dx), 500) points with wavelength in [250,50000]
 import numpy as np, pandas as pd, os
 from pyproj import Transformer
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+HERE = os.path.dirname(os.path.abspath(__file__))
+ODSA = os.path.dirname(os.path.dirname(HERE))   # .../ODSA — current codebase + results
+sys.path.insert(0, ODSA)
 from loading import load_datasets
 from segmentation import split_into_segments, split_by_landscape
 from config import WINDOW_SIZE, Tee
-HERE = os.path.dirname(os.path.abspath(__file__))
-RESULTS = os.path.join(HERE, "Ockenden-regions")  # results to verify live beside this script
+RESULTS = os.path.join(ODSA, "Ockenden-regions")  # most recent codebase run
 sys.stdout = Tee(os.path.join(HERE, "sparsity_log.txt"))
 
 tf = Transformer.from_crs("EPSG:4326","EPSG:3031",always_xy=True)

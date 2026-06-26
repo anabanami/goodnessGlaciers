@@ -16,10 +16,11 @@ from scipy.ndimage import uniform_filter1d
 import os
 import sys
 
-from config import Tee
+from config import Tee, processing_flag_of
 from loading import load_datasets
 from segmentation import detect_data_gaps, split_into_segments, split_by_landscape
 from REMA_extractor import extract_rema_elevation
+from plotting import flag_title
 
 # ── Config ──────────────────────────────────────────────────────────────────
 # Output configuration - nested inside region output from loading.py
@@ -32,7 +33,7 @@ DEM_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 # MAX_PLOTS = 50  # safety cap per dataset
 
 
-def plot_cross_section(dist, elev, segments, surface_segments, traj_id, output_path):
+def plot_cross_section(dist, elev, segments, surface_segments, traj_id, output_path, processing_flag=None):
     """
     Plot bedrock + REMA surface along a flight line.
 
@@ -62,7 +63,7 @@ def plot_cross_section(dist, elev, segments, surface_segments, traj_id, output_p
 
     ax.set_xlabel('Distance along track (km)')
     ax.set_ylabel('Elevation (m)')
-    ax.set_title(f'Cross-section: {traj_id}')
+    flag_title(ax, f'Cross-section: {traj_id}', processing_flag)
     ax.legend(loc='upper right', fontsize='small', ncol=2)
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
@@ -85,6 +86,7 @@ def main():
     for bundle in datasets:
         name = bundle['name']
         df = bundle['data']
+        pflag = processing_flag_of(df)
         print(f"\n=== {name} ===")
 
         out_path = os.path.join(OUTPUT_DIR, name)
@@ -124,7 +126,7 @@ def main():
                 )
                 surface_segments.append(extract_rema_elevation(sx, sy, DEM_PATH))
 
-            plot_cross_section(dist, elev, segments, surface_segments, traj_id, out_path)
+            plot_cross_section(dist, elev, segments, surface_segments, traj_id, out_path, pflag)
             count += 1
             print(f"  [{count}] {traj_id}")
 

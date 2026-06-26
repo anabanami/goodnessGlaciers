@@ -190,6 +190,7 @@ def analyse_bedrock():
     for bundle in datasets_bundle:
         dataset_name = bundle['name']
         df = bundle['data']
+        pflag = df['processing_flag'].iloc[0]
         print(f"\nStarting analysis of {dataset_name}...")
 
         region_folder = get_region_folder(dataset_name)
@@ -320,7 +321,8 @@ def analyse_bedrock():
                     'flow_error_median': np.nanmedian(angular_diff),
                     'measures_speed_mean': np.nanmean(measures_speed),
                     'is_transition': is_transition,
-                    'window_stats': [{**w, 'segment': seg_idx + 1, 'is_transition': is_transition} for w in window_stats]
+                    'processing_flag': pflag,
+                    'window_stats': [{**w, 'segment': seg_idx + 1, 'is_transition': is_transition, 'processing_flag': pflag} for w in window_stats]
                 }
 
                 if avg_psd is None or np.all(avg_psd == 0) or np.any(avg_psd < 0):
@@ -401,14 +403,14 @@ def analyse_bedrock():
                         'hurst_uncertainty': hurst_uncertainty
                     })
 
-                    plot_spectra(segment_distance, detrended, wavelengths_calc, avg_psd, fitted_psd, beta, psd_intercept, residual_psd, traj_id, dataset_name, segment_number=seg_idx+1, output_path=output_paths['psd'])
+                    plot_spectra(segment_distance, detrended, wavelengths_calc, avg_psd, fitted_psd, beta, psd_intercept, residual_psd, traj_id, dataset_name, segment_number=seg_idx+1, output_path=output_paths['psd'], processing_flag=pflag)
                 else:
                     print(f"Skipping Line {traj_id}: Not enough data points in 250m–50km range.")
 
                 segment_results.append(stats_dict)
 
             if valid_segments:
-                plot_raw_data_with_segmentation_check(dist, elev, valid_segments, traj_id, gap_mask, output_path=output_paths['trajectories'])
+                plot_raw_data_with_segmentation_check(dist, elev, valid_segments, traj_id, gap_mask, output_path=output_paths['trajectories'], processing_flag=pflag)
 
             if segment_results:
                 combined_stats = {}
@@ -562,7 +564,8 @@ if __name__ == "__main__":
                     'center_x': w.get('center_x'),
                     'center_y': w.get('center_y'),
                     'azimuth_deg': w.get('azimuth_deg'),
-                    'is_transition': w.get('is_transition', False)
+                    'is_transition': w.get('is_transition', False),
+                    'processing_flag': w.get('processing_flag')
                 })
         csv_suffix = f"_w{WINDOW_SIZE // 1000}km" if WINDOW_TYPE == 'rectangular' else f"_w{WINDOW_SIZE // 1000}km_{WINDOW_TYPE}"
         region_output = os.path.join(OUTPUT_BASE_PATH, f'{get_region_folder(region_name)}{csv_suffix}')
@@ -616,6 +619,7 @@ if __name__ == "__main__":
                     'elevation_min': elev_mins[i] if i < len(elev_mins) else np.nan,
                     'elevation_max': elev_maxs[i] if i < len(elev_maxs) else np.nan,
                     'is_transition': is_trans[i] if i < len(is_trans) else False,
+                    'processing_flag': traj_data.get('processing_flag'),
                 }
 
                 if len(window_df) > 0:

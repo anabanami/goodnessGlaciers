@@ -6,7 +6,7 @@ gate to lengths. Survivor counts are cross-checked against the gated call."""
 import numpy as np
 from pyproj import Transformer
 import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))  # .../ODSA — current codebase
 from loading import load_datasets
 from segmentation import split_into_segments, split_by_landscape
 from config import Tee

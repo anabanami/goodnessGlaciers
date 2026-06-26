@@ -1,11 +1,48 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.offsetbox import TextArea, HPacker, AnnotationBbox
 from scipy import signal
 import os
-from config import peak_masking_height_threshold
+from config import peak_masking_height_threshold, PROCESSING_FLAG_COLORS as _FLAG_COLOR
 
 
-def plot_raw_data_with_segmentation_check(dist, elev, segments, traj_id, gap_mask=None, output_path=None):
+def _two_colour_title(base_title, processing_flag, fontsize):
+    """HPacker of a black base title and a colour-coded [flag] tag."""
+    base = TextArea(base_title, textprops=dict(color='black', fontsize=fontsize))
+    tag = TextArea(f'[{processing_flag}]',
+                   textprops=dict(color=_FLAG_COLOR.get(processing_flag, '0.3'), fontsize=fontsize))
+    return HPacker(children=[base, tag], sep=6, pad=0, align='center')
+
+
+def flag_title(ax, base_title, processing_flag, fontsize=None):
+    """Axes title: base name in black, migration-status tag in colour."""
+    if processing_flag is None:
+        ax.set_title(base_title, fontsize=fontsize)
+        return
+    ax.set_title('')  # clear default so only the two-colour title shows
+    pack = _two_colour_title(base_title, processing_flag, fontsize or plt.rcParams['axes.titlesize'])
+    ab = AnnotationBbox(pack, (0.5, 1.0), xycoords='axes fraction',
+                        box_alignment=(0.5, 0.0), frameon=False, pad=0,
+                        annotation_clip=False)
+    ax.add_artist(ab)
+
+
+def flag_suptitle(fig, base_title, processing_flag, fontsize=14):
+    """Figure title: base name in black, migration-status tag in colour."""
+    if not processing_flag:
+        fig.suptitle(base_title, fontsize=fontsize)
+        return
+    pack = _two_colour_title(base_title, processing_flag, fontsize)
+    # Anchor just above the figure's top edge (growing upward) so it clears subplot
+    # titles, mirroring fig.suptitle(y=1.02); bbox_inches='tight' captures it on save.
+    ab = AnnotationBbox(pack, (0.5, 1.0), xycoords='figure fraction',
+                        box_alignment=(0.5, 0.0), frameon=False, pad=0,
+                        annotation_clip=False)
+    fig.add_artist(ab)
+
+
+def plot_raw_data_with_segmentation_check(dist, elev, segments, traj_id, gap_mask=None, output_path=None,
+                                          processing_flag=None):
     plt.figure(figsize=(18, 6))
 
     plot_elev = elev.copy().astype(float)
@@ -27,7 +64,7 @@ def plot_raw_data_with_segmentation_check(dist, elev, segments, traj_id, gap_mas
 
     plt.xlabel('Distance along track (km)')
     plt.ylabel('Bed Elevation (m)')
-    plt.title(f'Segmentation Check: {traj_id} ({len(segments)} valid segments)')
+    flag_title(plt.gca(), f'Segmentation Check: {traj_id} ({len(segments)} valid segments)', processing_flag)
     plt.legend(loc='upper right', fontsize='small', ncol=2)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
@@ -37,7 +74,7 @@ def plot_raw_data_with_segmentation_check(dist, elev, segments, traj_id, gap_mas
 
 
 def plot_spectra(dist, detrended, wavelengths, psd, fitted_psd, beta, psd_intercept,  residual_psd,
-                 traj_id, dataset_name, segment_number=None, output_path=None):
+                 traj_id, dataset_name, segment_number=None, output_path=None, processing_flag=None):
     fig = plt.figure(figsize=(20, 15))
     gs = fig.add_gridspec(2, 2)
 
@@ -46,7 +83,7 @@ def plot_spectra(dist, detrended, wavelengths, psd, fitted_psd, beta, psd_interc
     ax1.set_xlabel('Distance along track (km)')
     ax1.set_ylabel('Detrended Bed Elevation (m)')
     segment_label = f' - Segment {segment_number}' if segment_number is not None else ''
-    ax1.set_title(f'Spatial Profile: {traj_id}{segment_label}')
+    flag_title(ax1, f'Spatial Profile: {traj_id}{segment_label}', processing_flag)
     ax1.grid(True, linestyle=":", alpha=0.5)
 
     ax2 = fig.add_subplot(gs[0, 1])

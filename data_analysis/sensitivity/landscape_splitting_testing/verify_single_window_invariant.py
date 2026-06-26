@@ -1,17 +1,34 @@
 """Regression check for the single-window fix (landscape_splitting_findings §code-change 2).
 
 Invariant: every single-window segment (n_windows == 1) must report a segment-CSV
-beta that is BYTE-IDENTICAL to the beta of its one window in the window CSV. This
-proves the segment fit bypasses the degenerate two-pass and copies the window
-first-pass OLS verbatim. Compares raw CSV strings (no float parse, no tolerance);
-joins on (trajectory, segment) and requires a unique window match. Exits nonzero on
+beta equal to the beta of its one window in the window CSV to within a tight numeric
+tolerance (1e-9). This proves the segment fit bypasses the degenerate two-pass and
+uses the window first-pass OLS — the degeneracy artifact was +0.17 to +0.48, so 1e-9
+catches it by ~8 orders of magnitude. The two CSVs can differ at the 1-ULP (~1e-16)
+level from downstream float plumbing (segment β and window CSV β both trace to the
+same window_beta but reach the CSVs by different paths); that is not a violation.
+Joins on (trajectory, segment) and requires a unique window match. Exits nonzero on
 any violation so it can run as a test."""
 import csv, glob, os, sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import Tee
 HERE = os.path.dirname(os.path.abspath(__file__))
-RESULTS = os.path.join(HERE, "Ockenden-regions")  # results to verify live beside this script
+ODSA = os.path.dirname(os.path.dirname(HERE))   # .../ODSA — current codebase + results
+sys.path.insert(0, ODSA)
+from config import Tee
+RESULTS = os.path.join(ODSA, "Ockenden-regions")  # most recent codebase run
 sys.stdout = Tee(os.path.join(HERE, "verify_single_window_invariant_log.txt"))
+
+TOL = 1e-9  # numeric tolerance — immune to 1-ULP CSV-plumbing noise, still catches the degeneracy
+
+
+def beta_match(seg_s, win_list):
+    """Unique window match, segment β == window β to within TOL (exact-string fallback for non-numeric)."""
+    if len(win_list) != 1:
+        return False
+    try:
+        return abs(float(seg_s) - float(win_list[0])) < TOL
+    except ValueError:
+        return seg_s == win_list[0]
+
 
 stem = lambda p: os.path.basename(p).replace("_segment_stats.csv", "").replace("_window_stats.csv", "")
 seg_csvs = sorted(glob.glob(os.path.join(RESULTS, "segment_csvs", "*_segment_stats.csv")))
@@ -34,7 +51,7 @@ for sp in seg_csvs:
             if row[ni].strip() != "1": continue
             sw += 1
             wb = wbeta.get((row[ti], row[si]), [])
-            if not (len(wb) == 1 and wb[0] == row[bi]):  # unique + byte-identical
+            if not beta_match(row[bi], wb):  # unique match + equal within TOL
                 mm += 1
                 if len(examples) < 5: examples.append((row[ti], row[si], row[bi], wb, row[tr]))
     tot_sw += sw; tot_mm += mm

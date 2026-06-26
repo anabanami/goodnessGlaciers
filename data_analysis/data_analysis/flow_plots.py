@@ -13,8 +13,9 @@ from matplotlib.colors import Normalize
 
 # Import the local tools
 from REMA_extractor import extract_rema_elevation, extract_rema_flow_vector, calculate_ice_thickness, get_rema_cache, MEaSUREs_comparison
-from config import Tee
+from config import Tee, processing_flag_of
 from loading import load_datasets
+from plotting import flag_title
 
 BASE_PATH = 'all_data/'
 DEM_PATH = os.path.join(BASE_PATH, 'rema_mosaic_100m_v2.0_filled_cop30/rema_mosaic_100m_v2.0_filled_cop30_dem.tif')
@@ -198,6 +199,7 @@ def get_orientation_color(angle):
 def main(dataset_dict):
     region_label = dataset_dict['name']
     df = dataset_dict['data']
+    pflag = processing_flag_of(df)
 
     print(f"Visualizing Flow Orientation for: {region_label}")
 
@@ -326,7 +328,7 @@ def main(dataset_dict):
     # Styling
     ax.set_xlabel('Easting (km, EPSG:3031)', fontsize=11)
     ax.set_ylabel('Northing (km, EPSG:3031)', fontsize=11)
-    ax.set_title(f'Ice Flow Orientation: {region_label}\n{traj_id}', fontsize=12, pad=10)
+    flag_title(ax, f'Ice Flow Orientation: {region_label}\n{traj_id}', pflag, fontsize=12)
     ax.set_aspect('equal')
     
     # --- Find emptiest corner for legend ---
@@ -447,6 +449,7 @@ def plot_flow_confidence(dataset_dict):
     """
     region_label = dataset_dict['name']
     df = dataset_dict['data']
+    pflag = processing_flag_of(df)
 
     print(f"Flow confidence map for: {region_label}")
 
@@ -565,7 +568,7 @@ def plot_flow_confidence(dataset_dict):
 
     ax.set_xlabel('Easting (km, EPSG:3031)', fontsize=11)
     ax.set_ylabel('Northing (km, EPSG:3031)', fontsize=11)
-    ax.set_title(f'Flow Direction Confidence: {region_label}\nREMA vs MEaSUREs', fontsize=12, pad=10)
+    flag_title(ax, f'Flow Direction Confidence: {region_label}\nREMA vs MEaSUREs', pflag, fontsize=12)
     ax.set_aspect('equal')
 
     plt.tight_layout()

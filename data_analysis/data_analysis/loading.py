@@ -23,8 +23,8 @@ _PARTIAL  = {'1-D Synthetic Aperture Radar processing',
              'pik1 (short coherent) processing',
              'MUSIC (Swath) Processing'}
 
-# Output configuration
-OUTPUT_BASE_PATH = os.path.join(
+# Output configuration (ODSA_OUTPUT_BASE env override isolates sweep runs)
+OUTPUT_BASE_PATH = os.environ.get('ODSA_OUTPUT_BASE') or os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     # 'TEST-ONE-SMUG-region/',
     # 'SMUG-regions/',
@@ -116,6 +116,13 @@ def load_datasets():
         },
 
     ]
+
+    # ODSA_REGION_FILTER: comma-separated label substrings (used by the window-size sweep)
+    _rf = os.environ.get('ODSA_REGION_FILTER')
+    if _rf:
+        keys = [k.strip().lower() for k in _rf.split(',') if k.strip()]
+        target_files = [t for t in target_files if any(k in t['label'].lower() for k in keys)]
+        print(f"  [ODSA_REGION_FILTER] {len(target_files)} region(s): {[t['label'] for t in target_files]}")
 
     file_cache = {}
 

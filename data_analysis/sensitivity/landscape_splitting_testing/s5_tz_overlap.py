@@ -4,12 +4,15 @@ gap-segment) vs the pre-gate merged TZ extents from split_by_landscape's gradien
 import numpy as np, pandas as pd, glob, os, sys
 from scipy.ndimage import uniform_filter1d
 from pyproj import Transformer
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+HERE = os.path.dirname(os.path.abspath(__file__))
+ODSA = os.path.dirname(os.path.dirname(HERE))   # .../ODSA — current codebase
+sys.path.insert(0, ODSA)
 from loading import load_datasets
 from segmentation import split_into_segments
 from config import WINDOW_SIZE, STEP_SIZE, SMOOTHING_LENGTH, GRADIENT_THRESHOLD, Tee
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+# s5 tests a NO-landscape-splitting run; this is a separate test artifact, NOT the
+# standard ODSA/Ockenden-regions (which IS landscape-split). Lives beside the script.
 NOSPLIT = os.path.join(HERE, "Ockenden-regions-No_Landscape_splitting-TEST", "window_csvs")
 sys.stdout = Tee(os.path.join(HERE, "s5_tz_overlap_log.txt"))
 transformer = Transformer.from_crs("EPSG:4326", "EPSG:3031", always_xy=True)

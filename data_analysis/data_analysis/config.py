@@ -3,14 +3,38 @@ import re
 import sys
 
 
-# Window parameters
-WINDOW_SIZE = 50000  # metres
+# Window parameters (env-overridable for the window-size sweep; defaults unchanged)
+WINDOW_SIZE = int(os.environ.get('ODSA_WINDOW_SIZE', 50000))  # metres
 STEP_SIZE = WINDOW_SIZE // 2  # 50% overlap
-WINDOW_TYPE = 'rectangular'
+WINDOW_TYPE = os.environ.get('ODSA_WINDOW_TYPE', 'rectangular')
 
 # Peak masking parameters
 peak_masking_height_threshold = 2.0
 bin_buffer = 5
+
+# Radar migration / processing-status palette (set in loading._parse_processing_flag).
+# Migration affects bed-geometry fidelity, so any spectral metric (beta, PSD amplitude,
+# roughness) carries this caveat; shared by plotting.py and bed_character.py.
+PROCESSING_FLAG_COLORS = {
+    'migrated':             'C2',
+    'partial':              'C1',
+    'unmigrated_or_unknown': 'C3',
+}
+
+# Spectral-reliability caveat keyed on migration status. Shared by the scripts that
+# report beta-derived quantities (bed_character, beta_intercept_check, weighted_anisotropy).
+PROCESSING_FLAG_NOTE = {
+    'migrated':              'migrated — β reliable',
+    'partial':               'PARTIAL migration — β may be biased by residual diffraction',
+    'unmigrated_or_unknown': 'UNMIGRATED/unknown — β classification suspect (diffraction tails)',
+}
+
+
+def processing_flag_of(df):
+    """Modal processing flag of a window/segment frame (None for pre-flag CSVs)."""
+    if 'processing_flag' in df.columns and df['processing_flag'].notna().any():
+        return df['processing_flag'].dropna().mode().iloc[0]
+    return None
 
 # Landscape splitting parameters
 SMOOTHING_LENGTH = WINDOW_SIZE  # metres

@@ -3,7 +3,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
-from config import Tee
+from config import Tee, PROCESSING_FLAG_NOTE as _FLAG_NOTE, processing_flag_of as region_flag
+from plotting import flag_suptitle as _flag_suptitle
 
 """
 Bed character classification from window-level spectral data.
@@ -28,8 +29,8 @@ BED_CLASSES = [
 
 # Relief thresholds — anchored to Ockenden et al. (2025) reference regions
 RELIEF_CLASSES = [
-    ('flat',        -np.inf, 300),
-    ('subdued',     300,     800),
+    ('flat',        -np.inf, 350),
+    ('subdued',     350,     800),
     ('mountainous', 800,     np.inf),
 ]
 
@@ -141,10 +142,12 @@ def segment_summary(df):
     return pd.DataFrame(rows)
 
 
-def print_summary(summary, region_name, df):
+def print_summary(summary, region_name, df, pflag=None):
     """Print terminal table."""
     print(f"\n{'='*80}")
     print(f"  BED CHARACTER: {region_name}")
+    if pflag:
+        print(f"  Processing: {_FLAG_NOTE.get(pflag, pflag)}")
     print(f"{'='*80}")
     print(f"{'Traj':>8s} {'Seg':>4s} {'n':>3s} {'β_med':>6s} {'β_IQR':>6s} "
           f"{'Relief':>7s} {'A_1km':>6s} {'Bed Class':>14s} {'Agree':>6s}  Detail")
@@ -171,7 +174,7 @@ def print_summary(summary, region_name, df):
     print(f"{'='*90}")
 
 
-def plot_bed_character(df, summary, region_name):
+def plot_bed_character(df, summary, region_name, pflag=None):
     """Two-panel diagnostic: beta histogram + per-segment stacked bars."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7),
                                     gridspec_kw={'width_ratios': [1, 1.2]})
@@ -251,7 +254,7 @@ def plot_bed_character(df, summary, region_name):
     ax2.legend(fontsize=9, loc='lower right')
     ax2.grid(True, alpha=0.3, axis='x')
 
-    fig.suptitle(f'Bed Character — {region_name}', fontsize=14, y=1.01)
+    _flag_suptitle(fig, f'Bed Character — {region_name}', pflag)
     plt.tight_layout()
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -267,7 +270,7 @@ def parse_window_km(csv_path):
     return int(m.group(1)) if m else 50  # fallback
 
 
-def plot_beta_along_track(df, region_name, csv_path):
+def plot_beta_along_track(df, region_name, csv_path, pflag=None):
     """Beta vs along-track distance per segment, colored by bed class."""
     step_km = parse_window_km(csv_path) / 2  # 50% overlap
 
@@ -309,7 +312,7 @@ def plot_beta_along_track(df, region_name, csv_path):
     unique = [(h, l) for h, l in zip(handles, labels) if l not in seen and not seen.update({l: 1})]
     fig.legend(*zip(*unique), loc='upper right', fontsize=9, framealpha=0.9)
 
-    fig.suptitle(f'β along track — {region_name}', fontsize=13)
+    _flag_suptitle(fig, f'β along track — {region_name}', pflag, fontsize=13)
     plt.tight_layout(rect=[0, 0, 1, 0.97])
 
     out_path = os.path.join(OUTPUT_DIR, f'{region_name}_beta_along_track.png')
@@ -325,7 +328,7 @@ ELEV_COLORS = {
 }
 
 
-def plot_bed_elevation_heatmap(df, region_name):
+def plot_bed_elevation_heatmap(df, region_name, pflag=None):
     """Contingency heatmap of bed_class vs elevation_class (window counts)."""
     if 'elevation_class' not in df.columns:
         return
@@ -361,7 +364,8 @@ def plot_bed_elevation_heatmap(df, region_name):
     ax.set_yticklabels(counts.index, fontsize=11)
     ax.set_xlabel('Elevation class', fontsize=12)
     ax.set_ylabel('Bed class (β)', fontsize=12)
-    ax.set_title(f'Bed class × Elevation — {region_name}\n(n={total} windows)', fontsize=13)
+    ax.set_title(f'n={total} windows', fontsize=10)
+    _flag_suptitle(fig, f'Bed class × Elevation — {region_name}', pflag, fontsize=13)
     fig.colorbar(im, ax=ax, label='Window count', shrink=0.8)
     plt.tight_layout()
 
@@ -378,6 +382,8 @@ def process_region(region_name, csv_path):
     if len(df) == 0:
         print("  No valid data.")
         return
+
+    pflag = region_flag(df)
 
     # Classify windows
     df['bed_class'] = df['beta'].apply(classify_beta)
@@ -397,7 +403,8 @@ def process_region(region_name, csv_path):
 
     # Segment summary
     summary = segment_summary(df)
-    print_summary(summary, region_name, df)
+    summary['processing_flag'] = pflag
+    print_summary(summary, region_name, df, pflag)
 
     # Save summary CSV
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -406,9 +413,9 @@ def process_region(region_name, csv_path):
     print(f"  Summary saved: {summary_path}")
 
     # Plots
-    plot_bed_character(df, summary, region_name)
-    plot_beta_along_track(df, region_name, csv_path)
-    plot_bed_elevation_heatmap(df, region_name)
+    plot_bed_character(df, summary, region_name, pflag)
+    plot_beta_along_track(df, region_name, csv_path, pflag)
+    plot_bed_elevation_heatmap(df, region_name, pflag)
 
 
 if __name__ == "__main__":

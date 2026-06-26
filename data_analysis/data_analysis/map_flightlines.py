@@ -13,7 +13,7 @@ from pyproj import Transformer
 import os
 
 import sys
-from config import Tee
+from config import Tee, PROCESSING_FLAG_COLORS, PROCESSING_FLAG_NOTE, processing_flag_of
 from loading import load_datasets
 
 
@@ -49,7 +49,8 @@ def extract_coordinates(datasets):
         coords[name] = {
             'lon': lons,
             'lat': lats,
-            'trajectories': trajectories
+            'trajectories': trajectories,
+            'flag': processing_flag_of(df),
         }
         
         print(f"{name}: {len(lons)} points, lon range [{lons.min():.2f}, {lons.max():.2f}], "
@@ -172,6 +173,47 @@ def plot_regional_detail(coords, output_path='antarctica_tracks_regional.png'):
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"Saved regional map to {output_path}")
+    plt.close()
+
+
+def plot_tracks_by_migration(coords, output_path='antarctica_tracks_migration.png'):
+    """Regional track map coloured by radar migration status (data provenance)."""
+    from matplotlib.lines import Line2D
+
+    antarctic_stereo = ccrs.SouthPolarStereo()
+    all_lons = np.concatenate([data['lon'] for data in coords.values()])
+    all_lats = np.concatenate([data['lat'] for data in coords.values()])
+    padding = 2.0
+    lon_min, lon_max = all_lons.min() - padding, all_lons.max() + padding
+    lat_min, lat_max = all_lats.min() - padding, all_lats.max() + padding
+
+    fig = plt.figure(figsize=(14, 10))
+    ax = fig.add_subplot(1, 1, 1, projection=antarctic_stereo)
+    ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
+    ax.add_feature(cfeature.LAND, facecolor='#e8e8e8', edgecolor='black', linewidth=0.5)
+    ax.add_feature(cfeature.OCEAN, facecolor='#cce5ff', alpha=0.5)
+    ax.coastlines(resolution='10m', linewidth=0.8)
+    gl = ax.gridlines(draw_labels=True, linewidth=0.5, alpha=0.5, linestyle='--', color='gray')
+    gl.top_labels = False
+    gl.right_labels = False
+
+    present = []
+    for name, data in coords.items():
+        flag = data['flag'] or 'unmigrated_or_unknown'
+        color = PROCESSING_FLAG_COLORS.get(flag, '0.3')
+        if flag not in present:
+            present.append(flag)
+        ax.scatter(data['lon'], data['lat'], c=color, s=2, alpha=0.7,
+                   transform=ccrs.PlateCarree())
+
+    handles = [Line2D([], [], marker='o', ls='', color=PROCESSING_FLAG_COLORS.get(f, '0.3'),
+                      label=PROCESSING_FLAG_NOTE.get(f, f)) for f in present]
+    ax.legend(handles=handles, loc='lower left', fontsize=8, framealpha=0.85, markerscale=2)
+    ax.set_title('Radar Flight Tracks — Migration Status', fontsize=12)
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f"Saved migration-status map to {output_path}")
     plt.close()
 
 
@@ -346,6 +388,7 @@ if __name__ == "__main__":
     print("\nGenerating maps...")
     plot_antarctica_overview(coords, os.path.join(OUTPUT_BASE_PATH, 'antarctica_tracks_overview.png'))
     plot_regional_detail(coords, os.path.join(OUTPUT_BASE_PATH, 'antarctica_tracks_regional.png'))
+    plot_tracks_by_migration(coords, os.path.join(OUTPUT_BASE_PATH, 'antarctica_tracks_migration.png'))
     plot_tracks_with_elevation(coords, datasets, os.path.join(OUTPUT_BASE_PATH, 'antarctica_tracks_elevation.png'))
 
     plot_tracks_on_ockenden(coords, os.path.join(OUTPUT_BASE_PATH, 'tracks_on_ockenden.png'))
@@ -353,5 +396,6 @@ if __name__ == "__main__":
     print("\nDone! Generated maps:")
     print("  - antarctica_tracks_overview.png (full continent)")
     print("  - antarctica_tracks_regional.png (zoomed to data)")
+    print("  - antarctica_tracks_migration.png (colored by migration status)")
     print("  - antarctica_tracks_elevation.png (colored by bed elevation)")
     print("  - tracks_on_ockenden.png (tracks on Ockenden Fig 4)")

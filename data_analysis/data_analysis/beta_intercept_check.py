@@ -4,7 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 from loading import OUTPUT_BASE_PATH
-from config import Tee
+from config import Tee, PROCESSING_FLAG_NOTE, processing_flag_of
+from plotting import flag_title
 
   # On interpreting these crosstabs for geological character:
 
@@ -69,6 +70,9 @@ for f in sorted(Path(OUTPUT_BASE_PATH, "window_csvs").glob("*_window_stats.csv")
     df = pd.read_csv(f)
     name = f.stem.replace("_w50km_window_stats", "")
     print(f"\n=== {name} ===")
+    pflag = processing_flag_of(df)
+    if pflag:
+        print(f"  processing: {PROCESSING_FLAG_NOTE.get(pflag, pflag)}")
     if 'psd_intercept' in df.columns:
         tmp = df.dropna(subset=['psd_intercept'])
         tmp = tmp.assign(C_bin=pd.qcut(tmp['psd_intercept'], q=4, precision=1))
@@ -82,6 +86,12 @@ BED_COLORS = {
     'chaotic': '#d62728', 'hard': '#ff7f0e',
     'transitional': '#9467bd', 'soft': '#1f77b4',
 }
+
+
+def _panel_flag(df):
+    """Migration flag for a panel — only if uniform, else None (e.g. ALL REGIONS)."""
+    flags = df['processing_flag'].dropna().unique() if 'processing_flag' in df.columns else []
+    return flags[0] if len(flags) == 1 else None
 
 csvs = sorted(Path(OUTPUT_BASE_PATH, "window_csvs").glob("*_window_stats.csv"))
 all_df = pd.concat([pd.read_csv(f).assign(
@@ -105,7 +115,7 @@ def scatter_panel(ax, df, title):
     valid = df[['relief_m', 'psd_amplitude_1km']].dropna()
     r, p = pearsonr(valid['relief_m'], valid['psd_amplitude_1km'])
     n = len(valid)
-    ax.set_title(f'{title}  (r={r:.2f}, p={p:.1e}, n={n})', fontsize=10)
+    flag_title(ax, f'{title}  (r={r:.2f}, p={p:.1e}, n={n})', _panel_flag(df), fontsize=10)
     ax.set_xlabel('Relief (m)')
     ax.set_ylabel('PSD amplitude @ 1 km')
     ax.grid(True, alpha=0.3)
@@ -150,7 +160,7 @@ def scatter_panel_spectral(ax, df, title):
     valid = df[['psd_intercept', 'beta']].dropna()
     r, p = pearsonr(valid['psd_intercept'], valid['beta'])
     n = len(valid)
-    ax.set_title(f'{title}  (r={r:.2f}, p={p:.1e}, n={n})', fontsize=10)
+    flag_title(ax, f'{title}  (r={r:.2f}, p={p:.1e}, n={n})', _panel_flag(df), fontsize=10)
     ax.set_xlabel('PSD intercept (C)')
     ax.set_ylabel('β')
     ax.grid(True, alpha=0.3)

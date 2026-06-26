@@ -15,7 +15,7 @@ import numpy as np
 from pathlib import Path
 from scipy import stats
 
-BASE = Path(__file__).parent
+BASE = Path(__file__).parent / 'gradient_threshold_sensitivity'  # this script's own data + output tree
 THRESHOLDS = [10, 15, 20]
 MERGE_DISTANCES = [2, 5, 10]  # km
 colors = ['#66c2a5', '#fc8d62', '#8da0cb']
