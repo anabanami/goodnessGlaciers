@@ -14,6 +14,43 @@ def _two_colour_title(base_title, processing_flag, fontsize):
     return HPacker(children=[base, tag], sep=6, pad=0, align='center')
 
 
+def label_trajectories(ax, df, transformer, drawn_traj_ids=None, scale=1000.0,
+                       gap_threshold=2000, min_points=20):
+    """Draw one label per trajectory, anchored at the midpoint of its longest
+    gap-free run. Placement is computed from the RAW trajectory coordinates (not
+    from any downstream segmentation), so it is identical across plots that share
+    the same df and transformer. Coordinates are divided by `scale` (metres->km).
+
+    drawn_traj_ids: if given, only label these trajectories (e.g. the ones that
+    actually survived filtering and got drawn), so no label floats over a blank track.
+    """
+    keep = None if drawn_traj_ids is None else set(map(str, drawn_traj_ids))
+
+    for tid in df['trajectory_id'].unique():
+        if keep is not None and str(tid) not in keep:
+            continue
+        line = df[df['trajectory_id'] == tid]
+        if len(line) < min_points:
+            continue
+
+        lx, ly = transformer.transform(line['longitude (degree_east)'].values,
+                                       line['latitude (degree_north)'].values)
+        lx, ly = np.asarray(lx), np.asarray(ly)
+        if len(lx) < 2:
+            continue
+
+        # Split into gap-free runs and pick the longest
+        step = np.sqrt(np.diff(lx) ** 2 + np.diff(ly) ** 2)
+        bounds = np.concatenate([[0], np.where(step > gap_threshold)[0] + 1, [len(lx)]])
+        s, e = max(zip(bounds[:-1], bounds[1:]), key=lambda se: se[1] - se[0])
+        mid = (s + e) // 2
+
+        ax.text(lx[mid] / scale, ly[mid] / scale, str(tid),
+                fontsize=6, fontweight='bold', ha='center', va='center',
+                color='white', zorder=6,
+                bbox=dict(boxstyle='round,pad=0.2', facecolor='black', alpha=0.7, linewidth=0))
+
+
 def flag_title(ax, base_title, processing_flag, fontsize=None):
     """Axes title: base name in black, migration-status tag in colour."""
     if processing_flag is None:

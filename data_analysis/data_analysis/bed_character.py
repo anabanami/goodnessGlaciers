@@ -393,7 +393,7 @@ def process_region(region_name, csv_path):
 
     # Write updated window CSV with classification columns (all windows)
     df.to_csv(csv_path, index=False)
-    print(f"  Updated {csv_path} with bed_class, relief_class columns")
+    print(f"  Updated {csv_path} with bed_class, relief_class, elevation_class columns")
 
     # Exclude transition windows from β analysis
     n_trans = df['is_transition'].sum() if 'is_transition' in df.columns else 0
