@@ -67,15 +67,23 @@ def flag_title(ax, base_title, processing_flag, fontsize=None):
 def flag_suptitle(fig, base_title, processing_flag, fontsize=14):
     """Figure title: base name in black, migration-status tag in colour."""
     if not processing_flag:
-        fig.suptitle(base_title, fontsize=fontsize)
-        return
-    pack = _two_colour_title(base_title, processing_flag, fontsize)
-    # Anchor just above the figure's top edge (growing upward) so it clears subplot
-    # titles, mirroring fig.suptitle(y=1.02); bbox_inches='tight' captures it on save.
-    ab = AnnotationBbox(pack, (0.5, 1.0), xycoords='figure fraction',
-                        box_alignment=(0.5, 0.0), frameon=False, pad=0,
-                        annotation_clip=False)
-    fig.add_artist(ab)
+        title = fig.suptitle(base_title, fontsize=fontsize)
+    else:
+        pack = _two_colour_title(base_title, processing_flag, fontsize)
+        # Anchor just above the figure's top edge (growing upward) so it clears subplot
+        # titles, mirroring fig.suptitle(y=1.02); bbox_inches='tight' captures it on save.
+        title = AnnotationBbox(pack, (0.5, 1.0), xycoords='figure fraction',
+                               box_alignment=(0.5, 0.0), frameon=False, pad=0,
+                               annotation_clip=False)
+        fig.add_artist(title)
+    # A centred title wider than the figure gets cropped by bbox_inches='tight'
+    # (it re-lays-out the overflowing artist instead of expanding the canvas).
+    # Widen the figure so the title fits; must run before the caller's tight_layout.
+    fig.canvas.draw()
+    need = title.get_window_extent(fig.canvas.get_renderer()).width / fig.dpi
+    w, h = fig.get_size_inches()
+    if need > w:
+        fig.set_size_inches(need + 0.4, h)
 
 
 def plot_raw_data_with_segmentation_check(dist, elev, segments, traj_id, gap_mask=None, output_path=None,

@@ -38,8 +38,8 @@ def nband(L,dx):
     f=np.geomspace(mn,mx,500); wl=1/f
     return int(((wl>=250)&(wl<=50000)).sum())
 
-regions={'Aurora':'ASB_ICECAP_2010_Fig4_Aurora_SB_lowrelief',
-         'Pensacola':'POLARGAP_2015_Fig1_Pensacola_Pole',
+regions={'Aurora':'ASB_ICECAP_2010_Fig4C_Aurora_SB_lowrelief',
+         'Pensacola':'POLARGAP_2015_Pensacola_Pole',
          'Hercules':'POLARGAP_2015_Fig2C_Hercules_Dome'}
 for reg,dn in regions.items():
     seg=pd.read_csv(os.path.join(RESULTS,'segment_csvs',dn+'_w50km_segment_stats.csv'))

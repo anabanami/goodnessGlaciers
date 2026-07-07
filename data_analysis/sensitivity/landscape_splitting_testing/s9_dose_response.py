@@ -36,10 +36,10 @@ for d in load_datasets():
             lengths[(name, str(traj_id), i + 1)] = sdist.max() - sdist.min()
 
 csvs = {
-    'Pensacola': 'POLARGAP_2015_Fig1_Pensacola_Pole_w50km_window_stats.csv',
+    'Pensacola': 'POLARGAP_2015_Pensacola_Pole_w50km_window_stats.csv',
     'Hercules':  'POLARGAP_2015_Fig2C_Hercules_Dome_w50km_window_stats.csv',
 }
-datasetname = {'Pensacola': 'POLARGAP_2015_Fig1_Pensacola_Pole',
+datasetname = {'Pensacola': 'POLARGAP_2015_Pensacola_Pole',
                'Hercules':  'POLARGAP_2015_Fig2C_Hercules_Dome'}
 
 LOG50 = np.log10(50000.0)

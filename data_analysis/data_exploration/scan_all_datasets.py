@@ -47,11 +47,11 @@ OCKENDEN_REGIONS = {
         'ps71': [1.05e6, 1.35e6, -1.575e6, -1.275e6],
         'ockenden_class': 'alpine',
     },
-    'Fig4_Aurora_SB': {
+    'Fig4C_Aurora_SB': {
         'ps71': [1.05e6, 2.20e6, -0.80e6, 0.20e6],
         'ockenden_class': 'low-relief',
     },
-    'Fig1_Pensacola_Pole': {
+    'Pensacola_Pole': {
         'ps71': [-0.9e6, 0.3e6, -0.6e6, 0.3e6],
         'ockenden_class': 'selective erosion',
     },

@@ -37,7 +37,7 @@ PPB_SPUR_LAT_CUT = -88.5             # drop spur points with lat > this (|lat| <
 # Dropped vs the original 9: Fig2F_Resolution_SH and Fig2B_Wilhelm_II — both sit
 # in ~zero alpine-class cells (badly classified).
 OCKENDEN_REGIONS = {
-    'Fig1_Pensacola_Pole': {
+    'Pensacola_Pole': {
         'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
         'dataset_label': 'POLARGAP_2015',
         'ps71': PPB_CORE_BOX,
@@ -47,7 +47,7 @@ OCKENDEN_REGIONS = {
         'core_subset': True,  # bespoke core-square + P33 trim, not a plain box
         'loading_subset_repr': "'subset': _ppb_core_subset,",  # matches loading.py
     },
-    'Fig4_Aurora_SB_lowrelief': {
+    'Fig4C_Aurora_SB_lowrelief': {
         'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
         'dataset_label': 'ASB_ICECAP_2010',
         'ps71': [1.05e6, 2.20e6, -0.80e6, 0.20e6],

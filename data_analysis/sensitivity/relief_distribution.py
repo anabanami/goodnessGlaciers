@@ -18,13 +18,13 @@ OUT.mkdir(parents=True, exist_ok=True)
 
 
 LANDSCAPE_CLASS = {
-    'Fig4_Aurora_SB_lowrelief': 'low-relief',
+    'Fig4C_Aurora_SB_lowrelief': 'low-relief',
     'Fig2A_Maud_SB': 'low-relief',
     'Fig2D_Recovery_SL': 'low-relief',
     'Fig2G_Highland_A': 'alpine',
     'Fig2H_Golicyna_SM': 'alpine',
     'Fig2C_Hercules_Dome': 'alpine',
-    'Fig1_Pensacola_Pole': 'selective erosion',
+    'Pensacola_Pole': 'selective erosion',
 }
 
 CLASS_COLORS = {

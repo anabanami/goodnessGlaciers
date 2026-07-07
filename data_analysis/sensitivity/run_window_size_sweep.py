@@ -39,8 +39,8 @@ SIZES_KM = [30, 50, 75, 100]
 REGIONS = [                                       # all 7 Ockenden regions (loading.py)
     'Rec_Catch_Fig2D_Recovery_SL',                # low-relief,              tier A, n~114, clean coverage
     'POLARGAP_2015_Fig2C_Hercules_Dome',          # alpine/mountainous,      tier B, n~40,  worst fragmentation
-    'POLARGAP_2015_Fig1_Pensacola_Pole',          # selective erosion,       tier C, n~283, data-rich, big gaps
-    'ASB_ICECAP_2010_Fig4_Aurora_SB_lowrelief',   # low-relief
+    'POLARGAP_2015_Pensacola_Pole',          # selective erosion,       tier C, n~283, data-rich, big gaps
+    'ASB_ICECAP_2010_Fig4C_Aurora_SB_lowrelief',   # low-relief
     'ASB_ICECAP_2010_Fig2A_Maud_SB',              # low-relief / sel. erosion
     'ASB_ICECAP_2010_Fig2G_Highland_A',           # alpine / sel. erosion / low-relief
     'ASB_ICECAP_2010_Fig2H_Golicyna_SM',          # alpine / sel. erosion / low-relief

@@ -38,7 +38,7 @@ from plotting import flag_title
 
 ### --------------------------------------------------------------------------------------
 # # test
-# path = "v23/Ockenden-regions/window_csvs/ASB_ICECAP_2010_Fig4_Aurora_SB_w50km_window_stats.csv"
+# path = "v23/Ockenden-regions/window_csvs/ASB_ICECAP_2010_Fig4C_Aurora_SB_w50km_window_stats.csv"
 # df = pd.read_csv(path)
 # ct = pd.crosstab(df.bed_class, df.relief_class, normalize='all') * 100
 # print(ct.round(1))
@@ -161,7 +161,7 @@ def scatter_panel_spectral(ax, df, title):
     r, p = pearsonr(valid['psd_intercept'], valid['beta'])
     n = len(valid)
     flag_title(ax, f'{title}\n(r={r:.2f}, p={p:.1e}, n={n})', _panel_flag(df), fontsize=10)
-    ax.set_xlabel('PSD intercept (C)')
+    ax.set_xlabel('PSD intercept')
     ax.set_ylabel('β')
     ax.grid(True, alpha=0.3)
 
@@ -173,7 +173,7 @@ axes2_flat[len(regions2)].legend(fontsize=8)
 for j in range(len(regions2) + 1, len(axes2_flat)):
     axes2_flat[j].set_visible(False)
 
-fig2.suptitle('β vs PSD intercept (C) — purely spectral 2D roughness classification', fontsize=13)
+fig2.suptitle('β vs PSD intercept — purely spectral 2D roughness classification', fontsize=13)
 plt.tight_layout()
 out2 = BIC_OUT / "beta_vs_psd_intercept_diagnostic.png"
 plt.savefig(out2, dpi=200, bbox_inches='tight')

@@ -269,6 +269,44 @@ def plot_anisotropy(csv_path, level='window'):
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
 
+    # ONLY weighted plot
+    fig = plt.figure(figsize=(8, 7))
+    if beta_err is not None and np.any(np.isfinite(beta_err)):
+        plt.errorbar(theta, beta, yerr=beta_err, fmt='none', ecolor='gray',
+                    elinewidth=elw, capsize=cap, alpha=0.5)
+    sc = plt.scatter(theta, beta, alpha=0.6, s=s, c=weights, cmap='viridis',
+                    vmin=0, vmax=1, edgecolors='none')
+    plt.title('Weighted by flow confidence', fontsize=12)
+    cbar = plt.colorbar(sc, shrink=0.7, pad=0.02)
+    cbar.set_label('Weight (1=agree, 0=disagree)', fontsize=9)
+    if fit_w:
+        plt.plot(x_fit, cos2_model(x_fit, *fit_w['popt']), 'k-', lw=2, label=_fit_label(fit_w))
+        plt.legend(fontsize=9)
+
+    plt.xlabel('Incidence Angle (°)')
+    plt.xlim(-2, 92)
+    plt.grid(True, alpha=0.3)
+    plt.ylabel(r'Power Law Exponent ($\beta$)')
+
+    if fit_w:
+        lvl = 'Segment' if is_seg else 'Window'
+        flag_suptitle(
+            fig,
+            f'{lvl}-Level Weighted Anisotropy (n={n_total} {level}s)\n'
+            f'$\\Delta\\beta$ weighted: {fit_w["delta"]:+.3f}',
+            pflag, fontsize=13)
+
+    plt.tight_layout()
+    os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
+    basename = os.path.basename(csv_path)
+    suffix = '_seg_ONLY_weighted_anisotropy.png' if is_seg else '_ONLY_weighted_anisotropy.png'
+    out_name = basename.replace(f'_{level}_stats.csv', suffix)
+    if out_name == basename:
+        out_name = basename.replace('.csv', suffix)
+    output_path = os.path.join(OUTPUT_BASE_PATH, out_name)
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+
     _print_comparison(fit_unw, fit_w)
     print(f"\nSaved to {output_path}")
     return {'unweighted': fit_unw, 'weighted': fit_w, 'n': n_total, 'n_valid': int(n_valid)}
