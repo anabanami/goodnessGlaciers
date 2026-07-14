@@ -173,11 +173,53 @@ axes2_flat[len(regions2)].legend(fontsize=8)
 for j in range(len(regions2) + 1, len(axes2_flat)):
     axes2_flat[j].set_visible(False)
 
-fig2.suptitle('β vs PSD intercept — purely spectral 2D roughness classification', fontsize=13)
+fig2.suptitle('β vs PSD intercept — Mechanical coupling diagnostic', fontsize=13)
 plt.tight_layout()
 out2 = BIC_OUT / "beta_vs_psd_intercept_diagnostic.png"
 plt.savefig(out2, dpi=200, bbox_inches='tight')
 plt.close()
 print(f"Diagnostic saved: {out2}")
 
+
+# ── 2D roughness classification: β vs psd_amplitude_1km (in-band amplitude) ──
+
+all_df3 = pd.concat([pd.read_csv(f).assign(
+    region=f.stem.replace("_w50km_window_stats", "")) for f in csvs], ignore_index=True)
+all_df3 = all_df3.dropna(subset=['beta', 'psd_amplitude_1km', 'bed_class'])
+
+regions3 = all_df3['region'].unique()
+ncols3 = min(len(regions3) + 1, 4)
+nrows3 = int(np.ceil((len(regions3) + 1) / ncols3))
+fig3, axes3 = plt.subplots(nrows3, ncols3, figsize=(5 * ncols3, 4.5 * nrows3), squeeze=False)
+axes3_flat = axes3.flatten()
+
+def scatter_panel_classification(ax, df, title):
+    from scipy.stats import pearsonr
+    for cls in ['chaotic', 'hard', 'transitional', 'soft']:
+        sub = df[df['bed_class'] == cls]
+        if len(sub):
+            ax.scatter(sub['psd_amplitude_1km'], sub['beta'],
+                       c=BED_COLORS[cls], label=cls, s=15, alpha=0.6, edgecolors='none')
+    valid = df[['psd_amplitude_1km', 'beta']].dropna()
+    r, p = pearsonr(valid['psd_amplitude_1km'], valid['beta'])
+    n = len(valid)
+    flag_title(ax, f'{title}\n(r={r:.2f}, p={p:.1e}, n={n})', _panel_flag(df), fontsize=10)
+    ax.set_xlabel('PSD amplitude @ 1 km')
+    ax.set_ylabel('β')
+    ax.grid(True, alpha=0.3)
+
+for i, reg in enumerate(regions3):
+    scatter_panel_classification(axes3_flat[i], all_df3[all_df3['region'] == reg], reg)
+scatter_panel_classification(axes3_flat[len(regions3)], all_df3, 'ALL REGIONS')
+axes3_flat[len(regions3)].legend(fontsize=8)
+
+for j in range(len(regions3) + 1, len(axes3_flat)):
+    axes3_flat[j].set_visible(False)
+
+fig3.suptitle('β vs PSD amplitude @ 1 km — 2D roughness classification (in-band amplitude)', fontsize=13)
+plt.tight_layout()
+out3 = BIC_OUT / "beta_vs_psd_amplitude_diagnostic.png"
+plt.savefig(out3, dpi=200, bbox_inches='tight')
+plt.close()
+print(f"Diagnostic saved: {out3}")
 

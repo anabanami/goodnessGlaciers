@@ -183,7 +183,7 @@ def plot_anisotropy(csv_path, level='window'):
 
     if 'flow_error_mean' not in df.columns:
         print(f"No flow_error_mean column in {csv_path} — cannot compute weighted fit.")
-        print("Run bed_analysis_20.py with MEaSUREs validation enabled first.")
+        print("Run bed_analysis with MEaSUREs validation enabled first.")
         return
 
     theta = df['incidence_deg'].values

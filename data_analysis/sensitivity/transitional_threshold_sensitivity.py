@@ -27,7 +27,7 @@ ODSA = HERE.parent                              # .../ODSA
 sys.path.insert(0, str(ODSA))
 from config import Tee                          # noqa: E402
 
-OUT_ROOT = HERE / "transitional_threshold_sensitivity"
+OUT_ROOT = HERE / "transitional_threshold"
 THRESHOLDS = [2.0, 2.1, 2.2]
 
 # Gather all window-level CSVs from whichever region dirs exist

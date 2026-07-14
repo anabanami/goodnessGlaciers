@@ -1,20 +1,24 @@
 """§5 spatial test, 9-region reproduction: do low-beta NO-split windows overlap a
 transition zone? Footprint overlap (window i spans [i*STEP, i*STEP+WINDOW] along its
-gap-segment) vs the pre-gate merged TZ extents from split_by_landscape's gradient detector."""
+gap-segment) vs the pre-gate merged TZ extents from split_by_landscape's gradient detector.
+
+Run from v23/; reads from and writes results to v23/TESTING_LANDSCAPE_SPLITTING/."""
 import numpy as np, pandas as pd, glob, os, sys
 from scipy.ndimage import uniform_filter1d
 from pyproj import Transformer
-HERE = os.path.dirname(os.path.abspath(__file__))
-ODSA = os.path.dirname(os.path.dirname(HERE))   # .../ODSA — current codebase
+HERE = os.path.dirname(os.path.abspath(__file__))            # .../v23
+ODSA = os.path.dirname(HERE)                                 # .../ODSA — current codebase
+OUT = os.path.join(HERE, "TESTING_LANDSCAPE_SPLITTING")      # this script's data/results folder
 sys.path.insert(0, ODSA)
 from loading import load_datasets
 from segmentation import split_into_segments
 from config import WINDOW_SIZE, STEP_SIZE, SMOOTHING_LENGTH, GRADIENT_THRESHOLD, Tee
 
 # s5 tests a NO-landscape-splitting run; this is a separate test artifact, NOT the
-# standard ODSA/Ockenden-regions (which IS landscape-split). Lives beside the script.
-NOSPLIT = os.path.join(HERE, "Ockenden-regions-No_Landscape_splitting-TEST", "window_csvs")
-sys.stdout = Tee(os.path.join(HERE, "s5_tz_overlap_log.txt"))
+# standard ODSA/Ockenden-regions (which IS landscape-split). Lives in the results folder.
+NOSPLIT = os.path.join(OUT, "Ockenden-regions-No_Landscape_splitting-TEST", "window_csvs")
+os.makedirs(OUT, exist_ok=True)
+sys.stdout = Tee(os.path.join(OUT, "s5_tz_overlap_log.txt"))
 transformer = Transformer.from_crs("EPSG:4326", "EPSG:3031", always_xy=True)
 W, STEP = WINDOW_SIZE/1000, STEP_SIZE/1000  # km
 

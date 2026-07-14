@@ -18,19 +18,21 @@ CONFOUND: changing WINDOW_SIZE also moves STEP_SIZE (= W/2) and SMOOTHING_LENGTH
 knob exactly as the pipeline wires it -- segmentation included. To vary the
 spectral window alone, decouple SMOOTHING_LENGTH from WINDOW_SIZE in config.py.
 
-Run:  python v23/window_size_sensitivity_test/run_sweep.py                # full sweep (30/50/75/100)
-      python v23/window_size_sensitivity_test/run_sweep.py --sizes 50     # cheap single-size spot-check
-      python v23/window_size_sensitivity_test/run_sweep.py --skip-runs    # rebuild table from existing runs/
-      python v23/window_size_sensitivity_test/run_sweep.py --skip-runs --plots   # (re)draw anisotropy panels
-      python v23/window_size_sensitivity_test/run_sweep.py --skip-runs --plots 0  # ...and don't gate on z
+Run from v23/; reads from and writes results to v23/window_size/.
+      python run_window_size_sweep.py                # full sweep (30/50/75/100)
+      python run_window_size_sweep.py --sizes 50     # cheap single-size spot-check
+      python run_window_size_sweep.py --skip-runs    # rebuild table from existing runs/
+      python run_window_size_sweep.py --skip-runs --plots   # (re)draw anisotropy panels
+      python run_window_size_sweep.py --skip-runs --plots 0  # ...and don't gate on z
 """
 import os, sys, subprocess
 from pathlib import Path
 import numpy as np, pandas as pd
 
-HERE = Path(__file__).resolve().parent          # .../v23/window_size_sensitivity_test
-ODSA = HERE.parents[1]                           # .../ODSA root (bed_analysis_23.py, config.py, weighted_anisotropy.py)
-RUNS = HERE / 'runs'
+HERE = Path(__file__).resolve().parent          # .../v23
+ODSA = HERE.parent                              # .../ODSA root (bed_analysis_23.py, config.py, weighted_anisotropy.py)
+OUT_ROOT = HERE / 'window_size'                 # this script's data/results folder
+RUNS = OUT_ROOT / 'runs'
 PLOT_Z_MIN = 1.5         # --plots only draws cells where |z| (unw or wt) reaches this; tune via `--plots <z>`
 sys.path.insert(0, str(ODSA))
 from weighted_anisotropy import fit_cos2, flow_weight  # noqa: E402
@@ -93,7 +95,7 @@ def build_table():
             row.update(_aniso(os.path.join(RUNS, 'segment_csvs', f'{region}{sfx}_segment_stats.csv'), 'seg'))
             rows.append(row)
     df = pd.DataFrame(rows)
-    out = os.path.join(HERE, 'window_size_comparison.csv')
+    out = os.path.join(OUT_ROOT, 'window_size_comparison.csv')
     df.to_csv(out, index=False)
     pd.set_option('display.width', 200)
     for region in REGIONS:
@@ -137,7 +139,7 @@ if __name__ == '__main__':
     if '--sizes' in sys.argv:
         SIZES_KM = [int(s) for s in sys.argv[sys.argv.index('--sizes') + 1].split(',')]
     if '--skip-runs' not in sys.argv:
-        os.makedirs(RUNS, exist_ok=True)
+        RUNS.mkdir(parents=True, exist_ok=True)
         for km in SIZES_KM:
             run_one(km)
     df = build_table()

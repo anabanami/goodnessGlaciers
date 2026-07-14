@@ -3,10 +3,19 @@ import re
 import sys
 
 
-# Window parameters (env-overridable for the window-size sweep; defaults unchanged)
+# Window parameters (env-overridable for the sensitivity sweeps)
 WINDOW_SIZE = int(os.environ.get('ODSA_WINDOW_SIZE', 50000))  # metres
 STEP_SIZE = WINDOW_SIZE // 2  # 50% overlap
-WINDOW_TYPE = os.environ.get('ODSA_WINDOW_TYPE', 'rectangular')
+
+# The production taper. Hann suppresses the spectral leakage that biases beta low in
+# proportion to beta (see 'Sensitivity analysis - window type'); 50% overlap satisfies
+# COLA, so adjacent Hann tapers sum to unity. Output names carry a suffix only for
+# non-standard windows, so the standard run keeps stable filenames.
+WINDOW_TYPES = ('rectangular', 'hann', 'tukey')
+STANDARD_WINDOW = 'hann'
+WINDOW_TYPE = os.environ.get('ODSA_WINDOW_TYPE', STANDARD_WINDOW)
+if WINDOW_TYPE not in WINDOW_TYPES:
+    raise ValueError(f'unknown WINDOW_TYPE {WINDOW_TYPE!r}; expected one of {WINDOW_TYPES}')
 
 # Peak masking parameters
 peak_masking_height_threshold = 2.0

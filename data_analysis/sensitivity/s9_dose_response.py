@@ -1,17 +1,21 @@
 """Recover §9 dose-response inputs: n and missing-decade range for the
-window-level beta vs missing-band regression (truncated population)."""
+window-level beta vs missing-band regression (truncated population).
+
+Run from v23/; writes results to v23/TESTING_LANDSCAPE_SPLITTING/."""
 import numpy as np, pandas as pd, os
 from pyproj import Transformer
 from scipy import stats as sst
 import sys
-HERE = os.path.dirname(os.path.abspath(__file__))
-ODSA = os.path.dirname(os.path.dirname(HERE))   # .../ODSA — current codebase + results
+HERE = os.path.dirname(os.path.abspath(__file__))            # .../v23
+ODSA = os.path.dirname(HERE)                                 # .../ODSA — current codebase + results
+OUT = os.path.join(HERE, "TESTING_LANDSCAPE_SPLITTING")      # this script's results folder
 sys.path.insert(0, ODSA)
 from loading import load_datasets
 from segmentation import detect_data_gaps, split_into_segments, split_by_landscape
 from config import WINDOW_SIZE, Tee
 RESULTS = os.path.join(ODSA, "Ockenden-regions")  # most recent codebase run
-sys.stdout = Tee(os.path.join(HERE, "s9_dose_response_log.txt"))
+os.makedirs(OUT, exist_ok=True)
+sys.stdout = Tee(os.path.join(OUT, "s9_dose_response_log.txt"))
 
 transformer = Transformer.from_crs("EPSG:4326", "EPSG:3031", always_xy=True)
 

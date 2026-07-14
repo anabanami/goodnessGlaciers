@@ -6,6 +6,11 @@ import os
 
 import xarray as xr
 
+# Flow direction is undefined where the REMA elevation difference across the
+# stencil does not exceed K_REJECT x the propagated DEM vertical error.
+REMA_SIGMA_Z = 1.0   # REMA 100m mosaic vertical error, m
+K_REJECT = 3.0
+
 
 class REMACache:
     """Cache for REMA DEM data to avoid repeated file I/O."""
@@ -73,7 +78,7 @@ def calculate_ice_thickness(surface_elevs, bedrock_elevs):
     return ice_thickness
 
 
-def extract_rema_flow_vector(x, y, dem_path, ice_thickness, cache=None):
+def extract_rema_flow_vector(x, y, dem_path, ice_thickness, cache=None, return_undefined=False):
     """
     Estimates the regional ice flow vector (-dS/dx, -dS/dy) from REMA.
 
@@ -83,8 +88,14 @@ def extract_rema_flow_vector(x, y, dem_path, ice_thickness, cache=None):
         ice_thickness: The baseline for the gradient calculation (meters).
                        McCormack et al. (2019) recommend ~10x ice thickness.
         cache: Optional REMACache instance. If None, uses global cache.
+        return_undefined: If True, also return the boolean mask of points
+                          rejected by the noise-floor guard (flat surface).
     Returns:
         flow_x, flow_y: Normalized vector components of the flow direction.
+        undefined (only if return_undefined): True where the surface gradient
+                          was below the DEM noise floor, so the bearing is
+                          undefined. Excludes NaN-thickness/NaN-DEM points,
+                          which are undefined for a different reason.
     """
     if cache is None:
         cache = _rema_cache
@@ -114,9 +125,15 @@ def extract_rema_flow_vector(x, y, dem_path, ice_thickness, cache=None):
     # Normalize vectors (we only care about direction, not speed)
     magnitude = np.sqrt(flow_x**2 + flow_y**2)
 
-    # Handle flat areas (avoid divide by zero)
-    magnitude[magnitude == 0] = 1.0
+    # Flat areas: the stencil elevation difference is indistinguishable from DEM
+    # noise, so the direction is undefined. NaN (not a sentinel) so degenerate
+    # points drop out of the nanmean window aggregation instead of averaging in.
+    dz = magnitude * (2 * delta)
+    undefined = dz < K_REJECT * np.sqrt(2) * REMA_SIGMA_Z   # False where dz is NaN
+    magnitude[undefined] = np.nan
 
+    if return_undefined:
+        return flow_x / magnitude, flow_y / magnitude, undefined
     return flow_x / magnitude, flow_y / magnitude
 
 

@@ -8,14 +8,18 @@ catches it by ~8 orders of magnitude. The two CSVs can differ at the 1-ULP (~1e-
 level from downstream float plumbing (segment β and window CSV β both trace to the
 same window_beta but reach the CSVs by different paths); that is not a violation.
 Joins on (trajectory, segment) and requires a unique window match. Exits nonzero on
-any violation so it can run as a test."""
+any violation so it can run as a test.
+
+Run from v23/; writes results to v23/TESTING_LANDSCAPE_SPLITTING/."""
 import csv, glob, os, sys
-HERE = os.path.dirname(os.path.abspath(__file__))
-ODSA = os.path.dirname(os.path.dirname(HERE))   # .../ODSA — current codebase + results
+HERE = os.path.dirname(os.path.abspath(__file__))            # .../v23
+ODSA = os.path.dirname(HERE)                                 # .../ODSA — current codebase + results
+OUT = os.path.join(HERE, "TESTING_LANDSCAPE_SPLITTING")      # this script's results folder
 sys.path.insert(0, ODSA)
 from config import Tee
 RESULTS = os.path.join(ODSA, "Ockenden-regions")  # most recent codebase run
-sys.stdout = Tee(os.path.join(HERE, "verify_single_window_invariant_log.txt"))
+os.makedirs(OUT, exist_ok=True)
+sys.stdout = Tee(os.path.join(OUT, "verify_single_window_invariant_log.txt"))
 
 TOL = 1e-9  # numeric tolerance — immune to 1-ULP CSV-plumbing noise, still catches the degeneracy
 

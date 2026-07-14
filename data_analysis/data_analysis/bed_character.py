@@ -2,7 +2,8 @@ import os, sys, glob, re
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.patches import Patch
+from matplotlib.colors import to_rgba
+from scipy.stats import norm, gaussian_kde
 from config import Tee, PROCESSING_FLAG_NOTE as _FLAG_NOTE, processing_flag_of as region_flag
 from plotting import flag_suptitle as _flag_suptitle
 
@@ -53,11 +54,53 @@ from loading import OUTPUT_BASE_PATH as _REGION_BASE
 OUTPUT_DIR = os.path.join(_REGION_BASE, 'bed_character/')
 
 
-def classify_beta(beta):
-    for name, lo, hi in BED_CLASSES:
-        if lo <= beta < hi:
-            return name
-    return 'unknown'
+CLASS_ORDER = [name for name, _, _ in BED_CLASSES]
+BED_EDGES = np.array([BED_CLASSES[0][1]] + [hi for _, _, hi in BED_CLASSES])  # [-inf, 1.5, 2.0, 2.5, inf]
+P_COLS = [f'p_{name}' for name in CLASS_ORDER]
+
+# Excess beta uncertainty beyond the formal PSD-fit error, added in quadrature.
+# Stays 0.0: beta_uncertainty is a mild underestimate (the geomspace frequency
+# grid oversamples the window's Fourier resolution, so true sigma ~0.06 not
+# 0.043), but class composition is insensitive to sigma across any plausible
+# value. Per-window class_confidence is NOT, so don't quote it as measured.
+# See v23/beta_sigma_calibration.py and "Sensitivity test - beta_sigma".
+SIGMA_EXTRA = 0.0
+
+
+def add_soft_membership(df, sigma_extra=None):
+    """Per-window class membership P(class | beta, sigma).
+
+    The class boundaries are conventions on a continuous variable, and beta is a
+    fit with a standard error, so a hard label discards real information near a
+    threshold. Treating beta as Normal(beta, sigma) gives each window a fractional
+    membership in every class; sigma -> 0 recovers the hard threshold assignment.
+
+    sigma = sqrt(beta_uncertainty**2 + sigma_extra**2); see SIGMA_EXTRA.
+    """
+    sigma_extra = SIGMA_EXTRA if sigma_extra is None else sigma_extra
+    b = df['beta'].to_numpy(float)
+    s = (df['beta_uncertainty'].to_numpy(float) if 'beta_uncertainty' in df.columns
+         else np.zeros(len(df)))
+    s = np.sqrt(np.nan_to_num(s) ** 2 + sigma_extra ** 2)
+    ok = np.isfinite(s) & (s > 0)
+
+    P = np.zeros((len(df), len(CLASS_ORDER)))
+    if ok.any():
+        P[ok] = np.diff(norm.cdf(BED_EDGES[None, :], b[ok, None], s[ok, None]), axis=1)
+    if (~ok).any():  # no usable sigma -> degenerate one-hot (hard assignment)
+        P[~ok, np.searchsorted(BED_EDGES[1:-1], b[~ok], side='right')] = 1.0
+
+    df[P_COLS] = P
+    df['bed_class'] = [CLASS_ORDER[i] for i in P.argmax(1)]  # MAP label, for description
+    df['class_confidence'] = P.max(1)                        # 1.0 = unambiguous, 0.5 = coin-flip
+    return df
+
+
+def expected_fractions(g):
+    """Expected class fractions for a group of windows, with Poisson-binomial SE."""
+    P = g[P_COLS].to_numpy()
+    n = len(g)
+    return P.mean(0), np.sqrt((P * (1 - P)).sum(0)) / n
 
 
 def classify_relief(relief):
@@ -110,14 +153,18 @@ def select_region(csvs):
 
 
 def segment_summary(df):
-    """Per-segment bed character summary."""
+    """Per-segment bed character summary.
+
+    Class composition is the expectation over soft memberships, not a hard count:
+    a window straddling a threshold contributes fractionally to both classes.
+    """
     rows = []
     for (traj, seg), g in df.groupby(['trajectory', 'segment']):
         n = len(g)
-        dominant = g['bed_class'].mode().iloc[0]
-        agreement = (g['bed_class'] == dominant).mean()
-        class_counts = g['bed_class'].value_counts()
-        class_str = ', '.join(f"{c} {v}" for c, v in class_counts.items())
+        frac, frac_se = expected_fractions(g)
+        dominant = CLASS_ORDER[int(frac.argmax())]
+        class_str = ', '.join(f"{c} {f * n:.1f}" for c, f in zip(CLASS_ORDER, frac)
+                              if f * n >= 0.05)
 
         row = {
             'trajectory': traj,
@@ -127,10 +174,13 @@ def segment_summary(df):
             'beta_iqr': g['beta'].quantile(0.75) - g['beta'].quantile(0.25) if n > 1 else np.nan,
             'relief_median': g['relief_m'].median(),
             'bed_class': dominant,
-            'agreement': agreement,
+            'agreement': float(frac.max()),                     # expected fraction in dominant class
+            'class_confidence': float(g['class_confidence'].mean()),
             'class_detail': class_str,
             'relief_class': classify_relief(g['relief_m'].median()),
         }
+        row.update({f'frac_{c}': f for c, f in zip(CLASS_ORDER, frac)})
+        row.update({f'frac_{c}_se': e for c, e in zip(CLASS_ORDER, frac_se)})
         if 'psd_amplitude_1km' in g.columns:
             row['psd_amp_1km_median'] = g['psd_amplitude_1km'].median()
             row['psd_amp_1km_iqr'] = (g['psd_amplitude_1km'].quantile(0.75)
@@ -150,24 +200,29 @@ def print_summary(summary, region_name, df, pflag=None):
         print(f"  Processing: {_FLAG_NOTE.get(pflag, pflag)}")
     print(f"{'='*80}")
     print(f"{'Traj':>8s} {'Seg':>4s} {'n':>3s} {'β_med':>6s} {'β_IQR':>6s} "
-          f"{'Relief':>7s} {'A_1km':>6s} {'Bed Class':>14s} {'Agree':>6s}  Detail")
-    print(f"{'-'*90}")
+          f"{'Relief':>7s} {'A_1km':>6s} {'Bed Class':>14s} {'Agree':>6s} {'Conf':>5s}  Detail")
+    print(f"{'-'*98}")
     for _, r in summary.iterrows():
         iqr = f"{r['beta_iqr']:.2f}" if np.isfinite(r['beta_iqr']) else '—'
         agree = f"{r['agreement']:.0%}" if r['n_windows'] > 1 else '(1win)'
+        conf = f"{r['class_confidence']:.0%}"
         amp = f"{r['psd_amp_1km_median']:.1f}" if 'psd_amp_1km_median' in r and np.isfinite(r['psd_amp_1km_median']) else '—'
         print(f"{r['trajectory']:>8} {r['segment']:>4.0f} {r['n_windows']:>3.0f} "
               f"{r['beta_median']:>6.2f} {iqr:>6s} {r['relief_median']:>7.0f} "
-              f"{amp:>6s} {r['bed_class']:>14s} {agree:>6s}  {r['class_detail']}")
+              f"{amp:>6s} {r['bed_class']:>14s} {agree:>6s} {conf:>5s}  {r['class_detail']}")
 
-    # Region totals
+    # Region totals — expected composition over soft memberships, not hard counts
     n = len(df)
-    counts = df['bed_class'].value_counts()
-    parts = ' | '.join(f"{c} {v/n:.0%}" for c, v in counts.items())
-    print(f"{'-'*90}")
+    frac, frac_se = expected_fractions(df)
+    parts = ' | '.join(f"{c} {f:.0%}±{e:.0%}" for c, f, e in zip(CLASS_ORDER, frac, frac_se)
+                       if f >= 0.005)
+    print(f"{'-'*98}")
     print(f"  Region: {n} windows | {parts}")
     print(f"  β: median {df['beta'].median():.2f}, "
           f"IQR [{df['beta'].quantile(0.25):.2f} – {df['beta'].quantile(0.75):.2f}]")
+    amb = (df['class_confidence'] < 0.9).mean()
+    print(f"  Class confidence: median {df['class_confidence'].median():.0%}, "
+          f"{amb:.0%} of windows ambiguous (<90%)")
     if 'psd_amplitude_1km' in df.columns:
         print(f"  PSD amp @ 1 km: median {df['psd_amplitude_1km'].median():.2f}, "
               f"IQR [{df['psd_amplitude_1km'].quantile(0.25):.2f} – {df['psd_amplitude_1km'].quantile(0.75):.2f}]")
@@ -179,29 +234,28 @@ def plot_bed_character(df, summary, region_name, pflag=None):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7),
                                     gridspec_kw={'width_ratios': [1, 1.2]})
 
-    # --- Left: beta histogram colored by class ---
-    # Build bin edges that always include the class boundaries
+    # --- Left: beta density (KDE) shaded by class region ---
+    # A continuous density decouples the distribution shape from the discrete
+    # class labels: color follows the β-axis thresholds, not per-window class,
+    # so there is no seam where windows straddle a boundary. If a real density
+    # peak sits on a threshold, the smooth curve still shows it (diagnostic).
     boundaries = [1.5, 2.0, 2.5]
-    beta_min, beta_max = df['beta'].min() - 0.1, df['beta'].max() + 0.1
-    bin_width = 0.1
-    bin_edges = np.arange(beta_min, beta_max + bin_width, bin_width)
-    # Insert class boundaries and re-sort so no bin straddles two classes
-    bin_edges = np.unique(np.sort(np.concatenate([bin_edges, boundaries])))
-    # Single stacked histogram with pre-separated data
-    class_order = [name for name, _, _ in BED_CLASSES]
-    class_data = [df.loc[df['bed_class'] == name, 'beta'].values for name in class_order]
-    class_colors = [BED_COLORS[name] for name in class_order]
-    # Filter empties
-    keep = [len(d) > 0 for d in class_data]
-    ax1.hist([d for d, k in zip(class_data, keep) if k],
-             bins=bin_edges, stacked=True,
-             color=[c for c, k in zip(class_colors, keep) if k],
-             label=[n for n, k in zip(class_order, keep) if k],
-             edgecolor='white', linewidth=0.5)
+    beta = df['beta'].dropna().values
+    beta_min, beta_max = beta.min() - 0.1, beta.max() + 0.1
+    grid = np.linspace(beta_min, beta_max, 512)
+    dens = gaussian_kde(beta)(grid)
+    # Fill under the curve, colored by which class region each grid point is in
+    for name, lo, hi in BED_CLASSES:
+        seg = (grid >= lo) & (grid < hi)
+        if seg.any():
+            ax1.fill_between(grid, 0, dens, where=seg, color=BED_COLORS[name],
+                             alpha=0.55, label=name, linewidth=0)
+    ax1.plot(grid, dens, color='0.25', lw=1.2)
     for b in boundaries:
         ax1.axvline(b, color='k', ls='--', lw=1, alpha=0.6)
+    ax1.set_ylim(bottom=0)
     ax1.set_xlabel(r'$\beta$', fontsize=12)
-    ax1.set_ylabel('Count', fontsize=12)
+    ax1.set_ylabel('Density', fontsize=12)
     ax1.set_title('Window β distribution', fontsize=12)
     ax1.legend(fontsize=9)
     ax1.grid(True, alpha=0.3)
@@ -212,15 +266,9 @@ def plot_bed_character(df, summary, region_name, pflag=None):
     class_fractions = {name: [] for name, _, _ in BED_CLASSES}
 
     for _, r in summary.iterrows():
-        label = f"{r['trajectory']} s{r['segment']:.0f}"
-        seg_labels.append(label)
-        detail = r['class_detail']
-        # Parse class counts from detail string
-        total = r['n_windows']
+        seg_labels.append(f"{r['trajectory']} s{r['segment']:.0f}")
         for name, _, _ in BED_CLASSES:
-            # Count from the original df
-            mask = (df['trajectory'] == r['trajectory']) & (df['segment'] == r['segment']) & (df['bed_class'] == name)
-            class_fractions[name].append(mask.sum() / total)
+            class_fractions[name].append(r[f'frac_{name}'])  # expected, not hard count
 
     y_pos = np.arange(len(seg_labels))
 
@@ -248,7 +296,7 @@ def plot_bed_character(df, summary, region_name, pflag=None):
 
     ax2.set_yticks(y_pos)
     ax2.set_yticklabels(seg_labels, fontsize=7)
-    ax2.set_xlabel('Fraction', fontsize=12)
+    ax2.set_xlabel('Expected fraction', fontsize=12)
     ax2.set_xlim(0, 1)
     ax2.invert_yaxis()
     ax2.legend(fontsize=9, loc='lower right')
@@ -289,12 +337,19 @@ def plot_beta_along_track(df, region_name, csv_path, pflag=None):
         dist = g['window_id'].values * step_km
         beta = g['beta'].values
 
-        # Plot colored scatter + connecting line
+        # Plot colored scatter + connecting line. Marker opacity tracks class
+        # confidence, so windows sitting near a threshold read as uncertain.
+        conf = g['class_confidence'].values
         ax.plot(dist, beta, color='0.6', lw=0.8, zorder=1)
+        if 'beta_uncertainty' in g.columns:
+            ax.errorbar(dist, beta, yerr=g['beta_uncertainty'].values, fmt='none',
+                        ecolor='0.5', elinewidth=0.7, capsize=1.5, zorder=1)
         for name, lo, hi in BED_CLASSES:
             mask = g['bed_class'].values == name
             if mask.any():
-                ax.scatter(dist[mask], beta[mask], c=BED_COLORS[name],
+                rgba = np.tile(to_rgba(BED_COLORS[name]), (mask.sum(), 1))
+                rgba[:, 3] = 0.25 + 0.75 * conf[mask]  # 0.5 conf -> faint, 1.0 -> solid
+                ax.scatter(dist[mask], beta[mask], c=rgba,
                            s=30, label=name, zorder=2, edgecolors='k', linewidths=0.3)
 
         for b in boundaries:
@@ -321,27 +376,24 @@ def plot_beta_along_track(df, region_name, csv_path, pflag=None):
     print(f"  Along-track plot saved: {out_path}")
 
 
-ELEV_COLORS = {
-    'submerged': '#2166ac',
-    'emerged':  '#b2182b',
-    'elevated':  '#762a83',
-}
-
-
 def plot_bed_elevation_heatmap(df, region_name, pflag=None):
-    """Contingency heatmap of bed_class vs elevation_class (window counts)."""
+    """Contingency heatmap of bed class vs elevation_class (expected window counts).
+
+    Cells are sums of soft memberships, so a boundary-straddling window is split
+    across bed classes rather than being forced into one cell.
+    """
     if 'elevation_class' not in df.columns:
         return
 
-    bed_order = [name for name, _, _ in BED_CLASSES]
     elev_order = [name for name, _, _ in ELEVATION_CLASSES]
 
-    # Build counts matrix
-    counts = pd.crosstab(df['bed_class'], df['elevation_class'])
-    counts = counts.reindex(index=bed_order, columns=elev_order, fill_value=0)
+    # Expected counts: sum memberships within each elevation class
+    counts = df.groupby('elevation_class')[P_COLS].sum().T
+    counts.index = CLASS_ORDER
+    counts = counts.reindex(columns=elev_order, fill_value=0.0)
 
     # Drop empty rows/columns
-    counts = counts.loc[counts.sum(axis=1) > 0, counts.sum(axis=0) > 0]
+    counts = counts.loc[counts.sum(axis=1) > 0.05, counts.sum(axis=0) > 0.05]
     if counts.empty:
         return
 
@@ -355,7 +407,7 @@ def plot_bed_elevation_heatmap(df, region_name, pflag=None):
             val = counts.values[i, j]
             pct = val / total * 100
             color = 'white' if val > total * 0.3 else 'black'
-            ax.text(j, i, f'{val}\n({pct:.0f}%)', ha='center', va='center',
+            ax.text(j, i, f'{val:.1f}\n({pct:.0f}%)', ha='center', va='center',
                     fontsize=10, color=color, fontweight='bold')
 
     ax.set_xticks(range(counts.shape[1]))
@@ -364,9 +416,9 @@ def plot_bed_elevation_heatmap(df, region_name, pflag=None):
     ax.set_yticklabels(counts.index, fontsize=11)
     ax.set_xlabel('Elevation class', fontsize=12)
     ax.set_ylabel('Bed class (β)', fontsize=12)
-    ax.set_title(f'n={total} windows', fontsize=10)
+    ax.set_title(f'n={total:.0f} windows (expected counts)', fontsize=10)
     _flag_suptitle(fig, f'Bed class × Elevation — {region_name}', pflag, fontsize=13)
-    fig.colorbar(im, ax=ax, label='Window count', shrink=0.8)
+    fig.colorbar(im, ax=ax, label='Expected window count', shrink=0.8)
     plt.tight_layout()
 
     out_path = os.path.join(OUTPUT_DIR, f'{region_name}_bed_elevation_heatmap.png')
@@ -385,15 +437,17 @@ def process_region(region_name, csv_path):
 
     pflag = region_flag(df)
 
-    # Classify windows
-    df['bed_class'] = df['beta'].apply(classify_beta)
+    # Classify windows. bed_class is the MAP label (descriptive); the p_* columns
+    # carry the soft membership used for all quantitative summaries.
+    df = add_soft_membership(df)
     df['relief_class'] = df['relief_m'].apply(classify_relief)
     if 'bed_elev_mean' in df.columns:
         df['elevation_class'] = df['bed_elev_mean'].apply(classify_elevation)
 
     # Write updated window CSV with classification columns (all windows)
     df.to_csv(csv_path, index=False)
-    print(f"  Updated {csv_path} with bed_class, relief_class, elevation_class columns")
+    print(f"  Updated {csv_path} with bed_class, class_confidence, {', '.join(P_COLS)}, "
+          f"relief_class, elevation_class columns")
 
     # Exclude transition windows from β analysis
     n_trans = df['is_transition'].sum() if 'is_transition' in df.columns else 0

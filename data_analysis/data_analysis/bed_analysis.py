@@ -5,7 +5,7 @@ from pyproj import Transformer
 import os
 import sys
 
-from config import (WINDOW_SIZE, STEP_SIZE, WINDOW_TYPE,
+from config import (WINDOW_SIZE, STEP_SIZE, WINDOW_TYPE, STANDARD_WINDOW,
                     peak_masking_height_threshold, bin_buffer,
                     Tee, get_region_folder, ensure_output_dirs)
 from loading import  OUTPUT_BASE_PATH, load_datasets
@@ -57,7 +57,7 @@ def calculate_flow_incidence(x, y, flow_x, flow_y):
     return np.minimum(angle, 180 - angle)
 
 
-def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size, flow_angular_diff=None, flow_speed=None, seg_x=None, seg_y=None):
+def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size, flow_angular_diff=None, flow_speed=None, seg_x=None, seg_y=None, flow_undefined=None):
     dx_median = np.median(np.diff(dist)) if len(dist) > 1 else 100
     if dx_median == 0: dx_median = 15.0
 
@@ -159,6 +159,16 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
             else:
                 feature_stats['measures_speed_mean'] = np.nan
 
+            # Fraction of the window where the surface gradient fell below the DEM
+            # noise floor, so the flow bearing (and hence the incidence angle) is
+            # undefined. These points drop out of the nanmeans above, so a high
+            # fraction means flow_error_mean rests on few points: treat theta with
+            # caution (flat surface: subglacial lake, divide or shelf).
+            if flow_undefined is not None:
+                feature_stats['flow_undefined_frac'] = float(np.mean(flow_undefined[fit_mask]))
+            else:
+                feature_stats['flow_undefined_frac'] = np.nan
+
             large_features.append(feature_stats)
 
         current_start += step_size
@@ -194,7 +204,7 @@ def analyse_bedrock():
         print(f"\nStarting analysis of {dataset_name}...")
 
         region_folder = get_region_folder(dataset_name)
-        window_suffix = f"_w{WINDOW_SIZE // 1000}km" if WINDOW_TYPE == 'rectangular' else f"_w{WINDOW_SIZE // 1000}km_{WINDOW_TYPE}"
+        window_suffix = f"_w{WINDOW_SIZE // 1000}km" if WINDOW_TYPE == STANDARD_WINDOW else f"_w{WINDOW_SIZE // 1000}km_{WINDOW_TYPE}"
         region_folder = f"{region_folder}{window_suffix}"
         output_paths = ensure_output_dirs(OUTPUT_BASE_PATH, region_folder)
         print(f"  Output folder: {output_paths['region']}")
@@ -267,7 +277,8 @@ def analyse_bedrock():
                 global_relief = bedrock_segment_elev.max() - bedrock_segment_elev.min()
                 valid_segments.append((segment_data, segment_distance))
 
-                vx, vy = extract_rema_flow_vector(seg_x, seg_y, dem_path, valid_ice_thickness)
+                vx, vy, flow_undefined = extract_rema_flow_vector(
+                    seg_x, seg_y, dem_path, valid_ice_thickness, return_undefined=True)
                 invalid_mask = np.isnan(valid_ice_thickness)
                 vx[invalid_mask] = np.nan
                 vy[invalid_mask] = np.nan
@@ -285,13 +296,13 @@ def analyse_bedrock():
                         segment_distance, bedrock_segment_elev, incidence_array,
                         window_size=segment_len_m, step_size=segment_len_m,
                         flow_angular_diff=angular_diff, flow_speed=measures_speed,
-                        seg_x=seg_x, seg_y=seg_y)
+                        seg_x=seg_x, seg_y=seg_y, flow_undefined=flow_undefined)
                 else:
                     avg_psd, freqs, window_stats, dx_median, psd_weights = analyse_sliding_windows(
                         segment_distance, bedrock_segment_elev, incidence_array,
                         window_size=WINDOW_SIZE, step_size=STEP_SIZE,
                         flow_angular_diff=angular_diff, flow_speed=measures_speed,
-                        seg_x=seg_x, seg_y=seg_y)
+                        seg_x=seg_x, seg_y=seg_y, flow_undefined=flow_undefined)
 
                 if window_stats:
                     max_relief_window = max(window_stats, key=lambda x: x['local_relief_m'])
@@ -320,6 +331,7 @@ def analyse_bedrock():
                     'flow_error_mean': np.nanmean(angular_diff),
                     'flow_error_median': np.nanmedian(angular_diff),
                     'measures_speed_mean': np.nanmean(measures_speed),
+                    'flow_undefined_frac': float(np.mean(flow_undefined)),
                     'is_transition': is_transition,
                     'processing_flag': pflag,
                     'window_stats': [{**w, 'segment': seg_idx + 1, 'is_transition': is_transition, 'processing_flag': pflag} for w in window_stats]
@@ -415,7 +427,7 @@ def analyse_bedrock():
             if segment_results:
                 combined_stats = {}
                 list_keys = ['dominant_wavelengths', 'confirmed_wavelengths', 'candidate_wavelengths', 'window_stats']
-                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'psd_intercept', 'psd_intercept_uncertainty', 'flow_incidence_deg', 'flow_error_mean', 'flow_error_median', 'measures_speed_mean', 'elevation_min', 'elevation_max', 'is_transition']
+                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'psd_intercept', 'psd_intercept_uncertainty', 'flow_incidence_deg', 'flow_error_mean', 'flow_error_median', 'measures_speed_mean', 'flow_undefined_frac', 'elevation_min', 'elevation_max', 'is_transition']
 
                 for key in segment_results[0].keys():
                     values = [seg[key] for seg in segment_results if key in seg]
@@ -561,13 +573,14 @@ if __name__ == "__main__":
                     'flow_error_mean': w.get('flow_error_mean'),
                     'flow_error_median': w.get('flow_error_median'),
                     'measures_speed_mean': w.get('measures_speed_mean'),
+                    'flow_undefined_frac': w.get('flow_undefined_frac'),
                     'center_x': w.get('center_x'),
                     'center_y': w.get('center_y'),
                     'azimuth_deg': w.get('azimuth_deg'),
                     'is_transition': w.get('is_transition', False),
                     'processing_flag': w.get('processing_flag')
                 })
-        csv_suffix = f"_w{WINDOW_SIZE // 1000}km" if WINDOW_TYPE == 'rectangular' else f"_w{WINDOW_SIZE // 1000}km_{WINDOW_TYPE}"
+        csv_suffix = f"_w{WINDOW_SIZE // 1000}km" if WINDOW_TYPE == STANDARD_WINDOW else f"_w{WINDOW_SIZE // 1000}km_{WINDOW_TYPE}"
         region_output = os.path.join(OUTPUT_BASE_PATH, f'{get_region_folder(region_name)}{csv_suffix}')
         window_csv_dir = os.path.join(OUTPUT_BASE_PATH, 'window_csvs')
         os.makedirs(window_csv_dir, exist_ok=True)
@@ -595,6 +608,7 @@ if __name__ == "__main__":
             flow_err_means = traj_data.get('flow_error_mean', [])
             flow_err_medians = traj_data.get('flow_error_median', [])
             speed_means = traj_data.get('measures_speed_mean', [])
+            flow_undef_fracs = traj_data.get('flow_undefined_frac', [])
             elev_mins = traj_data.get('elevation_min', [])
             elev_maxs = traj_data.get('elevation_max', [])
             is_trans = traj_data.get('is_transition', [])
@@ -616,6 +630,7 @@ if __name__ == "__main__":
                     'flow_error_mean': flow_err_means[i] if i < len(flow_err_means) else np.nan,
                     'flow_error_median': flow_err_medians[i] if i < len(flow_err_medians) else np.nan,
                     'measures_speed_mean': speed_means[i] if i < len(speed_means) else np.nan,
+                    'flow_undefined_frac': flow_undef_fracs[i] if i < len(flow_undef_fracs) else np.nan,
                     'elevation_min': elev_mins[i] if i < len(elev_mins) else np.nan,
                     'elevation_max': elev_maxs[i] if i < len(elev_maxs) else np.nan,
                     'is_transition': is_trans[i] if i < len(is_trans) else False,

@@ -7,6 +7,9 @@ to results), not just where segments split. Key questions:
   3. Are within-segment variance and fit uncertainty stable?
 
 Also tests TZ-merge distance (2, 5, 10 km) if data directories exist.
+
+Run from v23/; reads from and writes results (log + figures) to
+v23/TESTING_LANDSCAPE_SPLITTING/gradient_threshold_sensitivity/.
 """
 import sys
 import pandas as pd
@@ -15,7 +18,9 @@ import numpy as np
 from pathlib import Path
 from scipy import stats
 
-BASE = Path(__file__).parent / 'gradient_threshold_sensitivity'  # this script's own data + output tree
+HERE = Path(__file__).resolve().parent                           # .../v23
+OUT_ROOT = HERE / 'TESTING_LANDSCAPE_SPLITTING'
+BASE = OUT_ROOT / 'gradient_threshold_sensitivity'  # this script's own data + output tree
 THRESHOLDS = [10, 15, 20]
 MERGE_DISTANCES = [2, 5, 10]  # km
 colors = ['#66c2a5', '#fc8d62', '#8da0cb']
@@ -33,6 +38,7 @@ class _Tee:
         for s in self.streams:
             s.flush()
 
+BASE.mkdir(parents=True, exist_ok=True)
 _log = open(BASE / 'gradient_threshold_sensitivity.log', 'w')
 sys.stdout = _Tee(sys.__stdout__, _log)
 

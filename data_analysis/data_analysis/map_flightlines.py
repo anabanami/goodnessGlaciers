@@ -6,11 +6,13 @@ using Antarctic Polar Stereographic projection (EPSG:3031).
 """
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 from pyproj import Transformer
 import os
+import re
 
 import sys
 from config import Tee, PROCESSING_FLAG_COLORS, PROCESSING_FLAG_NOTE, processing_flag_of
@@ -217,6 +219,85 @@ def plot_tracks_by_migration(coords, output_path='antarctica_tracks_migration.pn
     plt.close()
 
 
+TIER_ORDER = ['A', 'B', 'C']   # good -> poor; ramp sampled in this order
+
+
+def load_region_tiers(directory=None):
+    """region-stem -> (tier, tier_driver) from coverage_summary.csv (written by coverage_tags.py).
+
+    `tier_driver` is the signature of what failed (sparsity/directionality/sample,
+    or '-' for a clean A). Region names carry a window suffix (`_w50km`) that the
+    dataset labels don't, so we strip `_w<N>km` to recover the stem `coords` uses.
+    """
+    directory = directory or _REGION_BASE
+    csv = os.path.join(directory, 'coverage_csvs', 'coverage_summary.csv')
+    if not os.path.exists(csv):
+        print(f"⚠️ {csv} not found — run coverage_tags.py first. Skipping tier map.")
+        return None
+    df = pd.read_csv(csv)
+    stem = df['region'].str.replace(r'_w\d+km$', '', regex=True)
+    driver = df['tier_driver'].fillna('-') if 'tier_driver' in df else ['-'] * len(df)
+    return {s: (t, d) for s, t, d in zip(stem, df['tier'], driver)}
+
+
+def plot_tracks_by_tier(coords, output_path='antarctica_tracks_tier.png', directory=None):
+    """Regional track map coloured by data-intrinsic coverage tier (A/B/C) from coverage_tags.py."""
+    from matplotlib.lines import Line2D
+
+    tiers = load_region_tiers(directory)
+    if tiers is None:
+        return
+
+    # sequential ramp sampled at the ordered tiers; NA -> neutral grey (off-ramp)
+    ramp = plt.cm.viridis(np.linspace(0.9, 0.15, len(TIER_ORDER)))
+    tier_color = {t: ramp[i] for i, t in enumerate(TIER_ORDER)}
+    NA_COLOR = '0.6'
+
+    antarctic_stereo = ccrs.SouthPolarStereo()
+    all_lons = np.concatenate([data['lon'] for data in coords.values()])
+    all_lats = np.concatenate([data['lat'] for data in coords.values()])
+    padding = 2.0
+    lon_min, lon_max = all_lons.min() - padding, all_lons.max() + padding
+    lat_min, lat_max = all_lats.min() - padding, all_lats.max() + padding
+
+    fig = plt.figure(figsize=(14, 10))
+    ax = fig.add_subplot(1, 1, 1, projection=antarctic_stereo)
+    ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
+    ax.add_feature(cfeature.LAND, facecolor='#e8e8e8', edgecolor='black', linewidth=0.5)
+    ax.add_feature(cfeature.OCEAN, facecolor='#cce5ff', alpha=0.5)
+    ax.coastlines(resolution='10m', linewidth=0.8)
+    gl = ax.gridlines(draw_labels=True, linewidth=0.5, alpha=0.5, linestyle='--', color='gray')
+    gl.top_labels = False
+    gl.right_labels = False
+
+    # one legend entry per dataset: name, tier, and what failed (tier_driver)
+    entries = []   # (tier, name, driver)
+    for name, data in coords.items():
+        tier, driver = tiers.get(name, ('NA', '-'))
+        if name not in tiers:
+            print(f"  ⚠️ no coverage tier for '{name}' — drawn as NA")
+        entries.append((tier, name, driver))
+        ax.scatter(data['lon'], data['lat'], color=[tier_color.get(tier, NA_COLOR)],
+                   s=2, alpha=0.8, transform=ccrs.PlateCarree())
+
+    # sort by tier (A->C, NA last) then name; label shows the driver signature
+    rank = {t: i for i, t in enumerate(TIER_ORDER)}
+    entries.sort(key=lambda e: (rank.get(e[0], len(TIER_ORDER)), e[1]))
+    handles = []
+    for tier, name, driver in entries:
+        sig = '' if driver in ('-', '', None) else f' ({driver})'
+        handles.append(Line2D([], [], marker='o', ls='', color=tier_color.get(tier, NA_COLOR),
+                              label=f'{name} — {tier}{sig}'))
+    ax.legend(handles=handles, loc='lower left', fontsize=7, framealpha=0.85,
+              markerscale=2, title='Coverage tier (driver)')
+    ax.set_title('Radar Flight Tracks — Coverage Tier', fontsize=12)
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f"Saved coverage-tier map to {output_path}")
+    plt.close()
+
+
 def plot_tracks_with_elevation(coords, datasets, output_path='antarctica_tracks_elevation.png'):
     """
     Plot tracks colored by bedrock elevation.
@@ -389,13 +470,14 @@ if __name__ == "__main__":
     plot_antarctica_overview(coords, os.path.join(OUTPUT_BASE_PATH, 'antarctica_tracks_overview.png'))
     plot_regional_detail(coords, os.path.join(OUTPUT_BASE_PATH, 'antarctica_tracks_regional.png'))
     plot_tracks_by_migration(coords, os.path.join(OUTPUT_BASE_PATH, 'antarctica_tracks_migration.png'))
+    plot_tracks_by_tier(coords, os.path.join(OUTPUT_BASE_PATH, 'antarctica_tracks_tier.png'))
     plot_tracks_with_elevation(coords, datasets, os.path.join(OUTPUT_BASE_PATH, 'antarctica_tracks_elevation.png'))
-
     plot_tracks_on_ockenden(coords, os.path.join(OUTPUT_BASE_PATH, 'tracks_on_ockenden.png'))
 
     print("\nDone! Generated maps:")
     print("  - antarctica_tracks_overview.png (full continent)")
     print("  - antarctica_tracks_regional.png (zoomed to data)")
     print("  - antarctica_tracks_migration.png (colored by migration status)")
+    print("  - antarctica_tracks_tier.png (colored by coverage tier)")
     print("  - antarctica_tracks_elevation.png (colored by bed elevation)")
     print("  - tracks_on_ockenden.png (tracks on Ockenden Fig 4)")

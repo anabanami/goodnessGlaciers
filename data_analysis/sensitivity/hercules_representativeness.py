@@ -2,15 +2,21 @@
 homogeneous basin (enters regional beta) vs flank/transition (TZ) vs dropped
 below the 10 km / 50 pt gate. Uses the real split_by_landscape with the gate
 disabled to get every pre-gate piece + its is_transition flag, then applies the
-gate to lengths. Survivor counts are cross-checked against the gated call."""
+gate to lengths. Survivor counts are cross-checked against the gated call.
+
+Run from v23/; writes results to v23/TESTING_LANDSCAPE_SPLITTING/."""
 import numpy as np
 from pyproj import Transformer
 import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))  # .../ODSA — current codebase
+HERE = os.path.dirname(os.path.abspath(__file__))            # .../v23
+ODSA = os.path.dirname(HERE)                                 # .../ODSA — current codebase
+OUT = os.path.join(HERE, "TESTING_LANDSCAPE_SPLITTING")      # this script's results folder
+sys.path.insert(0, ODSA)
 from loading import load_datasets
 from segmentation import split_into_segments, split_by_landscape
 from config import Tee
-sys.stdout = Tee(os.path.join(os.path.dirname(os.path.abspath(__file__)), "hercules_representativeness_log.txt"))
+os.makedirs(OUT, exist_ok=True)
+sys.stdout = Tee(os.path.join(OUT, "hercules_representativeness_log.txt"))
 
 MIN_KM, MIN_PTS, HERC = 10, 50, 'POLARGAP_2015_Fig2C_Hercules_Dome'
 tf = Transformer.from_crs("EPSG:4326", "EPSG:3031", always_xy=True)
