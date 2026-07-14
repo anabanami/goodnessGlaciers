@@ -48,15 +48,18 @@ all_beta = pd.concat(frames, ignore_index=True)
 beta = all_beta["beta"].values
 n = len(beta)
 
-# Pooled KDE — threshold-independent, computed once
-x_grid = np.linspace(0.5, 3.0, 500)
-kde = gaussian_kde(beta, bw_method=0.08)        # bandwidth 0.08 — tight enough
-                                                # to see structure, not so tight
-                                                # it's just noise
-density = kde(x_grid)
+# Pooled KDE — threshold-independent, computed once.
+# KDE_BW = None -> Scott's rule. Do NOT hand-tune this narrower. At bw=0.08 the KDE
+# resolves 6-13 "peaks" (noise) and invents a saddle near beta=2.0 that appears under
+# every taper and vanishes for any bw >= 0.15. Bandwidth stability is reported below;
+# trust no feature that does not survive it.
+KDE_BW = None
+x_grid = np.linspace(0.5, 3.5, 700)
+density = gaussian_kde(beta, bw_method=KDE_BW)(x_grid)
 
-# 1.8–2.5 sub-range used for structure / peak detection
-mask = (x_grid >= 1.8) & (x_grid <= 2.5)
+# Structure detection spans the full beta range. The modes (~1.6 and ~2.2) and the
+# valley between them lie OUTSIDE the old 1.8-2.5 window, which was blind to them.
+mask = (x_grid >= 1.2) & (x_grid <= 3.0)
 x_sub = x_grid[mask]
 d_sub = density[mask]
 
@@ -116,16 +119,37 @@ def shared():
     minima_idx = argrelmin(d_sub, order=15)[0]
     maxima_idx = argrelmin(-d_sub, order=15)[0]  # local maxima
 
-    print("\n── KDE structure between β=1.8 and β=2.5 ──")
+    print("\n── KDE structure (β = 1.2–3.0, Scott's-rule bandwidth) ──")
     print("Local maxima (peaks):")
     for i in maxima_idx:
         print(f"  β = {x_sub[i]:.3f}   density = {d_sub[i]:.4f}")
     print("Local minima (saddles):")
     for i in minima_idx:
         print(f"  β = {x_sub[i]:.3f}   density = {d_sub[i]:.4f}")
+    if len(maxima_idx) >= 2 and len(minima_idx) >= 1:
+        lo, hi = x_sub[maxima_idx[0]], x_sub[maxima_idx[1]]
+        v = [x_sub[i] for i in minima_idx if lo < x_sub[i] < hi]
+        if v:
+            print(f"\n  Data-driven cut (valley between the two modes): β = {v[0]:.3f}")
+            print("  NOTE: the modes track the *regions sampled* (ASB regions ~1.5,")
+            print("  POLARGAP/Recovery ~2.2-2.5), so this valley is a region-mixture")
+            print("  artifact, not a bed-physics boundary. It is not a threshold candidate.")
+
+    # ── Bandwidth stability — the only diagnostic that matters ────────
+    print("\n── Bandwidth stability (does the structure survive smoothing?) ──")
+    print(f"  {'bw':>6} {'peaks':>6}   modes                          valleys")
+    for bw in (0.08, 0.10, 0.15, 0.20, None):
+        d = gaussian_kde(beta, bw_method=bw)(x_grid)
+        pk, vl = argrelmin(-d, order=15)[0], argrelmin(d, order=15)[0]
+        lab = "scott" if bw is None else f"{bw:.2f}"
+        pks = ", ".join(f"{x_grid[i]:.2f}" for i in pk)
+        vls = ", ".join(f"{x_grid[i]:.2f}" for i in vl)
+        print(f"  {lab:>6} {len(pk):>6}   {pks:<30} {vls}")
+    print("  -> fine structure that only appears below bw≈0.15 is a smoothing")
+    print("     artifact. Only features stable up to Scott's rule are real.")
 
     # ── Per-region KDE peaks (table only; plots are per-candidate) ────
-    print("\n── Per-region KDE peaks (β = 1.8–2.5) ──")
+    print("\n── Per-region KDE peaks (β = 1.2–3.0) ──")
     print(f"  {'region':<55s}   n    peak β   density")
     print("  " + "─" * 85)
     for name, grp in all_beta.groupby("region"):
@@ -133,7 +157,7 @@ def shared():
         if len(b) < 10:
             print(f"  {name:<55s} {len(b):>4d}    (too few)")
             continue
-        d = gaussian_kde(b, bw_method=0.08)(x_grid)
+        d = gaussian_kde(b, bw_method=KDE_BW)(x_grid)
         d_sub_r = d[mask]
         max_idx_r = argrelmin(-d_sub_r, order=15)[0]
         if len(max_idx_r) > 0:
@@ -184,7 +208,7 @@ def run(threshold, outdir):
         if len(b) < 10:
             ax.set_title(f"{name}\n(n={len(b)}, too few)", fontsize=7)
             continue
-        d = gaussian_kde(b, bw_method=0.08)(x_grid)
+        d = gaussian_kde(b, bw_method=KDE_BW)(x_grid)
         ax.fill_between(x_grid, d, alpha=0.3, color="steelblue")
         ax.plot(x_grid, d, color="steelblue", lw=1.5)
         ax.axvline(threshold, color="red", ls="--", lw=1, alpha=0.7)
