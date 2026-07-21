@@ -28,12 +28,17 @@ BED_CLASSES = [
     ('soft',          2.5,     np.inf),
 ]
 
-# Relief thresholds — anchored to Ockenden et al. (2025) reference regions
+# Relief thresholds — anchored to Ockenden et al. (2026) reference regions
 RELIEF_CLASSES = [
     ('flat',        -np.inf, 350),
     ('subdued',     350,     800),
     ('mountainous', 800,     np.inf),
 ]
+
+# The two finite class boundaries, exposed so the derivation tool
+# (v23/relief_distribution.py) can cross-check its sweep value against the
+# adopted production value. Kept in step by that check, not by a shared source.
+RELIEF_THRESHOLDS = [hi for _, _, hi in RELIEF_CLASSES if np.isfinite(hi)]
 
 # Elevation thresholds — absolute bed elevation (m a.s.l.) [Siegert_2004, Frederick_2016]
 ELEVATION_CLASSES = [

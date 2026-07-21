@@ -1,4 +1,4 @@
-"""§5 spatial test, 9-region reproduction: do low-beta NO-split windows overlap a
+"""§5 spatial test, 7-region reproduction: do low-beta NO-split windows overlap a
 transition zone? Footprint overlap (window i spans [i*STEP, i*STEP+WINDOW] along its
 gap-segment) vs the pre-gate merged TZ extents from split_by_landscape's gradient detector.
 
@@ -16,7 +16,10 @@ from config import WINDOW_SIZE, STEP_SIZE, SMOOTHING_LENGTH, GRADIENT_THRESHOLD,
 
 # s5 tests a NO-landscape-splitting run; this is a separate test artifact, NOT the
 # standard ODSA/Ockenden-regions (which IS landscape-split). Lives in the results folder.
-NOSPLIT = os.path.join(OUT, "Ockenden-regions-No_Landscape_splitting-TEST", "window_csvs")
+# Must match OUTPUT_BASE_PATH in the snapshot's loading.py, which is what regenerates
+# this artifact. The older "-TEST" folder is a partial Jul-2026 run of the same code
+# (identical beta, fewer columns) and is no longer written to.
+NOSPLIT = os.path.join(OUT, "Ockenden-regions-No_Landscape_splitting-FIXED", "window_csvs")
 os.makedirs(OUT, exist_ok=True)
 sys.stdout = Tee(os.path.join(OUT, "s5_tz_overlap_log.txt"))
 transformer = Transformer.from_crs("EPSG:4326", "EPSG:3031", always_xy=True)
@@ -27,15 +30,21 @@ def tz_extents_km(seg_data, seg_dist):
     """Pre-gate merged transition zones, as (start_km, end_km) relative to segment start.
     Replicates split_by_landscape's detector verbatim (5 km merge)."""
     elev = seg_data['bedrock_altitude (m)'].values
-    dist = seg_dist.copy().astype(float)
-    for i in range(1, len(dist)):
-        if dist[i] <= dist[i-1]:
-            dist[i] = dist[i-1] + 1e-3
+    dist = np.asarray(seg_dist, dtype=float)
     if len(dist) < 2:
         return []
-    dx = np.median(np.diff(dist)) or 15.0
-    kp = int(SMOOTHING_LENGTH/dx); kp = max(3, kp if kp % 2 == 1 else kp+1)
-    grad = np.gradient(uniform_filter1d(elev, size=kp, mode='nearest'), dist/1000)
+    # Gradient-only median-spacing nudge, matching segmentation.split_by_landscape:
+    # duplicated points divide by ~0 km and spike the gradient to ~1e5 m/km. Extents
+    # below are reported against the measured distance.
+    _diffs = np.diff(dist)
+    _pos = _diffs[_diffs > 0]
+    min_step = float(np.median(_pos)) if _pos.size else 15.0
+    grad_dist = dist.copy()
+    for i in range(1, len(grad_dist)):
+        if grad_dist[i] <= grad_dist[i-1]:
+            grad_dist[i] = grad_dist[i-1] + min_step
+    kp = int(SMOOTHING_LENGTH/min_step); kp = max(3, kp if kp % 2 == 1 else kp+1)
+    grad = np.gradient(uniform_filter1d(elev, size=kp, mode='nearest'), grad_dist/1000)
     intz = np.abs(grad) > GRADIENT_THRESHOLD
     if not np.any(intz):
         return []
@@ -125,4 +134,4 @@ print(f"  low-β(<2.0) only:                       {rate(lowT)[0]}/{rate(lowT)[1
       f"= {100*rate(lowT)[0]/rate(lowT)[1]:.1f}% overlap a TZ")
 print(f"  median relief, low-β windows: overlap={lowT[lowT.ov>0].relief.median():.0f} m  "
       f"no-overlap={lowT[lowT.ov==0].relief.median():.0f} m")
-print("(flat regions Maud/Wilhelm/Aurora excluded: 0 TZ, splitting is a no-op there)")
+print("(flat regions Maud/Aurora excluded: 0 TZ, splitting is a no-op there)")

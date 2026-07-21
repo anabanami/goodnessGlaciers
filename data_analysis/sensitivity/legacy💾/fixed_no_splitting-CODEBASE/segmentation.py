@@ -38,23 +38,29 @@ def split_by_landscape(segment_data, segment_distance, smoothing_length=SMOOTHIN
                        gradient_threshold=GRADIENT_THRESHOLD,
                        min_segment_km=10, min_segment_pts=50):
     elev = segment_data['bedrock_altitude (m)'].values
-    dist = segment_distance.copy()
-
-    for i in range(1, len(dist)):
-        if dist[i] <= dist[i - 1]:
-            dist[i] = dist[i - 1] + 1e-3
+    dist = np.asarray(segment_distance, dtype=float)
 
     if len(dist) < 2:
         return [(segment_data, segment_distance, False)]
 
-    dx_median = np.median(np.diff(dist))
-    if dx_median <= 0:
-        dx_median = 15.0
-    kernel_pts = int(smoothing_length / dx_median)
+    # Distance repeats where positions are duplicated. np.gradient below divides by
+    # dist/1000 (km), so a repeated point divides by ~0 and yields a spurious ~1e5
+    # m/km spike. Build a strictly increasing copy for the gradient only, nudging by
+    # the median real sample spacing. Everything else (zone extents, length gates,
+    # the returned arrays) uses the measured distance, so none is invented.
+    _diffs = np.diff(dist)
+    _pos = _diffs[_diffs > 0]
+    min_step = float(np.median(_pos)) if _pos.size else 15.0
+    grad_dist = dist.copy()
+    for i in range(1, len(grad_dist)):
+        if grad_dist[i] <= grad_dist[i - 1]:
+            grad_dist[i] = grad_dist[i - 1] + min_step
+
+    kernel_pts = int(smoothing_length / min_step)
     kernel_pts = max(3, kernel_pts if kernel_pts % 2 == 1 else kernel_pts + 1)
 
     smoothed = uniform_filter1d(elev, size=kernel_pts, mode='nearest')
-    grad = np.gradient(smoothed, dist / 1000)
+    grad = np.gradient(smoothed, grad_dist / 1000)
     in_transition = np.abs(grad) > gradient_threshold
 
     if not np.any(in_transition):

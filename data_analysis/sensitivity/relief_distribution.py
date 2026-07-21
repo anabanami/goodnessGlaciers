@@ -6,10 +6,33 @@ from matplotlib.lines import Line2D
 HERE = Path(__file__).resolve().parent          # .../v23
 ODSA = HERE.parent                               # .../ODSA
 OCKENDEN = ODSA / 'Ockenden-regions'
-THRESHOLDS = [200, 600]  # initial values — to be revised from this analysis
-# THRESHOLDS = [350, 800]
+# THRESHOLDS = [200, 600]  # initial values — to be revised from this analysis
 # THRESHOLDS = [300, 800]
 # THRESHOLDS = [350, 900]
+# Production. Must match RELIEF_CLASSES in bed_character.py, which sets relief_class
+# in the window CSVs. 350/800 sit on the relief P25 (368) and P75 (815).
+THRESHOLDS = [350, 800]
+
+# Cross-check the sweep value against the adopted production value. THRESHOLDS is
+# deliberately free to vary (it is the derivation knob), so a mismatch is a
+# non-fatal reminder, not an error: if a swept value is adopted, RELIEF_CLASSES in
+# bed_character.py has to be updated to match. The message is emitted after the Tee
+# is installed below, so it lands in relief_distribution.log alongside the results.
+import sys as _sys
+_sys.path.insert(0, str(ODSA))
+try:
+    from bed_character import RELIEF_THRESHOLDS as _PROD_THRESHOLDS
+except Exception as _e:
+    THRESHOLD_CHECK = [f"NOTE: could not import RELIEF_THRESHOLDS from bed_character.py to cross-check ({_e})."]
+else:
+    if list(THRESHOLDS) == list(_PROD_THRESHOLDS):
+        THRESHOLD_CHECK = [f"Relief-threshold check: THRESHOLDS {THRESHOLDS} match production "
+                           f"RELIEF_CLASSES {_PROD_THRESHOLDS} in bed_character.py."]
+    else:
+        THRESHOLD_CHECK = [f"WARNING: THRESHOLDS {THRESHOLDS} differ from production "
+                           f"RELIEF_CLASSES {_PROD_THRESHOLDS} in bed_character.py.",
+                           "         Expected during a sweep. If you adopt this value, update "
+                           "RELIEF_CLASSES in bed_character.py to match."]
 
 
 # Results for this run go to v23/relief_thresholds/<thresholds joined by '-'>/
@@ -56,6 +79,9 @@ class Tee:
 
 _tee_buf = io.StringIO()
 sys.stdout = Tee(sys.__stdout__, _tee_buf)
+
+for _line in THRESHOLD_CHECK:
+    print(_line)
 
 regions = load_windows(OCKENDEN)
 
@@ -192,4 +218,4 @@ with open(OUT / 'relief_distribution.log', 'w') as f:
     f.write(_tee_buf.getvalue())
 print(f"Log written to {OUT / 'relief_distribution.log'}")
 
-plt.show()
+# plt.show()

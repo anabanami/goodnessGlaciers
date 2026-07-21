@@ -31,6 +31,7 @@ _PARTIAL  = {'1-D Synthetic Aperture Radar processing',
 OUTPUT_BASE_PATH = os.environ.get('ODSA_OUTPUT_BASE') or os.path.join(
     RESULTS_ROOT,
     'Ockenden-regions-No_Landscape_splitting-FIXED',
+    # 'Ockenden-regions-SPLIT-fidelity-check'
 )
 
 

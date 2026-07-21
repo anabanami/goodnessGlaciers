@@ -87,38 +87,22 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
         if len(w_dist) > 50:
             w_detrended = signal.detrend(w_elev)
 
+            # Taper is for the spectral estimate only. Keep it in a separate
+            # array so roughness_rms below stays on the untapered residuals.
+            w_tapered = w_detrended
             if WINDOW_TYPE == 'hann':
-                w_detrended = w_detrended * signal.windows.hann(len(w_detrended))
+                w_tapered = w_detrended * signal.windows.hann(len(w_detrended))
             elif WINDOW_TYPE == 'tukey':
-                w_detrended = w_detrended * signal.windows.tukey(len(w_detrended), alpha=0.5)
+                w_tapered = w_detrended * signal.windows.tukey(len(w_detrended), alpha=0.5)
 
-            pgram = signal.lombscargle(w_dist, w_detrended, angular_freqs, normalize=False)
+            pgram = signal.lombscargle(w_dist, w_tapered, angular_freqs, normalize=False)
             psd_accumulator.append(pgram)
-
-            window_beta = np.nan
-            window_beta_uncertainty = np.nan
-            window_psd_intercept = np.nan
-            window_psd_intercept_uncertainty = np.nan
-            if np.sum(mask) >= 2 and np.all(pgram > 0):
-                log_psd = np.log10(pgram)
-                try:
-                    n_fit = np.sum(mask)
-                    if n_fit > 2:
-                        coeffs, cov = np.polyfit(log_freqs[mask], log_psd[mask], 1, cov=True)
-                        window_beta_uncertainty = np.sqrt(cov[0, 0])
-                        window_psd_intercept_uncertainty = np.sqrt(cov[1, 1])
-                    else:
-                        coeffs = np.polyfit(log_freqs[mask], log_psd[mask], 1)
-                    window_beta = -coeffs[0]
-                    window_psd_intercept = coeffs[1]
-                except:
-                    pass
-
-            window_hurst = (window_beta - 1) / 2
-            window_hurst_uncertainty = window_beta_uncertainty / 2
 
             local_relief = np.max(w_elev) - np.min(w_elev)
 
+            # Window beta is fit after the loop, once the averaged PSD and its
+            # peak mask are known (see the masked window fit below), so that
+            # window-level beta responds to peak masking like segment beta does.
             feature_stats = {
                 'window_id': window_idx,
                 'start_km': current_start / 1000,
@@ -126,12 +110,6 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
                 'local_relief_m': local_relief,
                 'bed_elev_mean': np.mean(w_elev),
                 'roughness_rms': np.sqrt(np.mean(w_detrended**2)),
-                'window_beta': window_beta,
-                'window_beta_uncertainty': window_beta_uncertainty,
-                'window_psd_intercept': window_psd_intercept,
-                'window_psd_intercept_uncertainty': window_psd_intercept_uncertainty,
-                'window_hurst': window_hurst,
-                'window_hurst_uncertainty': window_hurst_uncertainty,
             }
 
             window_incidence = incidence_array[fit_mask]
@@ -184,6 +162,54 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
     else:
         avg_psd = None
         psd_weights = None
+
+    # Peak mask for the window-level fits, derived from the averaged PSD using
+    # the same first-pass recipe the segment two-pass uses in analyse_bedrock
+    # (fit the band, take residual = PSD / fit, flag peaks above the threshold,
+    # widen by bin_buffer). Applying it to the per-window fits below is preferred
+    # over per-window peak detection, which is noisy on a single periodogram.
+    clean_mask = mask.copy()
+    if avg_psd is not None and np.sum(mask) >= 2 and np.all(avg_psd[mask] > 0):
+        slope0, int0 = np.polyfit(log_freqs[mask], np.log10(avg_psd[mask]), 1)
+        fitted0 = 10 ** (int0 + slope0 * log_freqs)
+        resid0 = avg_psd / fitted0
+        peaks0, _ = signal.find_peaks(resid0, height=peak_masking_height_threshold)
+        for p_idx in peaks0:
+            start = max(0, p_idx - bin_buffer)
+            end = min(len(clean_mask), p_idx + bin_buffer + 1)
+            clean_mask[start:end] = False
+
+    # Fit each window's beta over the masked band. clean_mask is identical to the
+    # mask the segment two-pass builds (same avg_psd, same fit band, same peaks),
+    # so the window and segment scales are masked consistently.
+    n_fit = int(np.sum(clean_mask))
+    for feat, pgram in zip(large_features, psd_accumulator):
+        window_beta = np.nan
+        window_beta_uncertainty = np.nan
+        window_psd_intercept = np.nan
+        window_psd_intercept_uncertainty = np.nan
+        if n_fit >= 2 and np.all(pgram > 0):
+            log_psd = np.log10(pgram)
+            try:
+                if n_fit > 2:
+                    coeffs, cov = np.polyfit(log_freqs[clean_mask], log_psd[clean_mask], 1, cov=True)
+                    window_beta_uncertainty = np.sqrt(cov[0, 0])
+                    window_psd_intercept_uncertainty = np.sqrt(cov[1, 1])
+                else:
+                    coeffs = np.polyfit(log_freqs[clean_mask], log_psd[clean_mask], 1)
+                window_beta = -coeffs[0]
+                window_psd_intercept = coeffs[1]
+            except Exception:
+                pass
+        feat['window_beta'] = window_beta
+        feat['window_beta_uncertainty'] = window_beta_uncertainty
+        feat['window_psd_intercept'] = window_psd_intercept
+        feat['window_psd_intercept_uncertainty'] = window_psd_intercept_uncertainty
+        feat['window_hurst'] = (window_beta - 1) / 2
+        feat['window_hurst_uncertainty'] = window_beta_uncertainty / 2
+        # H in [0,1] requires beta in [1,3]; outside that the window is not
+        # self-affine and window_hurst is not a valid exponent (see Jordan 2017).
+        feat['window_self_affine_valid'] = bool(np.isfinite(window_beta) and 1.0 <= window_beta <= 3.0)
 
     return avg_psd, freqs, large_features, dx_median, psd_weights
 
@@ -401,10 +427,19 @@ def analyse_bedrock():
 
                     dominant_wavelengths = wavelengths_calc[peaks] if len(peaks) > 0 else []
                     profile_length = segment_distance.max() - segment_distance.min()
-                    confidence_flags = flag_wavelength_confidence(dominant_wavelengths, profile_length)
+                    # The 2-cycle resolvability limit is set by the PSD grid, whose
+                    # longest wavelength is min(segment length, WINDOW_SIZE), not the
+                    # full segment length. Using profile_length alone never binds and
+                    # lets unresolvable long wavelengths through as "confirmed".
+                    grid_length = min(profile_length, WINDOW_SIZE)
+                    confidence_flags = flag_wavelength_confidence(dominant_wavelengths, grid_length)
 
                     hurst_exponent = (beta - 1) / 2
                     hurst_uncertainty = beta_uncertainty / 2
+                    # hurst = (beta-1)/2 (Turcotte 1992, along-track), so H in [0,1]
+                    # requires beta in [1,3]. Outside that the surface is not
+                    # self-affine and the exported hurst is not a valid exponent.
+                    self_affine_valid = bool(np.isfinite(beta) and 1.0 <= beta <= 3.0)
 
                     stats_dict.update({
                         'median_spacing': dx_median,
@@ -418,7 +453,8 @@ def analyse_bedrock():
                         'psd_intercept': psd_intercept,
                         'psd_intercept_uncertainty': psd_intercept_uncertainty,
                         'hurst_exponent': hurst_exponent,
-                        'hurst_uncertainty': hurst_uncertainty
+                        'hurst_uncertainty': hurst_uncertainty,
+                        'self_affine_valid': self_affine_valid
                     })
 
                     plot_spectra(segment_distance, detrended, wavelengths_calc, avg_psd, fitted_psd, beta, psd_intercept, residual_psd, traj_id, dataset_name, segment_number=seg_idx+1, output_path=output_paths['psd'], processing_flag=pflag)
@@ -433,7 +469,7 @@ def analyse_bedrock():
             if segment_results:
                 combined_stats = {}
                 list_keys = ['dominant_wavelengths', 'confirmed_wavelengths', 'candidate_wavelengths', 'window_stats']
-                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'psd_intercept', 'psd_intercept_uncertainty', 'flow_incidence_deg', 'flow_error_mean', 'flow_error_median', 'measures_speed_mean', 'flow_undefined_frac', 'elevation_min', 'elevation_max', 'is_transition']
+                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'psd_intercept', 'psd_intercept_uncertainty', 'flow_incidence_deg', 'flow_error_mean', 'flow_error_median', 'measures_speed_mean', 'flow_undefined_frac', 'elevation_min', 'elevation_max', 'is_transition', 'self_affine_valid']
 
                 for key in segment_results[0].keys():
                     values = [seg[key] for seg in segment_results if key in seg]
@@ -516,16 +552,21 @@ def results_summary(results):
     cand = [w for r in results.values() for w in r.get('candidate_wavelengths', [])]
 
     if conf:
-        print(f"CONFIRMED WAVELENGTHS (Physically valid < L/2):")
+        c = np.asarray(conf, float)
+        print(f"CONFIRMED WAVELENGTHS (resolvable, <= grid 2-cycle limit):")
         print(f"  -> Count: {len(conf)}")
-        print(f"  -> {format_stat(conf, 'm')}")
+        print(f"  -> Median: {np.median(c):.0f}m  (P10 {np.percentile(c, 10):.0f}m, P90 {np.percentile(c, 90):.0f}m)")
     else:
         print("CONFIRMED WAVELENGTHS: None found.")
 
     if cand:
-        print(f"CANDIDATE WAVELENGTHS (Statistically present > L/2):")
+        # Beyond the grid 2-cycle limit, so not resolvable as periodicities.
+        # Report count and median only: the maximum is drawn from the unresolvable
+        # low-frequency tail and is not a bed measurement.
+        cd = np.asarray(cand, float)
+        print(f"CANDIDATE WAVELENGTHS (beyond 2-cycle limit, not resolvable):")
         print(f"  -> Count: {len(cand)}")
-        print(f"  -> Range: [{min(cand):.0f}m, {max(cand):.0f}m]")
+        print(f"  -> Median: {np.median(cd):.0f}m")
 
     if not conf and not cand:
         print("  -> Topography appears Scale Invariant (Fractal/No dominant peaks)")
@@ -573,6 +614,7 @@ if __name__ == "__main__":
                     'psd_amplitude_1km': w.get('window_psd_intercept', np.nan) + 3 * w.get('window_beta', np.nan),
                     'hurst': w.get('window_hurst'),
                     'hurst_uncertainty': w.get('window_hurst_uncertainty'),
+                    'self_affine_valid': w.get('window_self_affine_valid'),
                     'relief_m': w.get('local_relief_m'),
                     'bed_elev_mean': w.get('bed_elev_mean'),
                     'rms_roughness': w.get('roughness_rms'),
@@ -618,6 +660,7 @@ if __name__ == "__main__":
             elev_mins = traj_data.get('elevation_min', [])
             elev_maxs = traj_data.get('elevation_max', [])
             is_trans = traj_data.get('is_transition', [])
+            self_affine_valids = traj_data.get('self_affine_valid', [])
 
             n_segs = min(len(betas), len(incidences))
             for i in range(n_segs):
@@ -633,6 +676,7 @@ if __name__ == "__main__":
                     'psd_amplitude_1km': (psd_intercepts[i] if i < len(psd_intercepts) else np.nan) + 3 * betas[i],
                     'hurst': hursts[i] if i < len(hursts) else np.nan,
                     'hurst_uncertainty': hurst_uncerts[i] if i < len(hurst_uncerts) else np.nan,
+                    'self_affine_valid': self_affine_valids[i] if i < len(self_affine_valids) else False,
                     'flow_error_mean': flow_err_means[i] if i < len(flow_err_means) else np.nan,
                     'flow_error_median': flow_err_medians[i] if i < len(flow_err_medians) else np.nan,
                     'measures_speed_mean': speed_means[i] if i < len(speed_means) else np.nan,

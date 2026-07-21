@@ -18,7 +18,7 @@ if WINDOW_TYPE not in WINDOW_TYPES:
     raise ValueError(f'unknown WINDOW_TYPE {WINDOW_TYPE!r}; expected one of {WINDOW_TYPES}')
 
 # Peak masking parameters
-peak_masking_height_threshold = 2.0
+peak_masking_height_threshold = 2.0 # 2.0 # is standard
 bin_buffer = 5
 
 # Radar migration / processing-status palette (set in loading._parse_processing_flag).

@@ -102,13 +102,21 @@ def _do_curve_fit(theta, beta, weights, p0):
     return optimize.curve_fit(cos2_model, theta, beta, p0=p0, maxfev=5000)
 
 
-def bootstrap_cos2_uncertainty(theta, beta, weights=None, n_boot=2000, block_length=3):
-    """Block bootstrap for cos²θ fit, optionally weighted."""
+def bootstrap_cos2_uncertainty(theta, beta, weights=None, n_boot=2000, block_length=3, seed=0):
+    """Block bootstrap for cos²θ fit, optionally weighted.
+
+    SE is the robust half-interval (p84-p16)/2, not the plain std. On small,
+    heavily down-weighted samples (Aurora, Maud) the resample distribution of
+    Δβ is heavy-tailed, so its std does not converge with n_boot and swings
+    run-to-run (Aurora weighted: 0.27-0.60). The percentile spread is stable
+    (~0.21) and seed-independent. RNG is seeded so the run reproduces exactly.
+    """
+    rng = np.random.default_rng(seed)
     n = len(theta)
+    n_blocks = int(np.ceil(n / block_length))
     boot_params = []
     for _ in range(n_boot):
-        n_blocks = int(np.ceil(n / block_length))
-        starts = np.random.randint(0, n, size=n_blocks)
+        starts = rng.integers(0, n, size=n_blocks)
         idx = np.concatenate([np.arange(s, min(s + block_length, n)) for s in starts])[:n]
         try:
             w_boot = weights[idx] if weights is not None else None
@@ -118,7 +126,8 @@ def bootstrap_cos2_uncertainty(theta, beta, weights=None, n_boot=2000, block_len
             continue
 
     boot_params = np.array(boot_params)
-    return np.std(boot_params, axis=0), np.std(boot_params[:, 1] - boot_params[:, 0])
+    robust_se = lambda x: (np.percentile(x, 84, axis=0) - np.percentile(x, 16, axis=0)) / 2
+    return robust_se(boot_params), robust_se(boot_params[:, 1] - boot_params[:, 0])
 
 
 def fit_cos2(theta, beta, weights=None):
