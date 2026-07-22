@@ -6,9 +6,13 @@ Wavelength-detection CSVs are read from each
 threshold_*/<region-group>/<region>/ folder, and the matching segment_stats
 CSV from the sibling <region-group>/segment_csvs/ folder.
 
-Panel 3 computes masked fraction properly by reconstructing the frequency
-grid, mapping wavelengths to bin indices, and counting unique masked bins
-(accounting for buffer overlap).
+Panel 3 estimates what fraction of the fit range peak masking removes, by
+reconstructing the frequency grid, mapping wavelengths to bin indices, and
+counting unique masked bins (buffer overlap merged). The split of a
+trajectory's peaks across its segments is a modelling assumption rather than
+a measurement, and it sets the absolute level of the panel — read the curves
+as an estimate and compare them to each other, not to the 30% line. See
+compute_masked_fraction.
 """
 import sys
 import numpy as np
@@ -20,7 +24,7 @@ import re
 HERE = Path(__file__).resolve().parent          # .../v23
 ODSA = HERE.parent                              # .../ODSA
 sys.path.insert(0, str(ODSA))
-from config import Tee                          # noqa: E402
+from config import Tee, WINDOW_SIZE, bin_buffer  # noqa: E402
 
 BASE_DIR = HERE / "peak-masking_threshold"      # this script's data/results folder
 
@@ -29,20 +33,27 @@ BASE_DIR.mkdir(parents=True, exist_ok=True)
 _real_stdout = sys.stdout
 sys.stdout = Tee(str(BASE_DIR / "peak-masking_threshold_log.txt"))
 
-# --- Frequency grid parameters (must match bed_analysis_19.py) ---
-WINDOW_SIZE = 50000  # metres
+# --- Frequency grid: mirrors analyse_sliding_windows (bed_analysis_23.py:64-69).
+# WINDOW_SIZE and bin_buffer come from config (WINDOW_SIZE is env-overridable, so a
+# 30/75/100 km run is picked up automatically). N_BINS, the dx floor and the fit range
+# are literals in that function, not config knobs, so they are duplicated here and must
+# be kept in step if it changes.
 N_BINS = 500
-DX_MEDIAN_DEFAULT = 15.0  # conservative fallback (smallest typical spacing)
+DX_MEDIAN_DEFAULT = 15.0  # pipeline dx floor: max_freq = 1/(2*max(dx_median, 15.0))
+FIT_MIN_WL, FIT_MAX_WL = 250, 50000  # metres
 MIN_FREQ = 1 / WINDOW_SIZE
 MAX_FREQ = 1 / (2 * DX_MEDIAN_DEFAULT)
 
-# Reference frequency grid (same geomspace as the analysis)
+# Reference frequency grid (same geomspace as the analysis). The pipeline builds this
+# per segment from that segment's own dx_median; pinning it to the 15 m floor gives the
+# finest grid any segment can have, which puts the fewest bins in the fit range and so
+# maximises the masked fraction — but only along this axis, and the n_seg split in
+# compute_masked_fraction pushes the other way, so the result is not a bound overall.
 REF_FREQS = np.geomspace(MIN_FREQ, MAX_FREQ, num=N_BINS)
 REF_WAVELENGTHS = 1 / REF_FREQS  # descending (long → short)
 
-# Fit range mask: 250m to 50km
-FIT_MASK = (REF_WAVELENGTHS >= 250) & (REF_WAVELENGTHS <= 50000)
-FIT_INDICES = np.where(FIT_MASK)[0]
+FIT_MASK = (REF_WAVELENGTHS >= FIT_MIN_WL) & (REF_WAVELENGTHS <= FIT_MAX_WL)
+FIT_INDICES = set(np.where(FIT_MASK)[0].tolist())
 N_FIT_BINS = len(FIT_INDICES)
 
 
@@ -57,12 +68,19 @@ def wavelengths_to_bin_indices(wavelengths):
 
 def compute_masked_fraction(wavelengths_per_trajectory, n_segments, buffer):
     """
-    Compute average masked fraction across segments for a region.
+    Segment-weighted mean masked fraction of the fit range for a region.
 
-    Since the CSV doesn't track which segment each detection belongs to,
-    we compute per-trajectory masked bins (unique, with overlap) and
-    average across the trajectory's segments. This is an upper bound
-    because cross-segment peaks don't actually share a spectrum.
+    The CSV doesn't track which segment each detection belongs to, so per
+    trajectory we count unique masked bins (buffered, overlap-merged) over all
+    its detections, then divide by its segment count to spread those peaks
+    across segments. Trajectories are weighted by segment count, making the
+    result the mean of that per-segment estimate over the region's segments.
+
+    Not a bound in either direction: pooling a trajectory's peaks into one
+    spectrum inflates the bin count, the 1/n_seg split deflates it, and neither
+    is calibrated against the real per-segment spectra. The two are the same
+    order of magnitude, so they do not cancel to anything principled — read the
+    output as an estimate, not a ceiling.
     """
     total_masked_frac = 0
     total_segments = 0
@@ -81,12 +99,12 @@ def compute_masked_fraction(wavelengths_per_trajectory, n_segments, buffer):
                 if b in FIT_INDICES:
                     masked_bins.add(b)
 
-        # This trajectory's masked fraction (averaged over its segments)
-        # Upper bound: all peaks treated as one spectrum
+        # All of this trajectory's peaks pooled into a single spectrum
         frac = len(masked_bins) / N_FIT_BINS if N_FIT_BINS > 0 else 0
-        # Scale down by segments (peaks are spread across segments, not all in one)
-        frac_per_seg = min(frac / n_seg, 1.0) if n_seg > 0 else frac
+        # Spread back over its segments
+        frac_per_seg = frac / n_seg if n_seg > 0 else frac
 
+        # Weighting by n_seg makes the running totals a segment-weighted mean
         total_masked_frac += frac_per_seg * n_seg
         total_segments += n_seg
 
@@ -162,7 +180,8 @@ print(data.to_string(index=False))
 print(f"\nReference grid: {N_BINS} bins, fit range: {N_FIT_BINS} bins (250m–50km)")
 
 # --- Compute masked fractions for multiple buffer sizes ---
-BUFFER_SIZES = [1, 2, 3, 5, 7]
+# bin_buffer (config) is the production value and is always drawn, highlighted.
+BUFFER_SIZES = sorted({1, 2, 3, 5, 7, bin_buffer})
 
 masked_frac_results = []
 for (threshold, region), rd in raw_data.items():
@@ -217,26 +236,26 @@ linestyles = {1: ':', 2: '--', 3: '-.', 5: '-', 7: (0, (3, 1, 1, 1))}
 for i, region in enumerate(regions):
     for buf in BUFFER_SIZES:
         subset = mf_data[(mf_data['region'] == region) & (mf_data['buffer'] == buf)].sort_values('threshold')
-        label = f'{region} (±{buf})' if i == 0 or buf == 5 else None
-        # Only label buffer=5 (current default) for all regions, others just for first region
-        if buf == 5:
+        # Label the production buffer for every region; the others once, on the first.
+        if buf == bin_buffer:
             label = f'{region} (±{buf}, current)'
         elif i == 0:
             label = f'±{buf} buffer'
         else:
             label = None
 
-        alpha = 1.0 if buf == 5 else 0.4
+        current = buf == bin_buffer
         ax3.plot(subset['threshold'], subset['masked_frac'] * 100,
                  marker=markers[i % len(markers)], color=colours[i],
                  linestyle=linestyles.get(buf, '-'),
-                 linewidth=1.5 if buf == 5 else 1.0,
-                 markersize=5, alpha=alpha, label=label)
+                 linewidth=1.5 if current else 1.0,
+                 markersize=5, alpha=1.0 if current else 0.4, label=label)
 
 ax3.set_xlabel('Peak Masking Height Threshold')
 ax3.set_ylabel('Est. Masked Fraction of Fit Range (%)')
 ax3.axhline(y=30, color='grey', linestyle='--', alpha=0.5, linewidth=0.8)
-ax3.text(10.2, 31, '30%', color='grey', fontsize=8, va='bottom')
+ax3.text(0.99, 30, '30%', color='grey', fontsize=8, va='bottom', ha='right',
+         transform=ax3.get_yaxis_transform())
 ax3.legend(fontsize='x-small', ncol=2)
 ax3.grid(True, alpha=0.3)
 
