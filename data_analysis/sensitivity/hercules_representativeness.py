@@ -19,6 +19,15 @@ os.makedirs(OUT, exist_ok=True)
 sys.stdout = Tee(os.path.join(OUT, "hercules_representativeness_log.txt"))
 
 MIN_KM, MIN_PTS, HERC = 10, 50, 'POLARGAP_2015_Fig2C_Hercules_Dome'
+
+# --- Drift guard. The 10 km / 50 pt gate mirrors split_by_landscape's own defaults;
+# read them from its signature and warn (non-fatal) if this copy has gone stale.
+import inspect as _inspect
+_sig = _inspect.signature(split_by_landscape).parameters
+for _label, _mine, _prod in [("min_segment_km", MIN_KM, _sig['min_segment_km'].default),
+                             ("min_segment_pts", MIN_PTS, _sig['min_segment_pts'].default)]:
+    if _mine != _prod:
+        print(f"WARNING: {_label} = {_mine} here but {_prod} in split_by_landscape (segmentation.py) — gate mirror STALE.")
 tf = Transformer.from_crs("EPSG:4326", "EPSG:3031", always_xy=True)
 
 acc = dict(gapfree=0.0, basin_keep=0.0, flank_keep=0.0, basin_drop=0.0, flank_drop=0.0)

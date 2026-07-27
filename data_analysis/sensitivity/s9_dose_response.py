@@ -2,7 +2,7 @@
 window-level beta vs missing-band regression (truncated population).
 
 Run from v23/; writes results to v23/TESTING_LANDSCAPE_SPLITTING/."""
-import numpy as np, pandas as pd, os
+import numpy as np, pandas as pd, os, re
 from pyproj import Transformer
 from scipy import stats as sst
 import sys
@@ -46,7 +46,13 @@ csvs = {
 datasetname = {'Pensacola': 'POLARGAP_2015_Pensacola_Pole',
                'Hercules':  'POLARGAP_2015_Fig2C_Hercules_Dome'}
 
-LOG50 = np.log10(50000.0)
+# --- Drift guard. LOG50 is log10 of the fit-band upper wavelength, an inline literal
+# in analyse_sliding_windows (bed_analysis_23.py). Warn (non-fatal) if it has moved.
+_BAND_MAX = 50000
+with open(os.path.join(ODSA, "bed_analysis_23.py")) as _f: _m = re.search(r"wavelengths_calc <= (\d+)", _f.read())
+if _m is None: print("NOTE: could not cross-check fit-band max against bed_analysis_23.py.")
+elif int(_m.group(1)) != _BAND_MAX: print(f"WARNING: LOG50 uses band max {_BAND_MAX} but bed_analysis_23.py={_m.group(1)} — STALE.")
+LOG50 = np.log10(float(_BAND_MAX))
 for reg, fn in csvs.items():
     w = pd.read_csv(os.path.join(RESULTS, 'window_csvs', fn))
     w['L'] = [lengths.get((datasetname[reg], str(t), int(s)), np.nan)

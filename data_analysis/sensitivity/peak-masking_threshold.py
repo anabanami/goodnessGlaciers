@@ -56,6 +56,23 @@ FIT_MASK = (REF_WAVELENGTHS >= FIT_MIN_WL) & (REF_WAVELENGTHS <= FIT_MAX_WL)
 FIT_INDICES = set(np.where(FIT_MASK)[0].tolist())
 N_FIT_BINS = len(FIT_INDICES)
 
+# --- Drift guard. The four values above mirror inline literals in
+# analyse_sliding_windows (bed_analysis_23.py); they are not importable, so read them
+# from that source and warn (non-fatal) if this copy has gone stale.
+def _prodval(pat, cast=float):
+    m = re.search(pat, (ODSA / "bed_analysis_23.py").read_text())
+    return cast(m.group(1)) if m else None
+for _label, _mine, _prod in [
+    ("grid bins (num=)", N_BINS,            _prodval(r"geomspace\([^)]*num=(\d+)", int)),
+    ("dx floor",         DX_MEDIAN_DEFAULT, _prodval(r"max\(dx_median,\s*([\d.]+)\)")),
+    ("fit band min (m)", FIT_MIN_WL,        _prodval(r"wavelengths_calc >= (\d+)", int)),
+    ("fit band max (m)", FIT_MAX_WL,        _prodval(r"wavelengths_calc <= (\d+)", int)),
+]:
+    if _prod is None:
+        print(f"NOTE: could not locate {_label} in bed_analysis_23.py to cross-check.")
+    elif _mine != _prod:
+        print(f"WARNING: {_label} = {_mine} here but {_prod} in bed_analysis_23.py — this mirror is STALE.")
+
 
 def wavelengths_to_bin_indices(wavelengths):
     """Map detected wavelengths to nearest bin index in the reference grid."""

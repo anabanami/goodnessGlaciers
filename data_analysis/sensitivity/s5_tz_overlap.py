@@ -3,7 +3,7 @@ transition zone? Footprint overlap (window i spans [i*STEP, i*STEP+WINDOW] along
 gap-segment) vs the pre-gate merged TZ extents from split_by_landscape's gradient detector.
 
 Run from v23/; reads from and writes results to v23/TESTING_LANDSCAPE_SPLITTING/."""
-import numpy as np, pandas as pd, glob, os, sys
+import numpy as np, pandas as pd, glob, os, sys, re
 from scipy.ndimage import uniform_filter1d
 from pyproj import Transformer
 HERE = os.path.dirname(os.path.abspath(__file__))            # .../v23
@@ -96,6 +96,26 @@ for d in load_datasets():
 
 import numpy as np
 BETA_T, RELIEF_T = 2.0, 800.0   # cliff signature: low beta AND mountainous relief (codebase RELIEF_CLASSES: mountainous >= 800 m)
+
+# --- Drift guard. BETA_T mirrors the hard/transitional β boundary and RELIEF_T the
+# mountainous relief floor (bed_character.py, importable); the 5 km TZ-merge gap
+# (tz_extents_km) and 15 m dx floor mirror inline literals in segmentation.py /
+# bed_analysis_23.py. Warn (non-fatal) on any drift.
+def _srcval(fname, pat, cast=float):
+    with open(os.path.join(ODSA, fname)) as _f: m = re.search(pat, _f.read())
+    return cast(m.group(1)) if m else None
+try:
+    from bed_character import BED_EDGES, RELIEF_THRESHOLDS
+    _checks = [("BETA_T (hard/trans β)", BETA_T, float(BED_EDGES[2])),
+               ("RELIEF_T (mountainous m)", RELIEF_T, float(RELIEF_THRESHOLDS[-1]))]
+except Exception as _e:
+    print(f"NOTE: could not import β/relief thresholds from bed_character.py ({_e}).")
+    _checks = []
+_checks += [("TZ merge gap (km)", 5.0, _srcval("segmentation.py", r"merge_gap_km\s*=\s*([\d.]+)")),
+            ("dx floor (m)",      15.0, _srcval("bed_analysis_23.py", r"max\(dx_median,\s*([\d.]+)\)"))]
+for _label, _mine, _prod in _checks:
+    if _prod is None: print(f"NOTE: could not cross-check {_label} against production source.")
+    elif _mine != _prod: print(f"WARNING: {_label} = {_mine} here but {_prod} in production — this mirror is STALE.")
 rows = []  # (region, has_tz, beta, relief, overlap_frac)
 for name, tzr in tz_by_region.items():
     f = csv_for(name)
