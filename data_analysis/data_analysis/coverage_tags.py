@@ -10,6 +10,9 @@ Inputs (written by bed_analysis_23.py):
 
 Output:
   coverage_csvs/coverage_summary.csv  (one row per region) + log table.
+  gap_* is the footprint-cell distance to the nearest track point; analysed_gap_* is
+  the same to the nearest beta-bearing window centre, so analysed_gap_excess_p90_km
+  (analysed minus track p90) flags area that was flown but yielded no usable beta.
 
 Usage:
   python coverage_tags.py            # all regions found
@@ -47,27 +50,31 @@ def _hull_area_km2(pts):
         return np.nan
 
 
-def _interp_distance(x, y, grid_km=GRID_KM):
-    """Distance from each footprint cell to the nearest track point (BedMachine-style)."""
+def _footprint_cells(x, y, grid_km=GRID_KM):
+    """Grid cells inside the track-point convex hull (the survey footprint)."""
     pts = np.column_stack([x, y])
     if len(pts) < 4:
-        return {}
-    tree = cKDTree(pts)
+        return None
     try:
         tri = Delaunay(pts)
     except Exception:
-        return {}
+        return None
     g = grid_km * 1000
     gx, gy = np.meshgrid(np.arange(x.min(), x.max() + g, g),
                          np.arange(y.min(), y.max() + g, g))
     cells = np.column_stack([gx.ravel(), gy.ravel()])
     cells = cells[tri.find_simplex(cells) >= 0]   # keep inside footprint hull
-    if len(cells) == 0:
+    return cells if len(cells) else None
+
+
+def _dist_stats(cells, targets, prefix):
+    """Median/p90/max distance (km) from each footprint cell to its nearest target."""
+    if cells is None or len(targets) < 1:
         return {}
-    d = tree.query(cells)[0] / 1000
-    return {'gap_median_km': float(np.median(d)),
-            'gap_p90_km': float(np.percentile(d, 90)),
-            'gap_max_km': float(d.max())}
+    d = cKDTree(np.asarray(targets)).query(cells)[0] / 1000
+    return {f'{prefix}median_km': float(np.median(d)),
+            f'{prefix}p90_km': float(np.percentile(d, 90)),
+            f'{prefix}max_km': float(d.max())}
 
 
 def _line_spacing_km(df):
@@ -100,11 +107,12 @@ def coverage_for_region(track_csv, window_csv):
     x, y = pc['x'].values, pc['y'].values
     foot_area = _hull_area_km2(np.column_stack([x, y]))
 
+    cells = _footprint_cells(x, y)
     res = {'n_track_points': len(pc),
            'n_trajectories': pc['trajectory_id'].nunique(),
            'footprint_km2': foot_area,
            'line_spacing_km': _line_spacing_km(pc)}
-    res.update(_interp_distance(x, y))
+    res.update(_dist_stats(cells, np.column_stack([x, y]), 'gap_'))
 
     win = pd.read_csv(window_csv) if window_csv and os.path.exists(window_csv) else pd.DataFrame()
     res['processing_flag'] = processing_flag_of(win) if len(win) else None
@@ -114,12 +122,21 @@ def coverage_for_region(track_csv, window_csv):
     homog = win[win.get('is_transition', False) == False] if len(win) else win
     homog = homog[np.isfinite(homog['beta'])] if 'beta' in homog else homog
     res['n_homog'] = len(homog)
+    c = (homog[['center_x', 'center_y']].dropna().values
+         if {'center_x', 'center_y'}.issubset(homog.columns) else np.empty((0, 2)))
     # fraction of footprint spanned by the homogeneous (beta-bearing) windows
-    if {'center_x', 'center_y'}.issubset(homog.columns) and len(homog) >= 3 and np.isfinite(foot_area):
-        c = homog[['center_x', 'center_y']].dropna().values
+    if len(c) >= 3 and np.isfinite(foot_area):
         res['beta_footprint_frac'] = _hull_area_km2(c) / foot_area if foot_area else np.nan
     else:
         res['beta_footprint_frac'] = np.nan
+    # analysed-coverage gap: same footprint cells as gap_*, but distance to the nearest
+    # beta-bearing window centre instead of any track point. Where analysed_gap_p90 far
+    # exceeds gap_p90 the area was flown but no usable beta survived (transition-heavy or
+    # fragmented terrain); the excess is that difference.
+    if len(c) >= 1:
+        res.update(_dist_stats(cells, c, 'analysed_gap_'))
+        if 'gap_p90_km' in res and 'analysed_gap_p90_km' in res:
+            res['analysed_gap_excess_p90_km'] = res['analysed_gap_p90_km'] - res['gap_p90_km']
 
     # --- tier: worst of the three axes, components reported ---
     g_gap = _grade(res.get('gap_p90_km', np.nan), GAP_GOOD_KM, GAP_POOR_KM, True)
@@ -159,11 +176,15 @@ def run_all(directory=None, region_filter=None):
         r['region'] = region
         rows.append(r)
         print(f"{region}: tier {r['tier']} ({r['tier_driver']}) | "
-              f"gap_p90 {r.get('gap_p90_km', float('nan')):.0f} km | R {r['azimuth_R']:.2f} | "
+              f"gap_p90 {r.get('gap_p90_km', float('nan')):.0f} km | "
+              f"analysed_gap_p90 {r.get('analysed_gap_p90_km', float('nan')):.0f} km "
+              f"(+{r.get('analysed_gap_excess_p90_km', float('nan')):.0f}) | R {r['azimuth_R']:.2f} | "
               f"n_homog {r['n_homog']} | spacing {r['line_spacing_km']:.0f} km")
 
     cols = ['region', 'tier', 'tier_driver', 'processing_flag', 'n_homog', 'n_trajectories',
-            'gap_median_km', 'gap_p90_km', 'gap_max_km', 'line_spacing_km',
+            'gap_median_km', 'gap_p90_km', 'gap_max_km',
+            'analysed_gap_median_km', 'analysed_gap_p90_km', 'analysed_gap_max_km',
+            'analysed_gap_excess_p90_km', 'line_spacing_km',
             'azimuth_R', 'footprint_km2', 'beta_footprint_frac',
             'grade_gap', 'grade_dir', 'grade_n', 'n_track_points']
     df = pd.DataFrame(rows).reindex(columns=cols)

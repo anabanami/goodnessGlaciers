@@ -6,7 +6,7 @@ import os
 import sys
 
 from config import (WINDOW_SIZE, STEP_SIZE, WINDOW_TYPE, STANDARD_WINDOW,
-                    peak_masking_height_threshold, bin_buffer,
+                    peak_masking_height_threshold, bin_buffer, WINDOW_MASK,
                     Tee, get_region_folder, ensure_output_dirs)
 from loading import  OUTPUT_BASE_PATH, load_datasets
 from segmentation import detect_data_gaps, split_into_segments, split_by_landscape
@@ -167,8 +167,11 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
     # (fit the band, take residual = PSD / fit, flag peaks above the threshold,
     # widen by bin_buffer). Applying it to the per-window fits below is preferred
     # over per-window peak detection, which is noisy on a single periodogram.
+    # config.WINDOW_MASK = False bypasses this window-level masking (segment
+    # two-pass unaffected); used by the window-type taper-isolation ladder.
     clean_mask = mask.copy()
-    if avg_psd is not None and np.sum(mask) >= 2 and np.all(avg_psd[mask] > 0):
+    if WINDOW_MASK \
+            and avg_psd is not None and np.sum(mask) >= 2 and np.all(avg_psd[mask] > 0):
         slope0, int0 = np.polyfit(log_freqs[mask], np.log10(avg_psd[mask]), 1)
         fitted0 = 10 ** (int0 + slope0 * log_freqs)
         resid0 = avg_psd / fitted0

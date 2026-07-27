@@ -18,8 +18,11 @@ if WINDOW_TYPE not in WINDOW_TYPES:
     raise ValueError(f'unknown WINDOW_TYPE {WINDOW_TYPE!r}; expected one of {WINDOW_TYPES}')
 
 # Peak masking parameters
-peak_masking_height_threshold = 2.0 # 2.0 # is standard
+peak_masking_height_threshold = 2.0 # 2.0 is standard
 bin_buffer = 5
+# False bypasses window-level peak masking (segment two-pass unaffected); used by
+# the window-type taper-isolation ladder. True is production — restore after any test.
+WINDOW_MASK = True
 
 # Radar migration / processing-status palette (set in loading._parse_processing_flag).
 # Migration affects bed-geometry fidelity, so any spectral metric (beta, PSD amplitude,
@@ -47,7 +50,13 @@ def processing_flag_of(df):
 
 # Landscape splitting parameters
 SMOOTHING_LENGTH = WINDOW_SIZE  # metres
-GRADIENT_THRESHOLD = 15 # m/km
+GRADIENT_THRESHOLD = 15 # 15 m/km is standard
+
+# Flow-direction stencil half-width, as a multiple of local ice thickness (used by
+# REMA_extractor.extract_rema_flow_vector to measure the surface slope that sets the
+# modelled flow bearing, hence the incidence angle theta). Production is 5; McCormack
+# et al. (2019) recommend ~10. Env-overridable for the stencil sensitivity sweep.
+STENCIL_FACTOR = float(os.environ.get('ODSA_STENCIL_FACTOR', 5))
 
 class Tee:
     """Write to both stdout and a log file."""

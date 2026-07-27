@@ -6,6 +6,8 @@ import os
 
 import xarray as xr
 
+from config import STENCIL_FACTOR
+
 # Flow direction is undefined where the REMA elevation difference across the
 # stencil does not exceed K_REJECT x the propagated DEM vertical error.
 REMA_SIGMA_Z = 1.0   # REMA 100m mosaic vertical error, m
@@ -101,7 +103,7 @@ def extract_rema_flow_vector(x, y, dem_path, ice_thickness, cache=None, return_u
         cache = _rema_cache
     cache.load(dem_path)
 
-    delta = ice_thickness * 5
+    delta = ice_thickness * STENCIL_FACTOR
 
     # Create stencil coordinates (Central Difference)
     x_left, x_right = x - delta, x + delta
