@@ -145,7 +145,7 @@ def shared():
         pks = ", ".join(f"{x_grid[i]:.2f}" for i in pk)
         vls = ", ".join(f"{x_grid[i]:.2f}" for i in vl)
         print(f"  {lab:>6} {len(pk):>6}   {pks:<30} {vls}")
-    print("  -> fine structure that only appears below bw≈0.15 is a smoothing")
+    print("  -> fine structure that only appears below bw≈0.20 is a smoothing")
     print("     artifact. Only features stable up to Scott's rule are real.")
 
     # ── Per-region KDE peaks (table only; plots are per-candidate) ────
