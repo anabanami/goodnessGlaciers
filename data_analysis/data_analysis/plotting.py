@@ -144,6 +144,9 @@ def plot_spectra(dist, detrended, wavelengths, psd, fitted_psd, beta, psd_interc
     ax3.semilogx(wavelengths, residual_psd, color='k', alpha=0.5)
 
     peaks, _ = signal.find_peaks(residual_psd, height=peak_masking_height_threshold)
+    # Annotate only in-band detections, matching the wavelength_detections export.
+    if len(peaks) > 0:
+        peaks = peaks[(wavelengths[peaks] >= 250) & (wavelengths[peaks] <= 50000)]
     if len(peaks) > 0:
         peak_waves = wavelengths[peaks]
         peak_powers = residual_psd[peaks]

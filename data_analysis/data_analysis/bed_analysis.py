@@ -422,7 +422,13 @@ def analyse_bedrock():
                             psd_intercept_uncertainty = np.nan
                             fitted_psd = fitted_psd_init
 
-                    dominant_wavelengths = wavelengths_calc[peaks] if len(peaks) > 0 else []
+                    # The PASS 2 mask above keeps all peaks (near-edge sub-band
+                    # peaks legitimately guard the band edge), but detections are
+                    # filtered to the fit band: below 250 m the residual compares
+                    # the spectrum against an extrapolated fit at the radar
+                    # resolution limit, so those peaks are not bed periodicities.
+                    in_band_peaks = peaks[fit_mask[peaks]] if len(peaks) > 0 else []
+                    dominant_wavelengths = wavelengths_calc[in_band_peaks] if len(in_band_peaks) > 0 else []
                     profile_length = segment_distance.max() - segment_distance.min()
                     # The 2-cycle resolvability limit is set by the PSD grid, whose
                     # longest wavelength is min(segment length, WINDOW_SIZE), not the

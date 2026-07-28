@@ -404,7 +404,9 @@ def plot_flow_confidence(dataset_dict):
 
     # Color tracks by angular difference using LineCollection
     norm = Normalize(vmin=0, vmax=90)
-    cmap = plt.get_cmap('berlin')#.reversed()
+    # Sequential, CVD-safe, monotonic lightness: agreement stays dark, high
+    # disagreement reads bright yellow against the gray hillshade.
+    cmap = plt.get_cmap('viridis')
 
     for seg in segments:
         sx_km = seg['seg_x'] / 1000

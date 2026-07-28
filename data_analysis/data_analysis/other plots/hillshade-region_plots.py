@@ -84,7 +84,8 @@ def calculate_along_track_distance(x, y):
 def detect_segments(df, x, y, gap_threshold=2000, min_segment_length=50, min_segment_km=10):
     """
     Detect segments based on gaps in the flight track.
-    Matches the logic in bed_analysis.py.
+    Gap-based split only; unlike bed_analysis_23.py there is no landscape
+    split, so these segments do not map onto the pipeline's segment IDs.
     Returns list of tuples: (segment_df, start_idx, end_idx)
     """
     # Calculate distances between consecutive points
