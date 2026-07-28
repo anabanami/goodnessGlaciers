@@ -29,7 +29,7 @@ OUTPUT_BASE_PATH = os.environ.get('ODSA_OUTPUT_BASE') or os.path.join(
     # 'TEST-ONE-SMUG-region/',
     # 'SMUG-regions/',
     'Ockenden-regions/',
-    # 'v23/window_type/Rectangular-Ockenden-regions_2026-07-24_window-beta-UNMASKED',
+    # 'v23/peak-masking_threshold/threshold_10.0/Ockenden-regions-sensitivityTEST'
     # 'v23/window_type/Tukey-Ockenden-regions_2026-07-24_window-beta-UNMASKED',
     # 'plotting_TEST'
 )

@@ -64,9 +64,11 @@ BED_EDGES = np.array([BED_CLASSES[0][1]] + [hi for _, _, hi in BED_CLASSES])  # 
 P_COLS = [f'p_{name}' for name in CLASS_ORDER]
 
 # Excess beta uncertainty beyond the formal PSD-fit error, added in quadrature.
-# Stays 0.0: beta_uncertainty is a mild underestimate (the geomspace frequency
-# grid oversamples the window's Fourier resolution, so true sigma ~0.06 not
-# 0.043), but class composition is insensitive to sigma across any plausible
+# Stays 0.0: beta_uncertainty is a lower bound (the geomspace frequency grid
+# oversamples the window's Fourier resolution and the Hann taper correlates
+# adjacent bins), sigma_fit = 0.051 on the masked production fit; how much
+# higher the true sigma runs is not measured. Class composition is
+# insensitive to sigma across the measured bracket and any plausible
 # value. Per-window class_confidence is NOT, so don't quote it as measured.
 # See v23/beta_sigma_calibration.py and "Sensitivity test - beta_sigma".
 SIGMA_EXTRA = 0.0
