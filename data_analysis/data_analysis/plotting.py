@@ -118,7 +118,7 @@ def plot_raw_data_with_segmentation_check(dist, elev, segments, traj_id, gap_mas
     plt.close()
 
 
-def plot_spectra(dist, detrended, wavelengths, psd, fitted_psd, beta, psd_intercept,  residual_psd,
+def plot_spectra(dist, detrended, wavelengths, psd, fitted_psd, beta, psd_intercept, psd_amplitude_1km, residual_psd,
                  traj_id, dataset_name, segment_number=None, output_path=None, processing_flag=None):
     fig = plt.figure(figsize=(20, 15))
     gs = fig.add_gridspec(2, 2)
@@ -138,6 +138,10 @@ def plot_spectra(dist, detrended, wavelengths, psd, fitted_psd, beta, psd_interc
     ax2.set_ylabel('Power Spectral Density ($m^3$)')
     ax2.set_title('Power Spectrum')
     ax2.grid(True, linestyle=":", alpha=0.5)
+    if np.isfinite(psd_amplitude_1km):
+        ax2.axvline(x=1000, color='C2', ls='--', lw=1,
+                    label=f'log10 psd_amplitude_1km={psd_amplitude_1km:.1f} @ λ=1 km')
+        ax2.axhline(y=10 ** psd_amplitude_1km, color='C2', ls='--', lw=1)
     ax2.legend()
 
     ax3 = fig.add_subplot(gs[1, :])

@@ -406,7 +406,13 @@ def analyse_bedrock():
                         if np.sum(clean_mask) >= 2:
                             psd_weights[~np.isfinite(psd_weights)] = 0
                             w = psd_weights[clean_mask]
-                            if np.all(w == 0):
+                            # psd_weights = 1/std(log10 PSD) across windows, so at
+                            # two windows the spread is a 2-sample estimate: bins
+                            # where the pair happens to agree get weights ~1e4x the
+                            # median and pivot the slope (RSL G17a seg5: beta 2.3 ->
+                            # 3.5). The zero-std guard upstream catches only exact
+                            # ties. Below three windows, fit unweighted.
+                            if np.all(w == 0) or len(window_stats) < 3:
                                 w = None
                             (slope, intercept), cov = np.polyfit(log_freqs[clean_mask], log_psd[clean_mask], 1, w=w, cov=True)
                             beta = -slope
@@ -437,6 +443,9 @@ def analyse_bedrock():
                     grid_length = min(profile_length, WINDOW_SIZE)
                     confidence_flags = flag_wavelength_confidence(dominant_wavelengths, grid_length)
 
+                    # log10 PSD at λ=1 km: intercept + (-beta)*log10(1e-3)
+                    psd_amplitude_1km = psd_intercept + 3 * beta
+
                     hurst_exponent = (beta - 1) / 2
                     hurst_uncertainty = beta_uncertainty / 2
                     # hurst = (beta-1)/2 (Turcotte 1992, along-track), so H in [0,1]
@@ -460,7 +469,7 @@ def analyse_bedrock():
                         'self_affine_valid': self_affine_valid
                     })
 
-                    plot_spectra(segment_distance, detrended, wavelengths_calc, avg_psd, fitted_psd, beta, psd_intercept, residual_psd, traj_id, dataset_name, segment_number=seg_idx+1, output_path=output_paths['psd'], processing_flag=pflag)
+                    plot_spectra(segment_distance, detrended, wavelengths_calc, avg_psd, fitted_psd, beta, psd_intercept, psd_amplitude_1km, residual_psd, traj_id, dataset_name, segment_number=seg_idx+1, output_path=output_paths['psd'], processing_flag=pflag)
                 else:
                     print(f"Skipping Line {traj_id}: Not enough data points in 250m–50km range.")
 
