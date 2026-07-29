@@ -540,20 +540,30 @@ def analyse_bedrock():
 def results_summary(results):
     if not results: return "no valid data found :("
 
-    def format_stat(values, unit=""):
+    def format_stat(values, unit="", dp=1):
         if not values: return "N/A"
         if isinstance(values[0], str): return "N/A (String Data)"
-        mean_val = np.mean(values)
-        min_val = np.min(values)
-        max_val = np.max(values)
+        # nan-safe: one bad segment used to turn the whole line into nan
+        v = np.asarray(values, float)
+        v = v[np.isfinite(v)]
+        if v.size == 0: return "N/A"
+        mean_val, min_val, max_val = v.mean(), v.min(), v.max()
         if min_val == max_val:
-            return f"{mean_val:.1f}{unit} (Single Value)"
+            return f"{mean_val:.{dp}f}{unit} (Single Value)"
         else:
-            return f"Mean: {mean_val:.1f}{unit} | Range: [{min_val:.1f}, {max_val:.1f}]{unit}"
+            return f"Mean: {mean_val:.{dp}f}{unit} | Range: [{min_val:.{dp}f}, {max_val:.{dp}f}]{unit}"
+
+    def flatten(key):
+        return [v for r in results.values() for v in r.get(key, [])]
 
     print("-" * 60)
     print(f"  RESULTS SUMMARY ({len(results)} trajectories aggregated)")
     print("-" * 60)
+    # The block below aggregates values that were already averaged per
+    # trajectory at the combine step, so its ranges are across trajectory
+    # means, not across segments. The spectral block further down is
+    # per-segment.
+    print("MORPHOMETRY (per-trajectory means of segment values):")
 
     reliefs = [r['elevation_range'] for r in results.values() if 'elevation_range' in r]
     print(f"VERTICAL RELIEF (Max-Min):\n  -> {format_stat(reliefs, 'm')}")
@@ -579,6 +589,33 @@ def results_summary(results):
 
     print("." * 60)
 
+    # Per-segment spectral fit: the quantities the anisotropy and bed-class
+    # work is built on. psd_amplitude_1km is not collected as its own list, so
+    # rebuild it here the same way the CSV export does (intercept + 3*beta).
+    betas = flatten('power_law_exponent')
+    if betas:
+        amps = [i + 3 * b for r in results.values()
+                for i, b in zip(r.get('psd_intercept', []), r.get('power_law_exponent', []))]
+        sav = flatten('self_affine_valid')
+        trans = flatten('is_transition')
+        pflags = [r['processing_flag'] for r in results.values() if 'processing_flag' in r]
+
+        def med(key):
+            v = np.asarray(flatten(key), float)
+            v = v[np.isfinite(v)]
+            return f"median sigma {np.median(v):.3f}" if v.size else "sigma N/A"
+
+        print(f"POWER-LAW FIT ({len(betas)} segments):")
+        print(f"  -> beta:             {format_stat(betas, dp=2)}   {med('beta_uncertainty')}")
+        print(f"  -> hurst:            {format_stat(flatten('hurst_exponent'), dp=2)}   {med('hurst_uncertainty')}")
+        print(f"  -> log10 PSD @ 1 km: {format_stat(amps, dp=2)}   {med('psd_amplitude_uncertainty')}")
+        # hurst = (beta-1)/2 is only a valid exponent for beta in [1,3];
+        # transitional segments are excluded from the anisotropy fits.
+        print(f"  -> {int(np.sum(sav))}/{len(sav)} self-affine valid | "
+              f"{int(np.sum(trans))} transitional | "
+              f"processing: {max(set(pflags), key=pflags.count) if pflags else 'unknown'}")
+        print("." * 60)
+
     conf = [w for r in results.values() for w in r.get('confirmed_wavelengths', [])]
     cand = [w for r in results.values() for w in r.get('candidate_wavelengths', [])]
 
@@ -602,14 +639,16 @@ def results_summary(results):
     if not conf and not cand:
         print("  -> Topography appears Scale Invariant (Fractal/No dominant peaks)")
 
-    max_reliefs = [r['max_local_relief'] for r in results.values() if 'max_local_relief' in r]
-    locs = [r['loc_of_max_relief'] for r in results.values() if 'loc_of_max_relief' in r]
+    # Keyed by trajectory: an unlabelled list is unreadable once a run covers
+    # more than one track.
+    largest = [(tid, r['max_local_relief'], r.get('loc_of_max_relief', np.nan))
+               for tid, r in results.items() if 'max_local_relief' in r]
 
-    if max_reliefs:
+    if largest:
         print("." * 60)
         print(f"LARGEST LOCAL STRUCTURES ({WINDOW_SIZE/1000:.0f}km Window):")
-        for relief, loc in zip(max_reliefs, locs):
-            print(f"  -> Relief: {relief:.1f}m at km {loc:.1f}")
+        for tid, relief, loc in sorted(largest, key=lambda t: -t[1]):
+            print(f"  -> {tid}: Relief: {relief:.1f}m at km {loc:.1f}")
         print("." * 60)
     print("=" * 60)
     return {}
