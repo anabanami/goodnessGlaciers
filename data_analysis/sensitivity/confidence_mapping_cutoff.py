@@ -104,6 +104,18 @@ def collect(level, regions):
             msg += (f"  |  w@60° (n={n_valid60}) Δβ={wb['delta']:+.3f} "
                     f"R²={wb['r2']:.3f}")
         print(msg)
+        # full sweep, so the cutoff-drift statements in the write-up cite the
+        # log instead of being read off the figure
+        fits = [(c, weighted.get(c)) for c in CUTOFFS]
+        got = [f['delta'] for _, f in fits if f is not None]
+        if got:
+            pad = ' ' * 47
+            cells = '  '.join(f"{c}°={f['delta']:+.3f}" if f is not None else f"{c}°=  n/a"
+                              for c, f in fits)
+            print(f"{pad}Δβ  {cells}   drift={max(got) - min(got):.3f}")
+            cells = '  '.join(f"{c}°={f['r2']:+.3f}" if f is not None else f"{c}°=  n/a"
+                              for c, f in fits)
+            print(f"{pad}R²  {cells}")
     return out
 
 

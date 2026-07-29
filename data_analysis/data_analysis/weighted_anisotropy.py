@@ -206,7 +206,13 @@ def plot_anisotropy(csv_path, level='window'):
 
     n_total = len(theta)
     n_valid = np.sum(weights > 0)
-    print(f"Loaded {n_total} {level}s, {n_valid} with non-zero weight")
+    # Kish effective sample size: (Σw)²/Σw². The survivor count (weights > 0)
+    # is not an ESS — it treats a weight of 0.05 as a full sample. ESS ≤ n_valid
+    # always, with equality only for uniform weights.
+    sum_w, sum_w2 = weights.sum(), np.sum(weights**2)
+    n_eff = (sum_w**2 / sum_w2) if sum_w2 > 0 else 0.0
+    print(f"Loaded {n_total} {level}s, {n_valid} with non-zero weight "
+          f"(Kish n_eff = {n_eff:.1f})")
 
     if n_valid == 0:
         print(f"  FLOW-AMBIGUOUS: all {level}s have zero weight (ice speed too low).")
@@ -318,11 +324,12 @@ def plot_anisotropy(csv_path, level='window'):
 
     _print_comparison(fit_unw, fit_w)
     print(f"\nSaved to {output_path}")
-    return {'unweighted': fit_unw, 'weighted': fit_w, 'n': n_total, 'n_valid': int(n_valid)}
+    return {'unweighted': fit_unw, 'weighted': fit_w, 'n': n_total,
+            'n_valid': int(n_valid), 'n_eff': float(n_eff)}
 
 
 def _cross_scale_comparison(win_fits, seg_fits, n_win=0, n_seg=0,
-                            n_win_valid=0, n_seg_valid=0, min_n=20):
+                            n_win_eff=0.0, n_seg_eff=0.0, min_n=20):
     """Compare Δβ between window and segment scales via z-score."""
     print(f"\n{'='*55}")
     print("CROSS-SCALE COMPARISON  (window vs segment Δβ)")
@@ -336,10 +343,10 @@ def _cross_scale_comparison(win_fits, seg_fits, n_win=0, n_seg=0,
         print(f"  ** LOW SAMPLE SIZE: {', '.join(low_n)} < {min_n} — "
               f"bootstrap SEs unreliable, interpret with caution **")
     low_n_eff = []
-    if n_win_valid < min_n:
-        low_n_eff.append(f"windows (n_eff={n_win_valid})")
-    if n_seg_valid < min_n:
-        low_n_eff.append(f"segments (n_eff={n_seg_valid})")
+    if n_win_eff < min_n:
+        low_n_eff.append(f"windows (n_eff={n_win_eff:.1f})")
+    if n_seg_eff < min_n:
+        low_n_eff.append(f"segments (n_eff={n_seg_eff:.1f})")
     for label, key in [('Unweighted', 'unweighted'), ('Weighted', 'weighted')]:
         fw, fs = win_fits.get(key), seg_fits.get(key)
         if fw is None or fs is None:
@@ -371,8 +378,8 @@ def process_region(region_name, files):
         _cross_scale_comparison(fits['window'], fits['segment'],
                                 n_win=fits['window']['n'],
                                 n_seg=fits['segment']['n'],
-                                n_win_valid=fits['window']['n_valid'],
-                                n_seg_valid=fits['segment']['n_valid'])
+                                n_win_eff=fits['window']['n_eff'],
+                                n_seg_eff=fits['segment']['n_eff'])
 
 
 if __name__ == "__main__":
