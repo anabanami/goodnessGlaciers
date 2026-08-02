@@ -26,6 +26,13 @@ HERE = Path(__file__).resolve().parent          # .../v23
 ODSA = HERE.parent                              # .../ODSA
 sys.path.insert(0, str(ODSA))
 from config import Tee                          # noqa: E402
+# The chaotic/hard and transitional/soft boundaries are held fixed while the hard/
+# transitional one is swept, so they are production values rather than parameters of this
+# test. Read them from BED_CLASSES instead of copying the numbers, which is what left this
+# script as one of the two unguarded mirrors in CONSTANTS_AUDIT.
+from bed_character import BED_EDGES              # noqa: E402
+EDGE_CHAOTIC_HARD = float(BED_EDGES[1])          # 1.5
+EDGE_TRANS_SOFT = float(BED_EDGES[3])            # 2.5
 
 OUT_ROOT = HERE / "transitional_threshold"
 THRESHOLDS = [2.0, 2.1, 2.2]
@@ -75,15 +82,15 @@ def shared():
     print(all_beta.groupby("region").size().to_string())
 
     # ── Threshold sweep ──────────────────────────────────────────────
-    # Slide the hard/transitional boundary from 1.8 to 2.6. The chaotic/hard
-    # (1.5) and transitional/soft (2.5) boundaries stay fixed; the candidate
+    # Slide the hard/transitional boundary from 1.8 to 2.6. The chaotic/hard and
+    # transitional/soft boundaries stay fixed at their production values; the candidate
     # values are marked for reference.
     sweep = np.arange(1.8, 2.61, 0.01)
 
-    pct_chaotic      = np.array([(beta < 1.5).sum() / n * 100] * len(sweep))
-    pct_hard         = np.array([((beta >= 1.5) & (beta < t)).sum() / n * 100 for t in sweep])
-    pct_transitional = np.array([((beta >= t) & (beta < 2.5)).sum() / n * 100 for t in sweep])
-    pct_soft         = np.array([(beta >= 2.5).sum() / n * 100] * len(sweep))
+    pct_chaotic      = np.array([(beta < EDGE_CHAOTIC_HARD).sum() / n * 100] * len(sweep))
+    pct_hard         = np.array([((beta >= EDGE_CHAOTIC_HARD) & (beta < t)).sum() / n * 100 for t in sweep])
+    pct_transitional = np.array([((beta >= t) & (beta < EDGE_TRANS_SOFT)).sum() / n * 100 for t in sweep])
+    pct_soft         = np.array([(beta >= EDGE_TRANS_SOFT).sum() / n * 100] * len(sweep))
 
     fig, ax = plt.subplots(figsize=(9, 4.5))
     ax.plot(sweep, pct_hard, label="hard", color="sienna", lw=2)
@@ -107,10 +114,10 @@ def shared():
     print("\n threshold   % hard     % trans     Δhard/0.1")
     print("  ──────────┼──────────┼───────────┼───────────")
     for t in [1.9, 2.0, 2.1, 2.2, 2.3, 2.4]:
-        h = ((beta >= 1.5) & (beta < t)).sum() / n * 100
-        tr = ((beta >= t) & (beta < 2.5)).sum() / n * 100
+        h = ((beta >= EDGE_CHAOTIC_HARD) & (beta < t)).sum() / n * 100
+        tr = ((beta >= t) & (beta < EDGE_TRANS_SOFT)).sum() / n * 100
         # rate of change: how much does %hard change per 0.1 shift?
-        h2 = ((beta >= 1.5) & (beta < t + 0.1)).sum() / n * 100
+        h2 = ((beta >= EDGE_CHAOTIC_HARD) & (beta < t + 0.1)).sum() / n * 100
         marker = "  ← candidate" if any(abs(t - c) < 1e-9 for c in THRESHOLDS) else ""
         print(f"    {t:.1f}     │  {h:5.1f}   │  {tr:5.1f}    │  {h2 - h:+.1f}%{marker}")
 
@@ -172,8 +179,8 @@ def run(threshold, outdir):
     """Threshold-dependent artifacts for one boundary value."""
     print(f"{'='*70}\nHARD / TRANSITIONAL THRESHOLD = {threshold:.2f}\n{'='*70}")
 
-    h  = ((beta >= 1.5) & (beta < threshold)).sum() / n * 100
-    tr = ((beta >= threshold) & (beta < 2.5)).sum() / n * 100
+    h  = ((beta >= EDGE_CHAOTIC_HARD) & (beta < threshold)).sum() / n * 100
+    tr = ((beta >= threshold) & (beta < EDGE_TRANS_SOFT)).sum() / n * 100
     print(f"At threshold = {threshold:.2f}:  hard = {h:.1f}%   transitional = {tr:.1f}%   (n = {n})")
 
     # ── Pooled KDE with the boundary marked ──────────────────────────

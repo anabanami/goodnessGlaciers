@@ -33,11 +33,15 @@ OUT_ROOT = HERE / 'stencil_sensitivity'
 RUNS = OUT_ROOT / 'runs'
 sys.path.insert(0, str(ODSA))
 from weighted_anisotropy import fit_cos2, flow_weight  # noqa: E402
-from config import Tee  # noqa: E402
+from config import Tee, WINDOW_SIZE, WINDOW_TYPE, STANDARD_WINDOW  # noqa: E402
 
 FACTORS = [2.5, 5.0, 7.5, 10.0]                  # 5.0 = production, 10.0 = McCormack 2019
 REGIONS = ['POLARGAP_2015_Pensacola_Pole']       # selective-erosion region; the open sign call
-SUFFIX = '_w50km'                                # WINDOW_SIZE unchanged, so filename is fixed
+# Built the same way bed_analysis_23 names its output, so the filename follows WINDOW_SIZE
+# and WINDOW_TYPE instead of mirroring them. This was one of the two unguarded mirrors in
+# CONSTANTS_AUDIT; deriving it removes the mirror rather than guarding it.
+SUFFIX = (f'_w{WINDOW_SIZE // 1000}km' if WINDOW_TYPE == STANDARD_WINDOW
+          else f'_w{WINDOW_SIZE // 1000}km_{WINDOW_TYPE}')
 
 
 def base_for(factor):
