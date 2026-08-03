@@ -1,12 +1,14 @@
 import numpy as np
 import pandas as pd
 from scipy import signal, stats
+from scipy.ndimage import maximum_filter1d, minimum_filter1d
 from pyproj import Transformer
 import os
 import sys
 
 from config import (WINDOW_SIZE, STEP_SIZE, WINDOW_TYPE, STANDARD_WINDOW,
                     peak_masking_height_threshold, bin_buffer, WINDOW_MASK,
+                    HILL_BOX_M, HILL_RELIEF_THRESHOLDS, HILL_THRESHOLD_M, BEDFORM_BAND_M,
                     Tee, get_region_folder, ensure_output_dirs)
 from loading import  OUTPUT_BASE_PATH, load_datasets
 from segmentation import detect_data_gaps, split_into_segments, split_by_landscape
@@ -57,6 +59,38 @@ def _downsample_idx(x, y, step_m=1000.0):
     return np.asarray(keep)
 
 
+def _hill_counts(detrended, dx, thresholds=HILL_RELIEF_THRESHOLDS, box_m=HILL_BOX_M):
+    """Ockenden bumpiness read along a transect: count points that are the maximum of
+    a box_m box whose relief clears the threshold, dropping maxima on the window edge.
+
+    The areal original plane-removes the tile first and detrending the window is the 1-D
+    equivalent, not cosmetic: on a sloping bed the box maximum sits at the box edge nearly
+    everywhere, so an undetrended profile returns almost no hills. The count is per window
+    and cannot exceed about WINDOW_SIZE / box_m.
+    """
+    n = max(3, int(round(box_m / dx)))
+    if n % 2 == 0:
+        n += 1
+    if len(detrended) < n:
+        return {t: np.nan for t in thresholds}
+
+    box_max = maximum_filter1d(detrended, n, mode='nearest')
+    box_relief = box_max - minimum_filter1d(detrended, n, mode='nearest')
+
+    counts = {}
+    for t in thresholds:
+        idx = np.flatnonzero((detrended == box_max) & (box_relief > t))
+        if idx.size == 0:
+            counts[t] = 0
+            continue
+        # Plateaux flag as runs of adjacent points; each run is one hill.
+        breaks = np.flatnonzero(np.diff(idx) > 1)
+        starts = np.concatenate([idx[:1], idx[breaks + 1]])
+        ends = np.concatenate([idx[breaks], idx[-1:]])
+        counts[t] = int(np.sum((starts > 0) & (ends < len(detrended) - 1)))
+    return counts
+
+
 def calculate_flow_incidence(x, y, flow_x, flow_y):
     flight_dx = np.gradient(x)
     flight_dy = np.gradient(y)
@@ -79,6 +113,7 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
     angular_freqs = freqs * 2 * np.pi
     wavelengths_calc = 1 / freqs
     mask = (wavelengths_calc >= 250) & (wavelengths_calc <= 50000)
+    band = (wavelengths_calc >= BEDFORM_BAND_M[0]) & (wavelengths_calc <= BEDFORM_BAND_M[1])
     log_freqs = np.log10(freqs)
 
     psd_accumulator = []
@@ -121,7 +156,14 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
                 'local_relief_m': local_relief,
                 'bed_elev_mean': np.mean(w_elev),
                 'roughness_rms': np.sqrt(np.mean(w_detrended**2)),
+                # Phase asymmetry, on the untapered residuals like roughness_rms: a Hann
+                # taper suppresses the window ends and would bias both moments.
+                'window_skewness': float(stats.skew(w_detrended, bias=False)),
+                'window_kurtosis': float(stats.kurtosis(w_detrended, bias=False)),
             }
+
+            for _t, _c in _hill_counts(w_detrended, dx_median).items():
+                feature_stats[f'hill_count_{_t}'] = _c
 
             window_incidence = incidence_array[fit_mask]
             feature_stats['mean_window_incidence'] = np.nanmean(window_incidence)
@@ -227,6 +269,40 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
         # H in [0,1] requires beta in [1,3]; outside that the window is not
         # self-affine and window_hurst is not a valid exponent (see Jordan 2017).
         feat['window_self_affine_valid'] = bool(np.isfinite(window_beta) and 1.0 <= window_beta <= 3.0)
+
+        # Detections on this window's own periodogram, same recipe as the segment
+        # first pass. Most segments hold one window, so detecting per window makes
+        # every detection one measurement instead of a mix of averaged and not.
+        dets = []
+        if np.sum(mask) >= 2 and np.all(pgram > 0):
+            s0, i0 = np.polyfit(log_freqs[mask], np.log10(pgram[mask]), 1)
+            resid = pgram / 10 ** (i0 + s0 * log_freqs)
+            pk, props = signal.find_peaks(resid, height=peak_masking_height_threshold)
+            hit = mask[pk]
+            wls = wavelengths_calc[pk[hit]]
+            # Each window is window_size long, so that is the resolvability limit.
+            thr = flag_wavelength_confidence(wls, window_size)['threshold']
+            dets = [{'window_id': feat['window_id'],
+                     'wavelength_m': float(wl),
+                     'type': 'confirmed' if wl <= thr else 'candidate',
+                     'residual_height': float(h),
+                     'incidence_deg': feat['mean_window_incidence']}
+                    for wl, h in zip(wls, props['peak_heights'][hit])]
+        feat['_detections'] = dets
+
+        # Li_2010 two-parameter index over the bedform band. xi is the band integral of
+        # the elevation PSD; eta is xi over the same integral of the slope spectrum,
+        # (2 pi k)^2 S. 2 pi sqrt(eta) is a wavelength and the 2 pi factors cancel, so it
+        # is written here as sqrt(int S dk / int k^2 S dk). The amplitude divides out,
+        # which is the axis rms_slope could not supply.
+        xi = eta_wl = np.nan
+        if np.sum(band) >= 2 and np.all(pgram[band] > 0):
+            xi = float(np.trapz(pgram[band], freqs[band]))
+            xi_k2 = float(np.trapz(freqs[band]**2 * pgram[band], freqs[band]))
+            if xi_k2 > 0:
+                eta_wl = float(np.sqrt(xi / xi_k2))
+        feat['window_xi_band'] = xi
+        feat['window_eta_wavelength'] = eta_wl
 
     return avg_psd, freqs, large_features, dx_median, psd_weights
 
@@ -378,7 +454,13 @@ def analyse_bedrock():
                     'flow_undefined_frac': float(np.mean(flow_undefined)),
                     'is_transition': is_transition,
                     'processing_flag': pflag,
-                    'window_stats': [{**w, 'segment': seg_idx + 1, 'is_transition': is_transition, 'processing_flag': pflag} for w in window_stats]
+                    'window_stats': [{**w, 'segment': seg_idx + 1, 'is_transition': is_transition, 'processing_flag': pflag} for w in window_stats],
+                    # Built here rather than beside the segment fit below so the
+                    # detections survive a segment whose spectral fit is skipped.
+                    'wavelength_detections': [
+                        {'segment': seg_idx + 1, **d,
+                         'is_transition': is_transition, 'processing_flag': pflag}
+                        for w in window_stats for d in w.get('_detections', [])]
                 }
 
                 if avg_psd is None or np.all(avg_psd == 0) or np.any(avg_psd < 0):
@@ -397,6 +479,9 @@ def analyse_bedrock():
                     slope_init, intercept_init = np.polyfit(log_freqs[fit_mask], log_psd[fit_mask], 1)
                     fitted_psd_init = 10 ** (intercept_init + slope_init * np.log10(freqs))
                     residual_psd = avg_psd / fitted_psd_init
+                    # Segment-level peaks drive the pass-2 mask and the confirmed and
+                    # candidate lists. Detections are found per window instead, so the
+                    # heights are taken there and not here.
                     peaks, _ = signal.find_peaks(residual_psd, height=peak_masking_height_threshold)
 
                     # PASS 2: mask peaks, refit
@@ -451,7 +536,8 @@ def analyse_bedrock():
                     # filtered to the fit band: below 250 m the residual compares
                     # the spectrum against an extrapolated fit at the radar
                     # resolution limit, so those peaks are not bed periodicities.
-                    in_band_peaks = peaks[fit_mask[peaks]] if len(peaks) > 0 else []
+                    in_band = fit_mask[peaks] if len(peaks) > 0 else np.zeros(0, dtype=bool)
+                    in_band_peaks = peaks[in_band] if len(peaks) > 0 else []
                     dominant_wavelengths = wavelengths_calc[in_band_peaks] if len(in_band_peaks) > 0 else []
                     profile_length = segment_distance.max() - segment_distance.min()
                     # The 2-cycle resolvability limit is set by the PSD grid, whose
@@ -499,8 +585,8 @@ def analyse_bedrock():
 
             if segment_results:
                 combined_stats = {}
-                list_keys = ['dominant_wavelengths', 'confirmed_wavelengths', 'candidate_wavelengths', 'window_stats']
-                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'psd_intercept', 'psd_intercept_uncertainty', 'psd_amplitude_uncertainty', 'flow_incidence_deg', 'flow_error_mean', 'flow_error_median', 'measures_speed_mean', 'flow_undefined_frac', 'elevation_min', 'elevation_max', 'is_transition', 'self_affine_valid']
+                list_keys = ['dominant_wavelengths', 'confirmed_wavelengths', 'candidate_wavelengths', 'window_stats', 'wavelength_detections']
+                list_keys_collect = ['power_law_exponent', 'hurst_exponent', 'beta_uncertainty', 'hurst_uncertainty', 'psd_intercept', 'psd_intercept_uncertainty', 'psd_amplitude_uncertainty', 'flow_incidence_deg', 'flow_error_mean', 'flow_error_median', 'measures_speed_mean', 'flow_undefined_frac', 'elevation_min', 'elevation_max', 'is_transition', 'self_affine_valid', 'skewness', 'kurtosis']
 
                 for key in segment_results[0].keys():
                     values = [seg[key] for seg in segment_results if key in seg]
@@ -576,8 +662,11 @@ def results_summary(results):
     lengths = [r['profile_length'] for r in results.values() if 'profile_length' in r]
     print(f"AVG SEGMENT LENGTH:\n  -> {format_stat(lengths, 'm')}")
 
-    skews = [r['skewness'] for r in results.values() if 'skewness' in r and np.isfinite(r['skewness'])]
-    kurts = [r['kurtosis'] for r in results.values() if 'kurtosis' in r and np.isfinite(r['kurtosis'])]
+    # Now collected per segment (see list_keys_collect), so flatten across trajectories
+    # rather than reading one trajectory-mean each. The printed value is a mean over
+    # segments, not a mean of trajectory means.
+    skews = [v for r in results.values() for v in np.atleast_1d(r.get('skewness', [])) if np.isfinite(v)]
+    kurts = [v for r in results.values() for v in np.atleast_1d(r.get('kurtosis', [])) if np.isfinite(v)]
     if skews:
         print(f"SKEWNESS:\n  -> {format_stat(skews)}")
     if kurts:
@@ -689,6 +778,13 @@ if __name__ == "__main__":
                     'relief_m': w.get('local_relief_m'),
                     'bed_elev_mean': w.get('bed_elev_mean'),
                     'rms_roughness': w.get('roughness_rms'),
+                    'skewness': w.get('window_skewness'),
+                    'kurtosis': w.get('window_kurtosis'),
+                    # One column at the adopted gate. The snapshot pipeline that ran the
+                    # threshold sweep emits hill_count_<threshold> for each of the four.
+                    'hill_count': w.get(f'hill_count_{HILL_THRESHOLD_M}'),
+                    'eta_wavelength_m': w.get('window_eta_wavelength'),
+                    'xi_band': w.get('window_xi_band'),
                     'flow_error_mean': w.get('flow_error_mean'),
                     'flow_error_median': w.get('flow_error_median'),
                     'measures_speed_mean': w.get('measures_speed_mean'),
@@ -731,6 +827,8 @@ if __name__ == "__main__":
             flow_undef_fracs = traj_data.get('flow_undefined_frac', [])
             elev_mins = traj_data.get('elevation_min', [])
             elev_maxs = traj_data.get('elevation_max', [])
+            seg_skews = traj_data.get('skewness', [])
+            seg_kurts = traj_data.get('kurtosis', [])
             is_trans = traj_data.get('is_transition', [])
             self_affine_valids = traj_data.get('self_affine_valid', [])
 
@@ -756,6 +854,8 @@ if __name__ == "__main__":
                     'flow_undefined_frac': flow_undef_fracs[i] if i < len(flow_undef_fracs) else np.nan,
                     'elevation_min': elev_mins[i] if i < len(elev_mins) else np.nan,
                     'elevation_max': elev_maxs[i] if i < len(elev_maxs) else np.nan,
+                    'skewness': seg_skews[i] if i < len(seg_skews) else np.nan,
+                    'kurtosis': seg_kurts[i] if i < len(seg_kurts) else np.nan,
                     'is_transition': is_trans[i] if i < len(is_trans) else False,
                     'processing_flag': traj_data.get('processing_flag'),
                 }
@@ -782,10 +882,8 @@ if __name__ == "__main__":
         # --- Wavelength detections CSV ---
         all_wavelength_data = []
         for traj_id, traj_data in region_results.items():
-            for wl in traj_data.get('confirmed_wavelengths', []):
-                all_wavelength_data.append({'trajectory': traj_id, 'wavelength_m': wl, 'type': 'confirmed'})
-            for wl in traj_data.get('candidate_wavelengths', []):
-                all_wavelength_data.append({'trajectory': traj_id, 'wavelength_m': wl, 'type': 'candidate'})
+            for d in traj_data.get('wavelength_detections', []):
+                all_wavelength_data.append({'trajectory': traj_id, **d})
         pd.DataFrame(all_wavelength_data).to_csv(os.path.join(region_output, f'{region_name}{csv_suffix}_wavelength_detections.csv'), index=False)
 
         print(f"Exported {len(all_window_data)} window rows, {len(all_segment_data)} segment rows, {len(all_wavelength_data)} wavelength detections")

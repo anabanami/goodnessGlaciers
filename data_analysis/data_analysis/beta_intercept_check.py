@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+from scipy.stats import pearsonr
 from loading import OUTPUT_BASE_PATH
 from config import Tee, PROCESSING_FLAG_NOTE, processing_flag_of
 from plotting import flag_title
@@ -80,12 +81,13 @@ for f in sorted(Path(OUTPUT_BASE_PATH, "window_csvs").glob("*_window_stats.csv")
         print(pd.crosstab(tmp.bed_class, tmp.C_bin, normalize='all').mul(100).round(2))
 
 
-# ── Diagnostic: relief_m vs psd_amplitude_1km, colored by bed_class ──
+# ── Scatter diagnostics: per-region panels + one combined, colored by bed_class ──
 
 BED_COLORS = {
     'chaotic': '#d62728', 'hard': '#ff7f0e',
     'transitional': '#9467bd', 'soft': '#1f77b4',
 }
+BED_ORDER = ['chaotic', 'hard', 'transitional', 'soft']
 
 
 def _panel_flag(df):
@@ -93,133 +95,66 @@ def _panel_flag(df):
     flags = df['processing_flag'].dropna().unique() if 'processing_flag' in df.columns else []
     return flags[0] if len(flags) == 1 else None
 
+
+def diag_grid(data, xcol, ycol, xlabel, ylabel, suptitle, fname, vlines=()):
+    df_all = data.dropna(subset=[xcol, ycol, 'bed_class'])
+    regions = df_all['region'].unique()
+    ncols = min(len(regions) + 1, 4)
+    nrows = int(np.ceil((len(regions) + 1) / ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 4.5 * nrows), squeeze=False)
+    axes_flat = axes.flatten()
+
+    def panel(ax, df, title):
+        for cls in BED_ORDER:
+            sub = df[df['bed_class'] == cls]
+            if len(sub):
+                ax.scatter(sub[xcol], sub[ycol], c=BED_COLORS[cls], label=cls,
+                           s=15, alpha=0.6, edgecolors='none')
+        valid = df[[xcol, ycol]].dropna()
+        r, p = pearsonr(valid[xcol], valid[ycol])
+        flag_title(ax, f'{title}\n(r={r:.2f}, p={p:.1e}, n={len(valid)})',
+                   _panel_flag(df), fontsize=10)
+        for x in vlines:
+            ax.axvline(x, color='0.5', ls='--', lw=0.8)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.grid(True, alpha=0.3)
+
+    for i, reg in enumerate(regions):
+        panel(axes_flat[i], df_all[df_all['region'] == reg], reg)
+    panel(axes_flat[len(regions)], df_all, 'ALL REGIONS')
+    axes_flat[len(regions)].legend(fontsize=8)
+
+    for j in range(len(regions) + 1, len(axes_flat)):
+        axes_flat[j].set_visible(False)
+
+    fig.suptitle(suptitle, fontsize=13)
+    plt.tight_layout()
+    out = OUT / fname
+    plt.savefig(out, dpi=200, bbox_inches='tight')
+    plt.close()
+    print(f"Diagnostic saved: {out}")
+
+
 csvs = sorted(Path(OUTPUT_BASE_PATH, "window_csvs").glob("*_window_stats.csv"))
 all_df = pd.concat([pd.read_csv(f).assign(
     region=f.stem.replace("_w50km_window_stats", "")) for f in csvs], ignore_index=True)
-all_df = all_df.dropna(subset=['relief_m', 'psd_amplitude_1km', 'bed_class'])
 
-# Per-region panels + one combined
-regions = all_df['region'].unique()
-ncols = min(len(regions) + 1, 4)
-nrows = int(np.ceil((len(regions) + 1) / ncols))
-fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 4.5 * nrows), squeeze=False)
-axes_flat = axes.flatten()
+print()
+diag_grid(all_df, 'relief_m', 'psd_amplitude_1km', 'Relief (m)', 'PSD amplitude @ 1 km',
+          'Relief vs PSD amplitude @ 1 km — does psd_intercept add info beyond relief?',
+          'relief_vs_psd_amplitude_diagnostic.png')
 
-def scatter_panel(ax, df, title):
-    for cls in ['chaotic', 'hard', 'transitional', 'soft']:
-        sub = df[df['bed_class'] == cls]
-        if len(sub):
-            ax.scatter(sub['relief_m'], sub['psd_amplitude_1km'],
-                       c=BED_COLORS[cls], label=cls, s=15, alpha=0.6, edgecolors='none')
-    from scipy.stats import pearsonr
-    valid = df[['relief_m', 'psd_amplitude_1km']].dropna()
-    r, p = pearsonr(valid['relief_m'], valid['psd_amplitude_1km'])
-    n = len(valid)
-    flag_title(ax, f'{title}\n(r={r:.2f}, p={p:.1e}, n={n})', _panel_flag(df), fontsize=10)
-    ax.set_xlabel('Relief (m)')
-    ax.set_ylabel('PSD amplitude @ 1 km')
-    ax.grid(True, alpha=0.3)
+diag_grid(all_df, 'psd_intercept', 'beta', 'PSD intercept', 'β',
+          'β vs PSD intercept — Mechanical coupling diagnostic',
+          'beta_vs_psd_intercept_diagnostic.png')
 
-for i, reg in enumerate(regions):
-    scatter_panel(axes_flat[i], all_df[all_df['region'] == reg], reg)
-scatter_panel(axes_flat[len(regions)], all_df, 'ALL REGIONS')
-axes_flat[len(regions)].legend(fontsize=8)
+diag_grid(all_df, 'psd_amplitude_1km', 'beta', 'PSD amplitude @ 1 km', 'β',
+          'β vs PSD amplitude @ 1 km — 2D roughness classification (in-band amplitude)',
+          'beta_vs_psd_amplitude_diagnostic.png')
 
-for j in range(len(regions) + 1, len(axes_flat)):
-    axes_flat[j].set_visible(False)
-
-fig.suptitle('Relief vs PSD amplitude @ 1 km — does psd_intercept add info beyond relief?', fontsize=13)
-plt.tight_layout()
-BIC_OUT = Path(OUTPUT_BASE_PATH, "bed_character", "beta_intercept_check")
-BIC_OUT.mkdir(parents=True, exist_ok=True)
-out = BIC_OUT / "relief_vs_psd_amplitude_diagnostic.png"
-plt.savefig(out, dpi=200, bbox_inches='tight')
-plt.close()
-print(f"\nDiagnostic saved: {out}")
-
-
-# ── Diagnostic: β vs psd_intercept (purely spectral 2D classification) ──
-
-all_df2 = pd.concat([pd.read_csv(f).assign(
-    region=f.stem.replace("_w50km_window_stats", "")) for f in csvs], ignore_index=True)
-all_df2 = all_df2.dropna(subset=['beta', 'psd_intercept', 'bed_class'])
-
-regions2 = all_df2['region'].unique()
-ncols2 = min(len(regions2) + 1, 4)
-nrows2 = int(np.ceil((len(regions2) + 1) / ncols2))
-fig2, axes2 = plt.subplots(nrows2, ncols2, figsize=(5 * ncols2, 4.5 * nrows2), squeeze=False)
-axes2_flat = axes2.flatten()
-
-def scatter_panel_spectral(ax, df, title):
-    from scipy.stats import pearsonr
-    for cls in ['chaotic', 'hard', 'transitional', 'soft']:
-        sub = df[df['bed_class'] == cls]
-        if len(sub):
-            ax.scatter(sub['psd_intercept'], sub['beta'],
-                       c=BED_COLORS[cls], label=cls, s=15, alpha=0.6, edgecolors='none')
-    valid = df[['psd_intercept', 'beta']].dropna()
-    r, p = pearsonr(valid['psd_intercept'], valid['beta'])
-    n = len(valid)
-    flag_title(ax, f'{title}\n(r={r:.2f}, p={p:.1e}, n={n})', _panel_flag(df), fontsize=10)
-    ax.set_xlabel('PSD intercept')
-    ax.set_ylabel('β')
-    ax.grid(True, alpha=0.3)
-
-for i, reg in enumerate(regions2):
-    scatter_panel_spectral(axes2_flat[i], all_df2[all_df2['region'] == reg], reg)
-scatter_panel_spectral(axes2_flat[len(regions2)], all_df2, 'ALL REGIONS')
-axes2_flat[len(regions2)].legend(fontsize=8)
-
-for j in range(len(regions2) + 1, len(axes2_flat)):
-    axes2_flat[j].set_visible(False)
-
-fig2.suptitle('β vs PSD intercept — Mechanical coupling diagnostic', fontsize=13)
-plt.tight_layout()
-out2 = BIC_OUT / "beta_vs_psd_intercept_diagnostic.png"
-plt.savefig(out2, dpi=200, bbox_inches='tight')
-plt.close()
-print(f"Diagnostic saved: {out2}")
-
-
-# ── 2D roughness classification: β vs psd_amplitude_1km (in-band amplitude) ──
-
-all_df3 = pd.concat([pd.read_csv(f).assign(
-    region=f.stem.replace("_w50km_window_stats", "")) for f in csvs], ignore_index=True)
-all_df3 = all_df3.dropna(subset=['beta', 'psd_amplitude_1km', 'bed_class'])
-
-regions3 = all_df3['region'].unique()
-ncols3 = min(len(regions3) + 1, 4)
-nrows3 = int(np.ceil((len(regions3) + 1) / ncols3))
-fig3, axes3 = plt.subplots(nrows3, ncols3, figsize=(5 * ncols3, 4.5 * nrows3), squeeze=False)
-axes3_flat = axes3.flatten()
-
-def scatter_panel_classification(ax, df, title):
-    from scipy.stats import pearsonr
-    for cls in ['chaotic', 'hard', 'transitional', 'soft']:
-        sub = df[df['bed_class'] == cls]
-        if len(sub):
-            ax.scatter(sub['psd_amplitude_1km'], sub['beta'],
-                       c=BED_COLORS[cls], label=cls, s=15, alpha=0.6, edgecolors='none')
-    valid = df[['psd_amplitude_1km', 'beta']].dropna()
-    r, p = pearsonr(valid['psd_amplitude_1km'], valid['beta'])
-    n = len(valid)
-    flag_title(ax, f'{title}\n(r={r:.2f}, p={p:.1e}, n={n})', _panel_flag(df), fontsize=10)
-    ax.set_xlabel('PSD amplitude @ 1 km')
-    ax.set_ylabel('β')
-    ax.grid(True, alpha=0.3)
-
-for i, reg in enumerate(regions3):
-    scatter_panel_classification(axes3_flat[i], all_df3[all_df3['region'] == reg], reg)
-scatter_panel_classification(axes3_flat[len(regions3)], all_df3, 'ALL REGIONS')
-axes3_flat[len(regions3)].legend(fontsize=8)
-
-for j in range(len(regions3) + 1, len(axes3_flat)):
-    axes3_flat[j].set_visible(False)
-
-fig3.suptitle('β vs PSD amplitude @ 1 km — 2D roughness classification (in-band amplitude)', fontsize=13)
-plt.tight_layout()
-out3 = BIC_OUT / "beta_vs_psd_amplitude_diagnostic.png"
-plt.savefig(out3, dpi=200, bbox_inches='tight')
-plt.close()
-print(f"Diagnostic saved: {out3}")
+# vlines are the relief_class breaks, for reading the scatter against the categorical bins
+diag_grid(all_df, 'relief_m', 'beta', 'Relief (m)', 'β',
+          'β vs relief — is spectral slope independent of total relief?',
+          'beta_vs_relief_diagnostic.png', vlines=(350, 800))
 

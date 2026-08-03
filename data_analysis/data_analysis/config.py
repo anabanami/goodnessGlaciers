@@ -48,6 +48,22 @@ def processing_flag_of(df):
         return df['processing_flag'].dropna().mode().iloc[0]
     return None
 
+# Hill count (Ockenden_2026 bumpiness, transect form): a point is a hill if it is the
+# max of a box this long and that box's relief clears the threshold. 20 m is the adopted
+# gate, the only one of Ockenden's four published thresholds that stays usable in every
+# region (see 'Sensitivity test - hill_count'). The four-threshold sweep that settled it
+# reproduces from the pipeline snapshot in v23/hill_count_threshold/hill_count_pipeline/,
+# which pins the whole pipeline and not just these values.
+HILL_BOX_M = 5000.0
+HILL_THRESHOLD_M = 20
+HILL_RELIEF_THRESHOLDS = (HILL_THRESHOLD_M,)
+
+# Band the Li_2010 two-parameter roughness index is integrated over. Spagnolo_2017's
+# MSGL range, the same anchor item 7 rests on. The band matters: over the full fit band
+# the index degenerates to a restatement of beta, and narrowing it to two octaves is
+# what leaves room for anything else to show.
+BEDFORM_BAND_M = (300.0, 1200.0)
+
 # Landscape splitting parameters
 SMOOTHING_LENGTH = WINDOW_SIZE  # metres
 GRADIENT_THRESHOLD = 15 # 15 m/km is standard

@@ -31,8 +31,7 @@ OUTPUT_BASE_PATH = os.environ.get('ODSA_OUTPUT_BASE') or os.path.join(
     'Ockenden-regions/',
     # 'v23/peak-masking_threshold/threshold_10.0/Ockenden-regions-sensitivityTEST'
     # 'v23/window_type/Tukey-Ockenden-regions_2026-07-24_window-beta-UNMASKED',
-    # 'plotting_TEST/HD_sigma_amp'
-
+    # 'individual_region_TEST/HD'
 )
 
 
