@@ -2,7 +2,7 @@
 window-level beta vs missing-band regression (truncated population).
 
 Run from v23/; writes results to v23/TESTING_LANDSCAPE_SPLITTING/."""
-import numpy as np, pandas as pd, os, re
+import numpy as np, pandas as pd, os
 from pyproj import Transformer
 from scipy import stats as sst
 import sys
@@ -12,7 +12,7 @@ OUT = os.path.join(HERE, "TESTING_LANDSCAPE_SPLITTING")      # this script's res
 sys.path.insert(0, ODSA)
 from loading import load_datasets
 from segmentation import detect_data_gaps, split_into_segments, split_by_landscape
-from config import WINDOW_SIZE, Tee
+from config import WINDOW_SIZE, FIT_BAND_M, Tee
 RESULTS = os.path.join(ODSA, "Ockenden-regions")  # most recent codebase run
 os.makedirs(OUT, exist_ok=True)
 sys.stdout = Tee(os.path.join(OUT, "s9_dose_response_log.txt"))
@@ -46,13 +46,9 @@ csvs = {
 datasetname = {'Pensacola': 'POLARGAP_2015_Pensacola_Pole',
                'Hercules':  'POLARGAP_2015_Fig2C_Hercules_Dome'}
 
-# --- Drift guard. LOG50 is log10 of the fit-band upper wavelength, an inline literal
-# in analyse_sliding_windows (bed_analysis_23.py). Warn (non-fatal) if it has moved.
-_BAND_MAX = 50000
-with open(os.path.join(ODSA, "bed_analysis_23.py")) as _f: _m = re.search(r"wavelengths_calc <= (\d+)", _f.read())
-if _m is None: print("NOTE: could not cross-check fit-band max against bed_analysis_23.py.")
-elif int(_m.group(1)) != _BAND_MAX: print(f"WARNING: LOG50 uses band max {_BAND_MAX} but bed_analysis_23.py={_m.group(1)} — STALE.")
-LOG50 = np.log10(float(_BAND_MAX))
+# LOG50 is log10 of the fit-band upper wavelength, taken from config so it cannot go
+# stale. The name keeps the 50 km value it was written for.
+LOG50 = np.log10(float(FIT_BAND_M[1]))
 for reg, fn in csvs.items():
     w = pd.read_csv(os.path.join(RESULTS, 'window_csvs', fn))
     w['L'] = [lengths.get((datasetname[reg], str(t), int(s)), np.nan)

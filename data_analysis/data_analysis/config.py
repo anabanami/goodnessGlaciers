@@ -64,6 +64,10 @@ HILL_RELIEF_THRESHOLDS = (HILL_THRESHOLD_M,)
 # what leaves room for anything else to show.
 BEDFORM_BAND_M = (300.0, 1200.0)
 
+# Wavelength band the power-law fit and the wavelength detections are restricted to.
+# The upper edge tracks WINDOW_SIZE: no wavelength longer than one window is resolved.
+FIT_BAND_M = (250.0, 50000.0)
+
 # Landscape splitting parameters
 SMOOTHING_LENGTH = WINDOW_SIZE  # metres
 GRADIENT_THRESHOLD = 15 # 15 m/km is standard

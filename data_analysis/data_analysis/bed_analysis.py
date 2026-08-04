@@ -8,11 +8,11 @@ import sys
 
 from config import (WINDOW_SIZE, STEP_SIZE, WINDOW_TYPE, STANDARD_WINDOW,
                     peak_masking_height_threshold, bin_buffer, WINDOW_MASK,
-                    HILL_BOX_M, HILL_RELIEF_THRESHOLDS, HILL_THRESHOLD_M, BEDFORM_BAND_M,
+                    HILL_BOX_M, HILL_RELIEF_THRESHOLDS, HILL_THRESHOLD_M, BEDFORM_BAND_M, FIT_BAND_M,
                     Tee, get_region_folder, ensure_output_dirs)
 from loading import  OUTPUT_BASE_PATH, load_datasets
 from segmentation import detect_data_gaps, split_into_segments, split_by_landscape
-from plotting import plot_raw_data_with_segmentation_check, plot_spectra
+from plotting import plot_raw_data_with_segmentation_check, plot_spectra, psd_spectrum_plot, psd_residuals_plot
 from REMA_extractor import extract_rema_elevation, extract_rema_flow_vector, calculate_ice_thickness, MEaSUREs_comparison
 
 
@@ -112,7 +112,7 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
     freqs = np.geomspace(min_freq, max_freq, num=500)
     angular_freqs = freqs * 2 * np.pi
     wavelengths_calc = 1 / freqs
-    mask = (wavelengths_calc >= 250) & (wavelengths_calc <= 50000)
+    mask = (wavelengths_calc >= FIT_BAND_M[0]) & (wavelengths_calc <= FIT_BAND_M[1])
     band = (wavelengths_calc >= BEDFORM_BAND_M[0]) & (wavelengths_calc <= BEDFORM_BAND_M[1])
     log_freqs = np.log10(freqs)
 
@@ -469,7 +469,7 @@ def analyse_bedrock():
                     continue
 
                 wavelengths_calc = 1 / freqs
-                fit_mask = (wavelengths_calc >= 250) & (wavelengths_calc <= 50000)
+                fit_mask = (wavelengths_calc >= FIT_BAND_M[0]) & (wavelengths_calc <= FIT_BAND_M[1])
 
                 if np.sum(fit_mask) >= 2:
                     log_freqs = np.log10(freqs)
@@ -575,6 +575,8 @@ def analyse_bedrock():
                     })
 
                     plot_spectra(segment_distance, detrended, wavelengths_calc, avg_psd, fitted_psd, beta, psd_intercept, psd_amplitude_1km, residual_psd, traj_id, dataset_name, segment_number=seg_idx+1, output_path=output_paths['psd'], processing_flag=pflag)
+                    psd_spectrum_plot(wavelengths_calc, avg_psd, fitted_psd, beta, psd_intercept, psd_amplitude_1km, traj_id, dataset_name, segment_number=seg_idx+1, output_path=output_paths['psd'], processing_flag=pflag)
+                    psd_residuals_plot(wavelengths_calc, residual_psd, traj_id, dataset_name, segment_number=seg_idx+1, output_path=output_paths['psd'], processing_flag=pflag)
                 else:
                     print(f"Skipping Line {traj_id}: Not enough data points in 250m–50km range.")
 

@@ -131,12 +131,16 @@ for name, df in sorted(regions.items()):
 fig, axes = plt.subplots(2, 1, figsize=(12, 10))
 
 ax = axes[0]
-bins = np.arange(0, 2200, 50)
+# Relief is log-normal (skew +2.2 linear, -0.1 in log10), so bins and axes are geometric.
+# The old linear bins also stopped at 2200 m and silently dropped the tail to 3825 m.
+_pos = all_relief[all_relief > 0]
+bins = np.geomspace(_pos.min(), _pos.max(), 40)
 for cls in ['low-relief', 'alpine', 'selective erosion']:
     vals = np.concatenate([df['relief_m'].dropna().values for df in regions.values() if df['_class'].iloc[0] == cls])
     ax.hist(vals, bins=bins, alpha=0.6, label=cls, color=CLASS_COLORS[cls], edgecolor='white', linewidth=0.3)
 for t in THRESHOLDS:
     ax.axvline(t, color='red', ls='--', lw=1.5, label=f'threshold {t}m')
+ax.set_xscale('log')
 ax.set_xlabel('Relief (m)')
 ax.set_ylabel('Window count')
 ax.set_title('Relief distribution by landscape class')
@@ -155,6 +159,7 @@ for patch, c in zip(bp['boxes'], colors):
     patch.set_alpha(0.7)
 for t in THRESHOLDS:
     ax.axhline(t, color='red', ls='--', lw=1.5)
+ax.set_yscale('log')
 ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=8)
 ax.set_ylabel('Relief (m)')
 ax.set_title('Relief by region (boxes = IQR, whiskers = 1.5xIQR)')
@@ -171,6 +176,7 @@ for name, df in sorted(regions.items()):
     ax.scatter(df['relief_m'], df['beta'], s=8, alpha=0.4, c=c, edgecolors='none')
 for t in THRESHOLDS:
     ax.axvline(t, color='red', ls='--', lw=1.2)
+ax.set_xscale('log')
 ax.set_xlabel('Relief (m)')
 ax.set_ylabel('Beta')
 ax.set_title('Beta vs Relief')
@@ -183,6 +189,7 @@ for name, df in sorted(regions.items()):
     ax.scatter(df['relief_m'], df['rms_roughness'], s=8, alpha=0.4, c=c, edgecolors='none')
 for t in THRESHOLDS:
     ax.axvline(t, color='red', ls='--', lw=1.2)
+ax.set_xscale('log')
 ax.set_xlabel('Relief (m)')
 ax.set_ylabel('RMS roughness (m)')
 ax.set_title('RMS roughness vs Relief')
@@ -202,8 +209,10 @@ for cls in ['low-relief', 'alpine', 'selective erosion']:
 for t in THRESHOLDS:
     frac = np.searchsorted(sorted_r, t) / len(sorted_r)
     ax3.axvline(t, color='red', ls='--', lw=1.5)
-    ax3.annotate(f'{t}m -> {frac:.1%}', xy=(t, frac), xytext=(t+50, frac-0.08),
+    # Label offset is multiplicative so it stays put on the log axis.
+    ax3.annotate(f'{t}m -> {frac:.1%}', xy=(t, frac), xytext=(t*1.1, frac-0.08),
                 fontsize=10, color='red')
+ax3.set_xscale('log')
 ax3.set_xlabel('Relief (m)')
 ax3.set_ylabel('Cumulative fraction')
 ax3.set_title('Relief CDF — all windows + per class')

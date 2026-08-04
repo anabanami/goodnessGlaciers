@@ -12,21 +12,20 @@ OUT = os.path.join(HERE, "TESTING_LANDSCAPE_SPLITTING")      # this script's res
 sys.path.insert(0, ODSA)
 from loading import load_datasets
 from segmentation import split_into_segments, split_by_landscape
-from config import WINDOW_SIZE, Tee
+from config import WINDOW_SIZE, FIT_BAND_M, Tee
 RESULTS = os.path.join(ODSA, "Ockenden-regions")  # most recent codebase run
 os.makedirs(OUT, exist_ok=True)
 sys.stdout = Tee(os.path.join(OUT, "sparsity_log.txt"))
 
-# --- Drift guard. nband() below reproduces the grid/band inline literals of
-# analyse_sliding_windows (bed_analysis_23.py). Read them from that source and warn
-# (non-fatal) if nband has gone stale relative to production.
+# --- Drift guard. nband() below reproduces the grid of analyse_sliding_windows
+# (bed_analysis_23.py); the band comes from config, the grid bins and dx floor are still
+# inline literals there, so read those two from source and warn (non-fatal) on drift.
+BAND_MIN, BAND_MAX = FIT_BAND_M
 def _prodval(pat, cast=float):
     with open(os.path.join(ODSA, "bed_analysis_23.py")) as _f: src = _f.read()
     m = re.search(pat, src); return cast(m.group(1)) if m else None
 for _label, _mine, _prod in [("grid bins", 500,   _prodval(r"geomspace\([^)]*num=(\d+)", int)),
-                             ("dx floor",  15.0,  _prodval(r"max\(dx_median,\s*([\d.]+)\)")),
-                             ("band min",  250,   _prodval(r"wavelengths_calc >= (\d+)", int)),
-                             ("band max",  50000, _prodval(r"wavelengths_calc <= (\d+)", int))]:
+                             ("dx floor",  15.0,  _prodval(r"max\(dx_median,\s*([\d.]+)\)"))]:
     if _prod is None: print(f"NOTE: could not cross-check {_label} against bed_analysis_23.py.")
     elif _mine != _prod: print(f"WARNING: nband {_label}={_mine} but bed_analysis_23.py={_prod} — nband is STALE.")
 
@@ -53,7 +52,7 @@ def nband(L,dx):
     ws=L if L<WINDOW_SIZE else WINDOW_SIZE
     mn,mx=1/ws,1/(2*max(dx,15.0))
     f=np.geomspace(mn,mx,500); wl=1/f
-    return int(((wl>=250)&(wl<=50000)).sum())
+    return int(((wl>=BAND_MIN)&(wl<=BAND_MAX)).sum())
 
 regions={'Aurora':'ASB_ICECAP_2010_Fig4C_Aurora_SB_lowrelief',
          'Pensacola':'POLARGAP_2015_Pensacola_Pole',

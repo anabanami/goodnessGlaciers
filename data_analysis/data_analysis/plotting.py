@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.offsetbox import TextArea, HPacker, AnnotationBbox
 from scipy import signal
 import os
-from config import peak_masking_height_threshold, PROCESSING_FLAG_COLORS as _FLAG_COLOR
+from config import peak_masking_height_threshold, FIT_BAND_M, PROCESSING_FLAG_COLORS as _FLAG_COLOR
 
 
 def _two_colour_title(base_title, processing_flag, fontsize):
@@ -86,6 +86,23 @@ def flag_suptitle(fig, base_title, processing_flag, fontsize=14):
         fig.set_size_inches(need + 0.4, h)
 
 
+def annotate_residual_peaks(ax, wavelengths, residual_psd):
+    """Scatter the shortest and longest in-band residual peaks; returns whether any were drawn.
+    Band matches the wavelength_detections export, so both must change together."""
+    peaks, _ = signal.find_peaks(residual_psd, height=peak_masking_height_threshold)
+    if len(peaks) > 0:
+        peaks = peaks[(wavelengths[peaks] >= FIT_BAND_M[0]) & (wavelengths[peaks] <= FIT_BAND_M[1])]
+    if len(peaks) == 0:
+        return False
+    peak_waves = wavelengths[peaks]
+    peak_powers = residual_psd[peaks]
+    idx_min = np.argmin(peak_waves)
+    idx_max = np.argmax(peak_waves)
+    ax.scatter(peak_waves[idx_max], peak_powers[idx_max], color='C3', s=40, alpha=1, label=f'Max λ: {peak_waves[idx_max]:.0f}m')
+    ax.scatter(peak_waves[idx_min], peak_powers[idx_min], color='C0', s=40, alpha=1, label=f'Min λ: {peak_waves[idx_min]:.0f}m')
+    return True
+
+
 def plot_raw_data_with_segmentation_check(dist, elev, segments, traj_id, gap_mask=None, output_path=None,
                                           processing_flag=None):
     plt.figure(figsize=(18, 6))
@@ -136,7 +153,7 @@ def plot_spectra(dist, detrended, wavelengths, psd, fitted_psd, beta, psd_interc
     ax2.plot(wavelengths, fitted_psd, color='C1', label=f'Power-law fit: β={beta:.1f}, psd_intercept={psd_intercept:.1f}')
     ax2.set_xlabel('Wavelength (m)')
     ax2.set_ylabel('Power Spectral Density ($m^3$)')
-    ax2.set_title('Power Spectrum')
+    ax2.set_title('Segment-averaged Power Spectrum')
     ax2.grid(True, linestyle=":", alpha=0.5)
     if np.isfinite(psd_amplitude_1km):
         ax2.axvline(x=1000, color='C2', ls='--', lw=1,
@@ -147,17 +164,7 @@ def plot_spectra(dist, detrended, wavelengths, psd, fitted_psd, beta, psd_interc
     ax3 = fig.add_subplot(gs[1, :])
     ax3.semilogx(wavelengths, residual_psd, color='k', alpha=0.5)
 
-    peaks, _ = signal.find_peaks(residual_psd, height=peak_masking_height_threshold)
-    # Annotate only in-band detections, matching the wavelength_detections export.
-    if len(peaks) > 0:
-        peaks = peaks[(wavelengths[peaks] >= 250) & (wavelengths[peaks] <= 50000)]
-    if len(peaks) > 0:
-        peak_waves = wavelengths[peaks]
-        peak_powers = residual_psd[peaks]
-        idx_min = np.argmin(peak_waves)
-        idx_max = np.argmax(peak_waves)
-        ax3.scatter(peak_waves[idx_max], peak_powers[idx_max], color='C3', s=40, alpha=1, label=f'Max λ: {peak_waves[idx_max]:.0f}m')
-        ax3.scatter(peak_waves[idx_min], peak_powers[idx_min], color='C0', s=40, alpha=1, label=f'Min λ: {peak_waves[idx_min]:.0f}m')
+    if annotate_residual_peaks(ax3, wavelengths, residual_psd):
         ax3.legend()
 
     ax3.set_xlabel('Wavelength (m)')
@@ -168,6 +175,56 @@ def plot_spectra(dist, detrended, wavelengths, psd, fitted_psd, beta, psd_interc
     plt.tight_layout()
     segment_suffix = f'_seg{segment_number}' if segment_number is not None else ''
     filename = f'psd_analysis_{dataset_name}_{traj_id}{segment_suffix}.png'
+    save_path = os.path.join(output_path, filename) if output_path else filename
+    plt.savefig(save_path, dpi=500, bbox_inches='tight')
+    plt.close()
+
+
+def psd_spectrum_plot(wavelengths, psd, fitted_psd, beta, psd_intercept, psd_amplitude_1km,
+                 traj_id, dataset_name, segment_number=None, output_path=None, processing_flag=None):
+
+    fig, ax = plt.subplots(figsize=(10, 7.5))
+    ax.loglog(wavelengths, psd, color='k', alpha=0.8, label='Power spectrum density')
+    ax.plot(wavelengths, fitted_psd, color='C1', label=f'Power-law fit: β={beta:.1f}, psd_intercept={psd_intercept:.1f}')
+    ax.set_xlabel('Wavelength (m)')
+    ax.set_ylabel('Power Spectral Density ($m^3$)')
+    segment_label = f' - Segment {segment_number}' if segment_number is not None else ''
+    flag_title(ax, f'Segment-averaged Power Spectrum: {traj_id}{segment_label}', processing_flag)
+    ax.grid(True, linestyle=":", alpha=0.5)
+    if np.isfinite(psd_amplitude_1km):
+        ax.axvline(x=1000, color='C2', ls='--', lw=1,
+                   label=f'log10 psd_amplitude_1km={psd_amplitude_1km:.1f} @ λ=1 km')
+        ax.axhline(y=10 ** psd_amplitude_1km, color='C2', ls='--', lw=1)
+    ax.legend()
+
+    plt.tight_layout()
+    segment_suffix = f'_seg{segment_number}' if segment_number is not None else ''
+    filename = f'psd_spectrum_{dataset_name}_{traj_id}{segment_suffix}.png'
+    save_path = os.path.join(output_path, filename) if output_path else filename
+    plt.savefig(save_path, dpi=500, bbox_inches='tight')
+    plt.close()
+
+
+def psd_residuals_plot(wavelengths, residual_psd, traj_id, dataset_name,
+                 segment_number=None, output_path=None, processing_flag=None):
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.semilogx(wavelengths, residual_psd, color='k', alpha=0.5)
+
+    annotate_residual_peaks(ax, wavelengths, residual_psd)
+
+    ax.axhline(y=peak_masking_height_threshold, color='0.5', ls='--', lw=1,
+               label=f'Detection threshold = {peak_masking_height_threshold}')
+    ax.set_xlabel('Wavelength (m)')
+    ax.set_ylabel('Whitened PSD - ratio to trend')
+    segment_label = f' - Segment {segment_number}' if segment_number is not None else ''
+    flag_title(ax, f'Whitened Residuals (Normalised): {traj_id}{segment_label}', processing_flag)
+    ax.grid(True, linestyle=":", alpha=0.5)
+    ax.legend()
+
+    plt.tight_layout()
+    segment_suffix = f'_seg{segment_number}' if segment_number is not None else ''
+    filename = f'psd_residuals_{dataset_name}_{traj_id}{segment_suffix}.png'
     save_path = os.path.join(output_path, filename) if output_path else filename
     plt.savefig(save_path, dpi=500, bbox_inches='tight')
     plt.close()

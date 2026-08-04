@@ -6,7 +6,7 @@ median after shifting the affected subset rather than scaling the offset linearl
 Both linear predictions are printed alongside so the gap is visible.
 
 Run from v23/; writes results to v23/TESTING_LANDSCAPE_SPLITTING/."""
-import numpy as np, pandas as pd, os, re, sys
+import numpy as np, pandas as pd, os, sys
 from pyproj import Transformer
 HERE = os.path.dirname(os.path.abspath(__file__))            # .../v23
 ODSA = os.path.dirname(HERE)                                 # .../ODSA — current codebase + results
@@ -14,7 +14,7 @@ OUT = os.path.join(HERE, "TESTING_LANDSCAPE_SPLITTING")      # this script's res
 sys.path.insert(0, ODSA)
 from loading import load_datasets
 from segmentation import split_into_segments, split_by_landscape
-from config import WINDOW_SIZE, Tee
+from config import WINDOW_SIZE, FIT_BAND_M, Tee
 from bed_character import BED_EDGES, CLASS_ORDER          # class breaks, imported not mirrored
 RESULTS = os.path.join(ODSA, "Ockenden-regions")  # most recent codebase run
 os.makedirs(OUT, exist_ok=True)
@@ -25,14 +25,12 @@ sys.stdout = Tee(os.path.join(OUT, "s8_refit_costing_log.txt"))
 OFFSET = 0.30
 COMMON_BAND = 25000.0   # the least aggressive common band that equalises; §8 discussion
 
-# --- Drift guard. The fit-band upper wavelength is an inline literal in
-# analyse_sliding_windows (bed_analysis_23.py) and must equal WINDOW_SIZE for the
-# length-based full-band test to mean what it says. Warn (non-fatal) on drift.
-with open(os.path.join(ODSA, "bed_analysis_23.py")) as _f:
-    _m = re.search(r"wavelengths_calc <= (\d+)", _f.read())
-if _m is None: print("NOTE: could not cross-check fit-band max against bed_analysis_23.py.")
-elif int(_m.group(1)) != WINDOW_SIZE:
-    print(f"WARNING: fit-band max {_m.group(1)} != WINDOW_SIZE {WINDOW_SIZE} — full-band test is STALE.")
+# --- Coupling guard, not a mirror check. FIT_BAND_M's upper edge must equal WINDOW_SIZE
+# for the length-based full-band test to mean what it says, but it is a fixed literal in
+# config and does not follow an env-overridden WINDOW_SIZE. Warn (non-fatal) on mismatch.
+if float(FIT_BAND_M[1]) != float(WINDOW_SIZE):
+    print(f"WARNING: fit-band max {FIT_BAND_M[1]:.0f} != WINDOW_SIZE {WINDOW_SIZE} — "
+          f"the full-band test is measuring a band longer or shorter than one window.")
 
 transformer = Transformer.from_crs("EPSG:4326", "EPSG:3031", always_xy=True)
 
