@@ -23,6 +23,25 @@ from loading import load_datasets
 from loading import OUTPUT_BASE_PATH as _REGION_BASE
 OUTPUT_BASE_PATH = os.path.join(_REGION_BASE, 'map_flightlines/')
 
+# Map CRS for every panel: true-scale -71 makes these axes genuinely EPSG:3031,
+# so frames can be set straight from PS71 metres.
+ANTARCTIC_STEREO = ccrs.SouthPolarStereo(true_scale_latitude=-71)
+_TO_PS = Transformer.from_crs('EPSG:4326', 'EPSG:3031', always_xy=True)
+
+# Frame padding, shared by every zoomed map including the Ockenden overlay:
+# a fraction of the track bundle's span, floored at three Ockenden cells.
+OCKENDEN_CELL_M = 50_000   # Ockenden metric grid spacing (PS71 metres)
+FRAME_PAD_FRAC = 0.15
+FRAME_PAD_MIN_M = 3 * OCKENDEN_CELL_M
+
+
+def frame_bounds_ps(coords):
+    """Padded PS71 bounding box of the tracks — the one frame rule for all zoomed maps."""
+    x, y = _TO_PS.transform(np.concatenate([d['lon'] for d in coords.values()]),
+                            np.concatenate([d['lat'] for d in coords.values()]))
+    pad = max(FRAME_PAD_FRAC * max(np.ptp(x), np.ptp(y)), FRAME_PAD_MIN_M)
+    return (x.min() - pad, x.max() + pad), (y.min() - pad, y.max() + pad)
+
 def extract_coordinates(datasets):
     """
     Extract lon/lat coordinates from loaded datasets.
@@ -53,6 +72,8 @@ def extract_coordinates(datasets):
             'lat': lats,
             'trajectories': trajectories,
             'flag': processing_flag_of(df),
+            # coverage tiers are per region; a single track looks up its parent
+            'tier_key': bundle.get('tier_key', name),
         }
         
         print(f"{name}: {len(lons)} points, lon range [{lons.min():.2f}, {lons.max():.2f}], "
@@ -66,13 +87,9 @@ def plot_antarctica_overview(coords, output_path='antarctica_tracks_overview.png
     Plot all tracks on a full Antarctic map.
     Uses South Polar Stereographic projection (EPSG:3031).
     """
-    # Define the Antarctic Polar Stereographic projection
-    # This is equivalent to EPSG:3031
-    antarctic_stereo = ccrs.SouthPolarStereo()
-    
     fig = plt.figure(figsize=(12, 12))
-    ax = fig.add_subplot(1, 1, 1, projection=antarctic_stereo)
-    
+    ax = fig.add_subplot(1, 1, 1, projection=ANTARCTIC_STEREO)
+
     # Set extent to show Antarctica (in plate carrée coordinates)
     ax.set_extent([-180, 180, -90, -60], crs=ccrs.PlateCarree())
     
@@ -108,23 +125,14 @@ def plot_regional_detail(coords, output_path='antarctica_tracks_regional.png'):
     Plot tracks zoomed into the region of interest.
     Automatically determines extent from data bounds.
     """
-    antarctic_stereo = ccrs.SouthPolarStereo()
-    
-    # Collect all coordinates to determine bounds
     all_lons = np.concatenate([data['lon'] for data in coords.values()])
     all_lats = np.concatenate([data['lat'] for data in coords.values()])
-    
-    # Add padding (in degrees)
-    padding = 2.0
-    lon_min, lon_max = all_lons.min() - padding, all_lons.max() + padding
-    lat_min, lat_max = all_lats.min() - padding, all_lats.max() + padding
-    
+    xlim, ylim = frame_bounds_ps(coords)
+
     fig = plt.figure(figsize=(14, 10))
-    ax = fig.add_subplot(1, 1, 1, projection=antarctic_stereo)
-    
-    # Set extent to the data region
-    ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
-    
+    ax = fig.add_subplot(1, 1, 1, projection=ANTARCTIC_STEREO)
+    ax.set_extent([*xlim, *ylim], crs=ANTARCTIC_STEREO)
+
     # Add features
     ax.add_feature(cfeature.LAND, facecolor='#e8e8e8', edgecolor='black', linewidth=0.5)
     ax.add_feature(cfeature.OCEAN, facecolor='#cce5ff', alpha=0.5)
@@ -168,8 +176,10 @@ def plot_regional_detail(coords, output_path='antarctica_tracks_regional.png'):
     else:
         ax.legend(handles=ax.get_legend_handles_labels()[0][-2:], loc='best')
     
+    # title reports the data span; the frame itself is padded per frame_bounds_ps
     ax.set_title(f'Radar Flight Tracks - Regional Detail\n'
-                 f'Lon: [{lon_min:.1f}°, {lon_max:.1f}°], Lat: [{lat_min:.1f}°, {lat_max:.1f}°]',
+                 f'Lon: [{all_lons.min():.1f}°, {all_lons.max():.1f}°], '
+                 f'Lat: [{all_lats.min():.1f}°, {all_lats.max():.1f}°]',
                  fontsize=12)
     
     plt.tight_layout()
@@ -182,16 +192,11 @@ def plot_tracks_by_migration(coords, output_path='antarctica_tracks_migration.pn
     """Regional track map coloured by radar migration status (data provenance)."""
     from matplotlib.lines import Line2D
 
-    antarctic_stereo = ccrs.SouthPolarStereo()
-    all_lons = np.concatenate([data['lon'] for data in coords.values()])
-    all_lats = np.concatenate([data['lat'] for data in coords.values()])
-    padding = 2.0
-    lon_min, lon_max = all_lons.min() - padding, all_lons.max() + padding
-    lat_min, lat_max = all_lats.min() - padding, all_lats.max() + padding
+    xlim, ylim = frame_bounds_ps(coords)
 
     fig = plt.figure(figsize=(14, 10))
-    ax = fig.add_subplot(1, 1, 1, projection=antarctic_stereo)
-    ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
+    ax = fig.add_subplot(1, 1, 1, projection=ANTARCTIC_STEREO)
+    ax.set_extent([*xlim, *ylim], crs=ANTARCTIC_STEREO)
     ax.add_feature(cfeature.LAND, facecolor='#e8e8e8', edgecolor='black', linewidth=0.5)
     ax.add_feature(cfeature.OCEAN, facecolor='#cce5ff', alpha=0.5)
     ax.coastlines(resolution='10m', linewidth=0.8)
@@ -253,16 +258,11 @@ def plot_tracks_by_tier(coords, output_path='antarctica_tracks_tier.png', direct
     tier_color = {t: ramp[i] for i, t in enumerate(TIER_ORDER)}
     NA_COLOR = '0.6'
 
-    antarctic_stereo = ccrs.SouthPolarStereo()
-    all_lons = np.concatenate([data['lon'] for data in coords.values()])
-    all_lats = np.concatenate([data['lat'] for data in coords.values()])
-    padding = 2.0
-    lon_min, lon_max = all_lons.min() - padding, all_lons.max() + padding
-    lat_min, lat_max = all_lats.min() - padding, all_lats.max() + padding
+    xlim, ylim = frame_bounds_ps(coords)
 
     fig = plt.figure(figsize=(14, 10))
-    ax = fig.add_subplot(1, 1, 1, projection=antarctic_stereo)
-    ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
+    ax = fig.add_subplot(1, 1, 1, projection=ANTARCTIC_STEREO)
+    ax.set_extent([*xlim, *ylim], crs=ANTARCTIC_STEREO)
     ax.add_feature(cfeature.LAND, facecolor='#e8e8e8', edgecolor='black', linewidth=0.5)
     ax.add_feature(cfeature.OCEAN, facecolor='#cce5ff', alpha=0.5)
     ax.coastlines(resolution='10m', linewidth=0.8)
@@ -273,9 +273,10 @@ def plot_tracks_by_tier(coords, output_path='antarctica_tracks_tier.png', direct
     # one legend entry per dataset: name, tier, and what failed (tier_driver)
     entries = []   # (tier, name, driver)
     for name, data in coords.items():
-        tier, driver = tiers.get(name, ('NA', '-'))
-        if name not in tiers:
-            print(f"  ⚠️ no coverage tier for '{name}' — drawn as NA")
+        key = data.get('tier_key', name)
+        tier, driver = tiers.get(key, ('NA', '-'))
+        if key not in tiers:
+            print(f"  ⚠️ no coverage tier for '{key}' — drawn as NA")
         entries.append((tier, name, driver))
         ax.scatter(data['lon'], data['lat'], color=[tier_color.get(tier, NA_COLOR)],
                    s=2, alpha=0.8, transform=ccrs.PlateCarree())
@@ -302,20 +303,12 @@ def plot_tracks_with_elevation(coords, datasets, output_path='antarctica_tracks_
     """
     Plot tracks colored by bedrock elevation.
     """
-    antarctic_stereo = ccrs.SouthPolarStereo()
-    
-    # Collect bounds
-    all_lons = np.concatenate([data['lon'] for data in coords.values()])
-    all_lats = np.concatenate([data['lat'] for data in coords.values()])
-    
-    padding = 2.0
-    lon_min, lon_max = all_lons.min() - padding, all_lons.max() + padding
-    lat_min, lat_max = all_lats.min() - padding, all_lats.max() + padding
-    
+    xlim, ylim = frame_bounds_ps(coords)
+
     fig = plt.figure(figsize=(14, 10))
-    ax = fig.add_subplot(1, 1, 1, projection=antarctic_stereo)
-    ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
-    
+    ax = fig.add_subplot(1, 1, 1, projection=ANTARCTIC_STEREO)
+    ax.set_extent([*xlim, *ylim], crs=ANTARCTIC_STEREO)
+
     ax.add_feature(cfeature.LAND, facecolor='#e8e8e8', edgecolor='black', linewidth=0.5)
     ax.coastlines(resolution='10m', linewidth=0.8)
     
@@ -370,9 +363,6 @@ def print_coordinate_summary(coords):
         
         for traj_id, traj_data in data['trajectories'].items():
             print(f"    - {traj_id}: {len(traj_data['lon'])} points")
-
-
-OCKENDEN_CELL_M = 50_000   # Ockenden metric grid spacing (PS71 metres)
 
 
 def plot_tracks_on_ockenden(coords, output_path='tracks_on_ockenden.png',
@@ -430,16 +420,13 @@ def plot_tracks_on_ockenden(coords, output_path='tracks_on_ockenden.png',
     icestreams_mask2 = (~mountain_mask) & (~poordetail_mask) & (~dunes_mask) & \
                        (~SGM_mask) & (~SGM_mask2) & (~icestreams_mask)
 
-    # Tracks in PS71; the zoom frame is their padded bounding box, clipped to the continent
-    to_ps = Transformer.from_crs('EPSG:4326', 'EPSG:3031', always_xy=True)
-    tracks = {name: to_ps.transform(data['lon'], data['lat']) for name, data in coords.items()}
+    # Tracks in PS71; the zoom frame is the shared padded box, clipped to the continent
+    tracks = {name: _TO_PS.transform(data['lon'], data['lat']) for name, data in coords.items()}
     xlim, ylim = (-2.55e6, 2.7e6), (-2.2e6, 2.2e6)
     if zoom:
-        tx = np.concatenate([t[0] for t in tracks.values()])
-        ty = np.concatenate([t[1] for t in tracks.values()])
-        pad = max(0.15 * max(np.ptp(tx), np.ptp(ty)), 3 * OCKENDEN_CELL_M)
-        xlim = (max(xlim[0], tx.min() - pad), min(xlim[1], tx.max() + pad))
-        ylim = (max(ylim[0], ty.min() - pad), min(ylim[1], ty.max() + pad))
+        fx, fy = frame_bounds_ps(coords)
+        xlim = (max(xlim[0], fx[0]), min(xlim[1], fx[1]))
+        ylim = (max(ylim[0], fy[0]), min(ylim[1], fy[1]))
 
     # Drop classification cells outside the frame (+1 cell) so only the local landscape is drawn
     inview = ((x_ifpa > xlim[0] - OCKENDEN_CELL_M) & (x_ifpa < xlim[1] + OCKENDEN_CELL_M) &
@@ -497,30 +484,36 @@ def plot_tracks_on_ockenden(coords, output_path='tracks_on_ockenden.png',
     plt.close()
 
 
+def main(datasets, prefix=''):
+    """Generate the full map set for `datasets`; `prefix` namespaces the filenames."""
+    print("\nExtracting coordinates...")
+    coords = extract_coordinates(datasets)
+
+    print_coordinate_summary(coords)
+
+    out = lambda fn: os.path.join(OUTPUT_BASE_PATH, prefix + fn)
+    print("\nGenerating maps...")
+    plot_antarctica_overview(coords, out('antarctica_tracks_overview.png'))
+    plot_regional_detail(coords, out('antarctica_tracks_regional.png'))
+    plot_tracks_by_migration(coords, out('antarctica_tracks_migration.png'))
+    plot_tracks_by_tier(coords, out('antarctica_tracks_tier.png'))
+    plot_tracks_with_elevation(coords, datasets, out('antarctica_tracks_elevation.png'))
+    plot_tracks_on_ockenden(coords, out('tracks_on_ockenden.png'))
+    plot_tracks_on_ockenden(coords, out('tracks_on_ockenden_regional.png'), zoom=True)
+
+
 if __name__ == "__main__":
     os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
     log_path = os.path.join(OUTPUT_BASE_PATH, 'map_flightlines_log.txt')
     sys.stdout = Tee(log_path)
     print("Loading datasets...")
     datasets = load_datasets()
-    
+
     if not datasets:
         print("No datasets loaded. Check file paths.")
         exit(1)
-    
-    print("\nExtracting coordinates...")
-    coords = extract_coordinates(datasets)
-    
-    print_coordinate_summary(coords)
-    
-    print("\nGenerating maps...")
-    plot_antarctica_overview(coords, os.path.join(OUTPUT_BASE_PATH, 'antarctica_tracks_overview.png'))
-    plot_regional_detail(coords, os.path.join(OUTPUT_BASE_PATH, 'antarctica_tracks_regional.png'))
-    plot_tracks_by_migration(coords, os.path.join(OUTPUT_BASE_PATH, 'antarctica_tracks_migration.png'))
-    plot_tracks_by_tier(coords, os.path.join(OUTPUT_BASE_PATH, 'antarctica_tracks_tier.png'))
-    plot_tracks_with_elevation(coords, datasets, os.path.join(OUTPUT_BASE_PATH, 'antarctica_tracks_elevation.png'))
-    plot_tracks_on_ockenden(coords, os.path.join(OUTPUT_BASE_PATH, 'tracks_on_ockenden.png'))
-    plot_tracks_on_ockenden(coords, os.path.join(OUTPUT_BASE_PATH, 'tracks_on_ockenden_regional.png'), zoom=True)
+
+    main(datasets)
 
     print("\nDone! Generated maps:")
     print("  - antarctica_tracks_overview.png (full continent)")
