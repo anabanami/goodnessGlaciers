@@ -96,7 +96,8 @@ def cos2_model(theta_deg, beta_perp, beta_parallel):
 
 def _do_curve_fit(theta, beta, weights, p0):
     if weights is not None:
-        sigma = np.where(weights > 0, 1.0 / weights, 1e10)
+        sigma = np.divide(1.0, weights, out=np.full_like(weights, 1e10, dtype=float),
+                          where=weights > 0)
         return optimize.curve_fit(cos2_model, theta, beta, p0=p0,
                                   sigma=sigma, absolute_sigma=False, maxfev=5000)
     return optimize.curve_fit(cos2_model, theta, beta, p0=p0, maxfev=5000)
@@ -130,7 +131,7 @@ def bootstrap_cos2_uncertainty(theta, beta, weights=None, n_boot=2000, block_len
     return robust_se(boot_params), robust_se(boot_params[:, 1] - boot_params[:, 0])
 
 
-def fit_cos2(theta, beta, weights=None):
+def fit_cos2(theta, beta, weights=None, n_boot=2000, quiet=False):
     """Fit cos²θ model, return dict with fit results or None on failure."""
     low, high = theta < 30, theta > 60
     p0_par = np.mean(beta[low]) if np.any(low) else np.mean(beta)
@@ -139,7 +140,7 @@ def fit_cos2(theta, beta, weights=None):
     try:
         popt, _ = _do_curve_fit(theta, beta, weights, p0=[p0_perp, p0_par])
         beta_perp, beta_par = popt
-        perr, delta_se = bootstrap_cos2_uncertainty(theta, beta, weights=weights)
+        perr, delta_se = bootstrap_cos2_uncertainty(theta, beta, weights=weights, n_boot=n_boot)
 
         pred = cos2_model(theta, *popt)
         if weights is not None:
@@ -153,8 +154,108 @@ def fit_cos2(theta, beta, weights=None):
                     delta=beta_par - beta_perp, delta_se=delta_se,
                     perr=perr, r2=1 - ss_res / ss_tot if ss_tot > 0 else 0, popt=popt)
     except (RuntimeError, ValueError) as e:
-        print(f"  Fit failed: {e}")
+        if not quiet:
+            print(f"  Fit failed: {e}")
         return None
+
+
+# ---------------------------------------------------------------------------
+# Local anisotropy. A segment runs along one trajectory, so it carries one
+# incidence angle and no lever arm for cos²θ; the angular spread lives between
+# crossing tracks. Pool by distance instead, and gate on the coverage each
+# neighbourhood actually has.
+NEIGHBOURHOOD_RADIUS_KM = 50.0
+MIN_NEIGHBOURS = 6
+MIN_THETA_SPREAD_DEG = 30.0
+LOCAL_N_BOOT = 300  # per-window, so the region default of 2000 is unaffordable
+
+
+def delta_beta_label(delta, se, status, k=2.0):
+    """Local Δβ -> catalogue axis value. A failed gate is 'not_fitted', deliberately not
+    a catalogue value: no angular leverage here is a fact about the survey, not the bed."""
+    if status != 'ok' or not np.isfinite(delta) or not np.isfinite(se) or se <= 0:
+        return 'not_fitted'
+    if abs(delta) >= k * se:
+        return 'pos_sig' if delta > 0 else 'neg_sig'
+    return 'zero'
+
+
+def local_anisotropy(csv_path, radius_km=NEIGHBOURHOOD_RADIUS_KM, min_n=MIN_NEIGHBOURS,
+                     min_spread=MIN_THETA_SPREAD_DEG, n_boot=LOCAL_N_BOOT, k_sigma=2.0):
+    """Δβ per window from a cos²θ fit over every window within radius_km, weighted
+    as the region fit is. Writes one row per window; `delta_beta_status` says
+    whether the neighbourhood had the coverage to support a fit at all."""
+    need = ['incidence_deg', 'beta', 'center_x', 'center_y']
+    df = pd.read_csv(csv_path)
+    missing = [c for c in need if c not in df.columns]
+    if missing:
+        print(f"  LOCAL Δβ: missing {missing} — skipped.")
+        return pd.DataFrame()
+    df = df.dropna(subset=need)
+    if 'is_transition' in df.columns:
+        df = df[~df['is_transition']]
+    df = df.reset_index(drop=True)
+    if len(df) < min_n:
+        print(f"  LOCAL Δβ: only {len(df)} windows, below min_n={min_n} — skipped.")
+        return pd.DataFrame()
+
+    theta, beta = df['incidence_deg'].to_numpy(float), df['beta'].to_numpy(float)
+    speed = df['measures_speed_mean'].to_numpy(float) if 'measures_speed_mean' in df else None
+    w = (flow_weight(df['flow_error_mean'].to_numpy(float), speed=speed)
+         if 'flow_error_mean' in df.columns else np.ones(len(df)))
+    xy = df[['center_x', 'center_y']].to_numpy(float)
+    dist = np.hypot(xy[:, 0][:, None] - xy[:, 0], xy[:, 1][:, None] - xy[:, 1]) / 1000.0
+
+    rows = []
+    for i in range(len(df)):
+        idx = np.flatnonzero(dist[i] <= radius_km)
+        wi = w[idx]
+        ok = idx[wi > 0]  # zero-weight points are effectively out of the fit
+        spread = float(theta[ok].max() - theta[ok].min()) if ok.size else 0.0
+        sw2 = float(np.sum(wi ** 2))
+        r = dict(n_neighbours=int(idx.size), n_weighted=int(ok.size),
+                 theta_spread_deg=spread, n_eff=(float(wi.sum()) ** 2 / sw2) if sw2 > 0 else 0.0,
+                 delta_beta_local=np.nan, delta_beta_local_se=np.nan, r2=np.nan)
+        if ok.size == 0:
+            r['delta_beta_status'] = 'flow_ambiguous'
+        elif ok.size < min_n or spread < min_spread:
+            r['delta_beta_status'] = 'low_coverage'
+        else:
+            fit = fit_cos2(theta[idx], beta[idx], weights=wi, n_boot=n_boot, quiet=True)
+            if fit is None:
+                r['delta_beta_status'] = 'fit_failed'
+            else:
+                r.update(delta_beta_local=fit['delta'], delta_beta_local_se=fit['delta_se'],
+                         r2=fit['r2'], delta_beta_status='ok')
+        r['delta_beta_label'] = delta_beta_label(r['delta_beta_local'],
+                                                 r['delta_beta_local_se'],
+                                                 r['delta_beta_status'], k=k_sigma)
+        rows.append(r)
+
+    ids = [c for c in ('trajectory', 'segment', 'window_id') if c in df.columns]
+    out = pd.concat([df[ids + ['center_x', 'center_y']], pd.DataFrame(rows)], axis=1)
+
+    os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
+    path = os.path.join(OUTPUT_BASE_PATH, os.path.basename(csv_path)
+                        .replace('_window_stats.csv', '_delta_beta_local.csv'))
+    out.to_csv(path, index=False)
+
+    n_ok = int((out.delta_beta_status == 'ok').sum())
+    print(f"\n  LOCAL Δβ (R={radius_km:.0f} km, gate n≥{min_n} and Δθ≥{min_spread:.0f}°): "
+          f"{n_ok}/{len(out)} windows fitted")
+    print("    status: " + ', '.join(f'{k} {v}' for k, v in out.delta_beta_status.value_counts().items()))
+    print("    labels: " + ', '.join(f'{k} {v}' for k, v in out.delta_beta_label.value_counts().items()))
+    if n_ok:
+        g = out[out.delta_beta_status == 'ok']
+        print(f"    median Δβ = {g.delta_beta_local.median():+.3f}, "
+              f"median SE = {g.delta_beta_local_se.median():.3f}, "
+              f"median n_eff = {g.n_eff.median():.1f}")
+    if n_ok / len(out) < 0.5:
+        print(f"  ** ANISOTROPY UNRELIABLE AT THIS SCALE: only {n_ok/len(out):.0%} of windows "
+              f"have a neighbourhood with the angular coverage to resolve Δβ. Local Δβ should "
+              f"not be read as a landscape variable here — use the region fit or nothing. **")
+    print(f"    Saved: {path}")
+    return out
 
 
 def _fit_label(fit):
@@ -374,6 +475,8 @@ def process_region(region_name, files):
             fits[level] = plot_anisotropy(files[level], level=level)
         else:
             print(f"  No {level} stats file for {region_name}")
+    if 'window' in files:
+        local_anisotropy(files['window'])
     if 'window' in fits and 'segment' in fits and fits['window'] and fits['segment']:
         _cross_scale_comparison(fits['window'], fits['segment'],
                                 n_win=fits['window']['n'],
