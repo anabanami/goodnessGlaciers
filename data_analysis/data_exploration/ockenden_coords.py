@@ -57,6 +57,17 @@ OCKENDEN_REGIONS = {
         'cell_mask': True,  # flag: use Ockenden metric grid instead of simple box
         'loading_subset_repr': "'subset': lambda df: _ps71_lowrelief_subset(df, [1.05e6, 2.20e6, -0.80e6, 0.20e6]),",
     },
+    'Fig4C_Aurora_SB_square': {
+        'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        'dataset_label': 'ASB_ICECAP_2010',
+        'ps71': [1.10e6, 1.40e6, -0.78e6, -0.48e6],
+        'description': ('Aurora SB -- unmasked 300x300 km square (same box size as '
+                        'Golicyna/Highland A), sited on the SW low-relief cluster of the '
+                        'Fig4C bounds. NOT filtered to low-relief cells: ~60% of the 50 km '
+                        'cells are low-relief, the rest are whatever else is there.'),
+        'ockenden_class': 'low-relief (mixed)',
+        'fig': 'Fig 4 classification region (unfiltered square)',
+    },
     'Fig2A_Maud_SB': {
         'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
         'dataset_label': 'ASB_ICECAP_2010',
