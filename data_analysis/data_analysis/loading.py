@@ -47,6 +47,29 @@ def _parse_processing_flag(filepath):
     return 'unmigrated_or_unknown'
 
 
+def _warn_degenerate_trajectories(label, df, min_pts_per_traj=5, max_singleton_frac=0.5):
+    """Flag datasets whose trajectory_id names rows rather than flight lines.
+
+    15 Bedmap1/2 campaigns (BEDMAP1_1966-2000, UTIG_2004_AGASEA, UTIG_2008_ICECAP,
+    NASA_2004/2010_ICEBRIDGE, UTIG_1999_SOAR-LVS-WLK, BGR_2002_PCMEGA, ...) number
+    trajectory_id 1..N per ROW. The bed elevations are valid so they sail through
+    the -9999 filters above, but every "track" is one point and every along-track
+    metric downstream is meaningless. No Bedmap3 campaign does this.
+    See all_data/Ockenden/scan_bed_validity.{py,log,csv} for the full audit.
+
+    Warns rather than drops: a small region box legitimately clips long lines to a
+    few points each, and that is the user's call, not the loader's.
+    """
+    sizes = df.groupby('trajectory_id').size()
+    per_traj, singleton_frac = sizes.median(), (sizes == 1).mean()
+    if per_traj >= min_pts_per_traj and singleton_frac <= max_singleton_frac:
+        return
+    print(f"  ⚠️ {label}: {len(sizes)} trajectories for {len(df)} points "
+          f"(median {per_traj:.0f} pts/track, {singleton_frac:.0%} single-point). "
+          f"trajectory_id looks like a row counter, not a flight line — "
+          f"along-track metrics on this dataset will be meaningless.")
+
+
 def load_datasets():
     base_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                              'all_data/bedmap3_data/bedmap*/Results/')
@@ -57,9 +80,9 @@ def load_datasets():
         # Ockenden et al. (2025) regions — PS71 bounds from Zenodo
         # =================================================================
         
-        # SELECTIVE EROSION: Pensacola-Pole Basin — core square (right portion of
-        # the POLARGAP fan incl. the radial convergence node). Matches the
-        # hand-drawn black square on the overview map; subset of the full PPB box.
+        # # SELECTIVE EROSION: Pensacola-Pole Basin — core square (right portion of
+        # # the POLARGAP fan incl. the radial convergence node). Matches the
+        # # hand-drawn black square on the overview map; subset of the full PPB box.
         # {
         #     'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
         #     'label': 'POLARGAP_2015_Pensacola_Pole',
@@ -113,6 +136,38 @@ def load_datasets():
         #     'subset': lambda df: _ps71_subset(
         #         df, [-0.6e6, -0.3e6, -0.23e6, 0.07e6]),
         # },
+
+        # # SELECTIVE EROSION/LOW RELIEF: Aurora Subglacial Basin
+        # {
+        #  'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        #  'label': 'ASB_ICECAP_2010_Fig4C_Aurora_SB_square',
+        #  'subset': lambda df, _b=[1100000.0, 1400000.0, -780000.0, -480000.0]: _ps71_subset(df, _b),
+        # },
+
+        # # ALPINE/LOW RELIEF: Dome C
+        # {
+        # 'file': 'BAS_2005_WISE-ISODYN_AIR_BM2.csv',
+        # 'label': 'BM2_DomeC_SW_sq_WISE_ISODYN',
+        # 'subset': lambda df, _b=[1020000.0, 1320000.0, -1237000.0, -937000.0]:_ps71_subset(df, _b),
+        # },
+        # {
+        # 'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        # 'label': 'BM3_DomeC_SW_sq_ICECAP',
+        # 'subset': lambda df, _b=[1020000.0, 1320000.0, -1237000.0, -937000.0]:_ps71_subset(df, _b),
+        # },
+        # {
+        # 'file': 'NASA_2013_ICEBRIDGE_AIR_BM3.csv',
+        # 'label': 'BM3_DomeC_SW_sq_ICEBRIDGE',
+        # 'subset': lambda df, _b=[1020000.0, 1320000.0, -1237000.0, -937000.0]:_ps71_subset(df, _b),
+        # },
+
+        # # ALPINE/SELECTIVE EROSION: Dronning Maud Land
+        # {
+        # 'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        # 'label': 'BM3_DML_3E_sq_ICECAP',
+        # 'subset': lambda df, _b=[-50000.0, 250000.0, 1620000.0, 1920000.0]: _ps71_subset(df, _b),
+        # },
+
     ]
 
     # ODSA_REGION_FILTER: comma-separated label substrings (used by the window-size sweep)
@@ -158,6 +213,7 @@ def load_datasets():
             if len(df) > 0:
                 pflag = df['processing_flag'].iloc[0]
                 print(f"✓ {label} loaded: {len(df)} rows (Filtered {initial_len - len(df)} nulls) [{pflag}]")
+                _warn_degenerate_trajectories(label, df)
                 all_dfs.append({'name': label, 'data': df})
             else:
                 print(f"---{label} resulted in 0 rows.---")
