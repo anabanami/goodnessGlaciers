@@ -13,9 +13,10 @@ Usage:  python production_output_diff.py [NEW BASELINE [NEW BASELINE ...]]
    eg:  python production_output_diff.py
         python production_output_diff.py individual_region_TEST Ockenden-regions
 """
-import sys, io
+import sys
 from pathlib import Path
 import numpy as np, pandas as pd
+from config import Tee
 
 ODSA = Path(__file__).resolve().parent
 DEFAULT = ('Ockenden-regions', 'Ockenden-regions.bak')
@@ -34,12 +35,6 @@ LATE_PASS_COLS = {'bed_class', 'class_confidence', 'p_chaotic', 'p_hard',
 # A measured column must stay out: put wavelength_m in the key and a wavelength that
 # shifted reads as a row that vanished, instead of a value that moved.
 ID_HINTS = ['region', 'trajectory', 'trajectory_id', 'segment', 'window_id']
-
-
-class Tee:
-    def __init__(self, *s): self.s = s
-    def write(self, m): [x.write(m) for x in self.s]
-    def flush(self): [x.flush() for x in self.s]
 
 
 def resolve(p):
@@ -104,8 +99,7 @@ if len(args) % 2:
     sys.exit(__doc__)
 pairs = [(resolve(a), resolve(b)) for a, b in zip(args[::2], args[1::2])]
 
-_buf = io.StringIO()
-sys.stdout = Tee(sys.__stdout__, _buf)
+sys.stdout = Tee(LOG)
 
 fail = 0
 for new_dir, base_dir in pairs:
@@ -170,7 +164,5 @@ for new_dir, base_dir in pairs:
 print('\n' + ('FAIL: see the flagged lines above' if fail else
              'PASS: every shared column matches the baseline; only additions differ'))
 
-sys.stdout = sys.__stdout__
-LOG.write_text(_buf.getvalue())
-print(f'Log written to {LOG}')
+sys.stdout.flush()
 sys.exit(1 if fail else 0)

@@ -237,7 +237,7 @@ def load_region_tiers(directory=None):
     directory = directory or _REGION_BASE
     csv = os.path.join(directory, 'coverage_csvs', 'coverage_summary.csv')
     if not os.path.exists(csv):
-        print(f"⚠️ {csv} not found — run coverage_tags.py first. Skipping tier map.")
+        print(f"{csv} not found — run coverage_tags.py first. Skipping tier map.")
         return None
     df = pd.read_csv(csv)
     stem = df['region'].str.replace(r'_w\d+km$', '', regex=True)
@@ -276,7 +276,7 @@ def plot_tracks_by_tier(coords, output_path='antarctica_tracks_tier.png', direct
         key = data.get('tier_key', name)
         tier, driver = tiers.get(key, ('NA', '-'))
         if key not in tiers:
-            print(f"  ⚠️ no coverage tier for '{key}' — drawn as NA")
+            print(f"  no coverage tier for '{key}' — drawn as NA")
         entries.append((tier, name, driver))
         ax.scatter(data['lon'], data['lat'], color=[tier_color.get(tier, NA_COLOR)],
                    s=2, alpha=0.8, transform=ccrs.PlateCarree())

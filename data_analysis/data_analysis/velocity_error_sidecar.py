@@ -39,6 +39,7 @@ Nothing here classifies and nothing is overwritten outside <region>/velocity/.
 """
 import argparse, glob, os, sys
 
+from config import Tee
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -232,4 +233,6 @@ if __name__ == '__main__':
     ap.add_argument('--root', default='individual_region_TEST')
     ap.add_argument('--dry-run', action='store_true')
     a = ap.parse_args()
+    if not a.dry_run:
+        sys.stdout = Tee(os.path.join(a.root, 'velocity_error_sidecar_log.txt'))
     main(a.root, a.dry_run)

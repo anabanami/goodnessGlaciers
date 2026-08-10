@@ -83,6 +83,7 @@ class Tee:
     def __init__(self, filepath):
         self.terminal = sys.stdout
         self.log = open(filepath, 'w')
+        self.terminal.write(f"Console output saved to {filepath}\n")
     def write(self, msg):
         self.terminal.write(msg)
         self.log.write(msg)

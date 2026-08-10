@@ -43,6 +43,9 @@ ANISOTROPY_TRUSTED = True
 # the formal error of a single local fit is not the error of many. Aggregate delta_beta
 # over fits whose neighbourhoods do not overlap and let their spread carry the error.
 DELTA_BETA_DECIMATE_KM = 100.0  # 2 x weighted_anisotropy.NEIGHBOURHOOD_RADIUS_KM
+# Lag at which the class tuple reaches chance agreement (window_atom_test.py). Set for the
+# verdict, not for delta_beta fits — the two are different quantities, do not merge them.
+COMPOSITION_DECIMATE_KM = 200.0
 
 # No literature threshold separates a "wide" from a "narrow" within-unit beta spread,
 # so the Case E spread constraint is never exercised. Set a value in beta units to
@@ -74,7 +77,17 @@ ELEVATION_ERROR_M = 10.0
 
 # Partial/unmigrated radar biases beta upward, so the true class may be the one below
 # the measured one. True adds that neighbour to the admissible beta set.
-MIGRATION_WIDENS_BETA = True
+# Off since 2026-08-08. Unvalidatable against Bedmap (no campaign ships under two processing
+# chains), it made a headline coverage rate track survey provenance, it cost more resolutions
+# than it created, and it drove the resolution rate below the permutation null. The widened
+# numbers stay reachable via beta_class_unwidened / widened_only / n_admissible_unwidened.
+MIGRATION_WIDENS_BETA = False
+# Beta's systematic as a symmetric envelope, in quadrature with the formal fit error. Set from
+# the deviogram validation (levels agree to 0.02 in zeta = 0.04 in beta), not from the 0.251
+# taper ladder, which measures rectangular's bias rather than hann's uncertainty. The sweep is
+# flat below 0.10, so nothing rests on the exact value. Floor, not an estimate: per-window
+# agreement between the two estimators is only r = 0.48 and is still open.
+BETA_SYSTEMATIC_ERROR = 0.05
 
 VELOCITY_CLASSES = [
     ('very_low', -np.inf, 5.0),
@@ -274,7 +287,8 @@ def observe(vec, pflag):
                 'elevation_class': 'elevation', 'velocity_band': 'velocity'}[axis]
         val, sig = vec[f'{name}'], vec[f'{name}_sigma']
         nominal = {'velocity_band': VELOCITY_ERROR_M_YR, 'relief_class': RELIEF_ERROR_M,
-                   'elevation_class': ELEVATION_ERROR_M}.get(axis)
+                   'elevation_class': ELEVATION_ERROR_M,
+                   'beta_class': BETA_SYSTEMATIC_ERROR}.get(axis)
         if axis == 'velocity_band':
             n_ok = vec.get('velocity_err_n_ok', np.nan)
             if np.isfinite(n_ok):
@@ -492,6 +506,25 @@ def units_from(df, level):
             yield f"{r['trajectory']}|s{r['segment']:.0f}|w{r['window_id']:.0f}", df.loc[[i]]
 
 
+def composition(rep, df, region_name):
+    """The region as a mixture of admissible sets over windows, not one label.
+
+    The fraction is areal, so every window counts — overlap and all, it covers real ground.
+    Independence governs only the error bar, and n_eff is far too small to carry one, so this
+    reports the fraction with n_eff beside it and no interval. See NEXT.md, queue item 5.
+    """
+    w = rep[rep.level == 'window']
+    if not len(w):
+        return None
+    xy = df[['center_x', 'center_y']].to_numpy(float)
+    n_eff = len(_independent_subset(xy, COMPOSITION_DECIMATE_KM)) if len(xy) else 0
+    c = w['admissible'].fillna('').value_counts()
+    return pd.DataFrame({'region': region_name, 'admissible': c.index.where(c.index != '', '(none)'),
+                         'n_windows': c.values, 'fraction': (c.values / len(w)).round(3),
+                         'n_windows_total': len(w), 'n_eff': n_eff,
+                         'decimate_km': COMPOSITION_DECIMATE_KM})
+
+
 def reachable_groups():
     """Catalogue entries that can never be the sole match, because some other entry
     admits everything they admit once the dead axes are removed. Subsumption, not
@@ -588,24 +621,27 @@ def unthresholded_separation(vec_df, reports, z_min=2.0, d_min=SEPARATION_D_MIN)
 
 
 # ---------------------------------------------------------------------------
-def process_region(region_name, csv_path, levels=('segment', 'region')):
-    print(f"\n{'='*100}\n  LANDSCAPE VECTOR: {region_name}\n{'='*100}")
+def load_region(csv_path, quiet=False):
+    """Window CSV plus both sidecars, transitions dropped. Returns (df, pflag), or
+    (None, None) if there is nothing to classify. Split out so anything testing the
+    classifier sees exactly the frame the classifier sees."""
+    say = (lambda *a: None) if quiet else print
     df = pd.read_csv(csv_path).dropna(subset=['beta'])
     if len(df) == 0:
-        print("  No valid data.")
-        return
+        say("  No valid data.")
+        return None, None
     pflag = region_flag(df)
     if pflag:
-        print(f"  Processing: {_FLAG_NOTE.get(pflag, pflag)}")
+        say(f"  Processing: {_FLAG_NOTE.get(pflag, pflag)}")
     if 'is_transition' in df.columns and df['is_transition'].any():
         n = int(df['is_transition'].sum())
         df = df[~df['is_transition']].copy()
-        print(f"  Excluded {n} transition windows ({len(df)} remain)")
+        say(f"  Excluded {n} transition windows ({len(df)} remain)")
 
     dbl = load_delta_beta(csv_path)
     if dbl is None:
-        print("  Delta-beta: no *_delta_beta_local.csv — axis stays unavailable "
-              "(run weighted_anisotropy.py first)")
+        say("  Delta-beta: no *_delta_beta_local.csv — axis stays unavailable "
+            "(run weighted_anisotropy.py first)")
     else:
         keys = [c for c in ('trajectory', 'segment', 'window_id')
                 if c in dbl.columns and c in df.columns]
@@ -614,26 +650,34 @@ def process_region(region_name, csv_path, levels=('segment', 'region')):
                       on=keys, how='left')
         vc = df['delta_beta_status'].value_counts()
         n_ok = int(vc.get('ok', 0))
-        print(f"  Delta-beta: {n_ok}/{len(df)} windows with a usable local fit "
-              f"({', '.join(f'{k} {v}' for k, v in vc.items())})")
+        say(f"  Delta-beta: {n_ok}/{len(df)} windows with a usable local fit "
+            f"({', '.join(f'{k} {v}' for k, v in vc.items())})")
         if n_ok / max(len(df), 1) < 0.5:
-            print("    ** anisotropy unresolvable at this scale in this region; the axis will "
-                  "read 'not_fitted' on most units and exclude nothing **")
+            say("    ** anisotropy unresolvable at this scale in this region; the axis will "
+                "read 'not_fitted' on most units and exclude nothing **")
 
     vel = load_velocity_error(csv_path)
     if vel is None:
-        print(f"  Velocity error: no *_velocity_error.csv — falling back to the "
-              f"VELOCITY_ERROR_M_YR = {VELOCITY_ERROR_M_YR} constant "
-              f"(run velocity_error_sidecar.py)")
+        say(f"  Velocity error: no *_velocity_error.csv — falling back to the "
+            f"VELOCITY_ERROR_M_YR = {VELOCITY_ERROR_M_YR} constant "
+            f"(run velocity_error_sidecar.py)")
     else:
         keys = [c for c in ('trajectory', 'segment', 'window_id')
                 if c in vel.columns and c in df.columns]
         df = df.merge(vel[keys + ['measures_err_m_yr', 'measures_cnt']], on=keys, how='left')
         e = pd.to_numeric(df['measures_err_m_yr'], errors='coerce')
-        print(f"  Velocity error: sampled, median {e.median():.2f} m/yr, CNT median "
-              f"{df['measures_cnt'].median():.0f}, {int((e > SEAM_THRESHOLD_M_YR).sum())}/"
-              f"{len(df)} windows above the {SEAM_THRESHOLD_M_YR:.2f} m/yr seam threshold "
-              f"(ONSET|DIVIDE inseparable), {int(e.isna().sum())} with no coverage")
+        say(f"  Velocity error: sampled, median {e.median():.2f} m/yr, CNT median "
+            f"{df['measures_cnt'].median():.0f}, {int((e > SEAM_THRESHOLD_M_YR).sum())}/"
+            f"{len(df)} windows above the {SEAM_THRESHOLD_M_YR:.2f} m/yr seam threshold "
+            f"(ONSET|DIVIDE inseparable), {int(e.isna().sum())} with no coverage")
+    return df, pflag
+
+
+def process_region(region_name, csv_path, levels=('window', 'segment', 'region')):
+    print(f"\n{'='*100}\n  LANDSCAPE VECTOR: {region_name}\n{'='*100}")
+    df, pflag = load_region(csv_path)
+    if df is None:
+        return
 
     subsumed, dead = reachable_groups()
     live = len(CATALOGUE) - len(subsumed)
@@ -661,6 +705,10 @@ def process_region(region_name, csv_path, levels=('segment', 'region')):
             rep_rows.append({
                 'unit': v['unit'], 'level': level, 'n_windows': v['n_windows'],
                 'admissible': '|'.join(ids), 'n_admissible': len(ids),
+                # Widening only ever adds beta classes, so the unwidened match set is a subset
+                # and this needs no second match(). 0 here = OUT-OF-CATALOGUE without the
+                # correction, which is the comparator for the preregistered ceiling.
+                'n_admissible_unwidened': len(ids) - len(wo),
                 'verdict': kind, 'discriminator': on, 'why': why,
                 'delta_beta_coverage': (v['delta_beta_n_ok'] /
                                         max(v['delta_beta_n_ok'] + v['delta_beta_n_gated'], 1)),
@@ -787,6 +835,22 @@ def process_region(region_name, csv_path, levels=('segment', 'region')):
         if wo_res == len(res):
             print("      ** every resolution in this region is widening-dependent; it has no "
                   "measured resolution at all **")
+
+    # The region as a mixture rather than one label. Fractions are areal and use every window;
+    # n_eff is the independent count at 200 km and is reported, never turned into an interval.
+    comp = composition(rep, df, region_name)
+    if comp is not None:
+        comp.to_csv(os.path.join(out, f'{region_name}_composition.csv'), index=False)
+        n_w, n_eff = comp['n_windows_total'].iloc[0], comp['n_eff'].iloc[0]
+        print(f"\n  COMPOSITION ({n_w} windows, n_eff = {n_eff} at "
+              f"{COMPOSITION_DECIMATE_KM:.0f} km):")
+        for _, r in comp.head(8).iterrows():
+            print(f"    {r['fraction']:6.1%}  {r['n_windows']:4d}  {r['admissible']}")
+        if len(comp) > 8:
+            print(f"    ... {len(comp) - 8} further sets")
+        print(f"    descriptive only: at n_eff = {n_eff} a fraction of 0.28 carries an SE of "
+              f"{np.sqrt(0.28 * 0.72 / max(n_eff, 1)):.2f}, so no interval is quoted and "
+              f"fractions are not comparable between regions")
 
     cp = collapse_pairs(vec[vec.level == 'segment'], admissible_by_unit)
     if len(cp):
@@ -931,7 +995,6 @@ if __name__ == "__main__":
         for r, f in found.items():
             process_region(r, f)
         compare_regions(arg)
-        print(f"\nLog: {log}")
         sys.exit(0)
 
     os.makedirs(os.path.join(_REGION_BASE, 'landscape_vector'), exist_ok=True)

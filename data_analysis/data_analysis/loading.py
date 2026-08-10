@@ -16,12 +16,18 @@ from ockenden_coords import (  # noqa: E402
 # =================================================================================
 
 
+# Bedmap #history strings verbatim. The same processing chain is spelled several ways:
+# 2D and 2-D, focused/focussed/focusing, and one entry doubles the trailing word.
 _MIGRATED = {'2-D migration processing', '2-D Synthetic Aperture Radar processing',
-             '2-D Synthetic Aperture Radar focused processing'}
+             '2-D Synthetic Aperture Radar focused processing',
+             '2-D Synthetic Aperture Radar focusing processing',
+             '2D Synthetic Aperture Radar processing',
+             '2D Synthetic Aperture Radar focussed processing'}
 _PARTIAL  = {'1-D Synthetic Aperture Radar processing',
              'Synthetic Aperture Radar unfocused processing',
              'pik1 (short coherent) processing',
-             'MUSIC (Swath) Processing'}
+             'MUSIC (Swath) Processing', 'MUSIC (Swath) Processing processing'}
+_WARNED = set()
 
 # Output configuration (ODSA_OUTPUT_BASE env override isolates sweep runs)
 OUTPUT_BASE_PATH = os.environ.get('ODSA_OUTPUT_BASE') or os.path.join(
@@ -43,6 +49,13 @@ def _parse_processing_flag(filepath):
                     return 'migrated'
                 if hist in _PARTIAL:
                     return 'partial'
+                # A SAR or migration string that matches neither set states no dimension,
+                # so it stays unknown and says so rather than passing silently.
+                low = hist.lower()
+                if ('synthetic aperture radar' in low or 'migration' in low) \
+                        and hist not in _WARNED:
+                    _WARNED.add(hist)
+                    print(f"  unlisted SAR/migration history, read as unknown: {hist!r}")
                 return 'unmigrated_or_unknown'
     return 'unmigrated_or_unknown'
 
@@ -64,7 +77,7 @@ def _warn_degenerate_trajectories(label, df, min_pts_per_traj=5, max_singleton_f
     per_traj, singleton_frac = sizes.median(), (sizes == 1).mean()
     if per_traj >= min_pts_per_traj and singleton_frac <= max_singleton_frac:
         return
-    print(f"  ⚠️ {label}: {len(sizes)} trajectories for {len(df)} points "
+    print(f"  {label}: {len(sizes)} trajectories for {len(df)} points "
           f"(median {per_traj:.0f} pts/track, {singleton_frac:.0%} single-point). "
           f"trajectory_id looks like a row counter, not a flight line — "
           f"along-track metrics on this dataset will be meaningless.")
@@ -77,7 +90,7 @@ def load_datasets():
 
     target_files = [
         # =================================================================
-        # Ockenden et al. (2025) regions — PS71 bounds from Zenodo
+        # [Ockenden_2026] regions — PS71 bounds from Zenodo [Ockenden_2025_data]
         # =================================================================
         
         # # SELECTIVE EROSION: Pensacola-Pole Basin — core square (right portion of
@@ -184,7 +197,7 @@ def load_datasets():
         label = item['label']
         matches = glob.glob(os.path.join(base_path, filename))
         if not matches:
-            print(f"⚠️ Warning: {filename} not found. Skipping.")
+            print(f"Warning: {filename} not found. Skipping.")
             continue
 
         filepath = matches[0]
@@ -212,7 +225,7 @@ def load_datasets():
 
             if len(df) > 0:
                 pflag = df['processing_flag'].iloc[0]
-                print(f"✓ {label} loaded: {len(df)} rows (Filtered {initial_len - len(df)} nulls) [{pflag}]")
+                print(f"{label} loaded: {len(df)} rows (Filtered {initial_len - len(df)} nulls) [{pflag}]")
                 _warn_degenerate_trajectories(label, df)
                 all_dfs.append({'name': label, 'data': df})
             else:
