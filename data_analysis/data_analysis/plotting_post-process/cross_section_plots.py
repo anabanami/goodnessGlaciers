@@ -16,6 +16,7 @@ from scipy.ndimage import uniform_filter1d
 import os
 import sys
 
+import _bootstrap
 from config import Tee, processing_flag_of
 from loading import load_datasets
 from segmentation import detect_data_gaps, split_into_segments, split_by_landscape
@@ -26,7 +27,7 @@ from plotting import flag_title
 # Output configuration - nested inside region output from loading.py
 from loading import OUTPUT_BASE_PATH as _REGION_BASE
 OUTPUT_DIR = os.path.join(_REGION_BASE, 'cross_sections')
-DEM_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+DEM_PATH = os.path.join(_bootstrap.ROOT,
                         'all_data',
                         'rema_mosaic_100m_v2.0_filled_cop30',
                         'rema_mosaic_100m_v2.0_filled_cop30_dem.tif')

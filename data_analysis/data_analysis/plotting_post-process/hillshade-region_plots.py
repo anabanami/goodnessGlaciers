@@ -8,6 +8,7 @@ from rasterio.windows import from_bounds
 import os
 
 # Import the local tools
+import _bootstrap  # noqa: F401  (sets sys.path + cwd to ODSA/)
 from REMA_extractor import extract_rema_elevation, calculate_ice_thickness, get_rema_cache
 from config import Tee, processing_flag_of
 from loading import load_datasets

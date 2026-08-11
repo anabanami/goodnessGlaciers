@@ -11,6 +11,7 @@ from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
 
 # Import the local tools
+import _bootstrap  # noqa: F401  (sets sys.path + cwd to ODSA/)
 from REMA_extractor import extract_rema_elevation, extract_rema_flow_vector, calculate_ice_thickness, get_rema_cache, MEaSUREs_comparison
 from config import Tee, processing_flag_of
 from loading import load_datasets

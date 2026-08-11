@@ -15,6 +15,7 @@ import os
 import re
 
 import sys
+import _bootstrap  # noqa: F401  (sets sys.path + cwd to ODSA/)
 from config import Tee, PROCESSING_FLAG_COLORS, PROCESSING_FLAG_NOTE, processing_flag_of
 from loading import load_datasets
 

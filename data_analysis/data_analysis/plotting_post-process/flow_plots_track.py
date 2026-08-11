@@ -1,6 +1,13 @@
 """Single-track version of flow_plots.py — same figures, one trajectory instead of the region."""
+# USAGE
+# python flow_plots_track.py <region_label> [trajectory_id]    # <region_label> as per loading.py
+# example:
+# python flow_plots_track.py BM3_DML_3E_sq_ICECAP IR2HI2_2011042_TRL_JKB2d_EH1TROa
+
+
 import os
 import sys
+import _bootstrap  # noqa: F401  (sets sys.path + cwd to ODSA/)
 import flow_plots as fp
 from config import Tee
 from loading import load_datasets

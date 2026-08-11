@@ -38,12 +38,18 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 from pyproj import Transformer
 
+# Run from anywhere: put ODSA/ on sys.path and make it the working dir, so the
+# relative paths below resolve against the project root.
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _ROOT)
+os.chdir(_ROOT)
+
 from config import Tee
 
 RESULTS_DIRS = {1: 'all_data/bedmap3_data/bedmap1/Results/',
                 2: 'all_data/bedmap3_data/bedmap2/Results/',
                 3: 'all_data/bedmap3_data/bedmap3/Results/'}
-OUTPUT_BASE_PATH = 'bedmap3_all/map_flightlines/'
+OUTPUT_BASE_PATH = 'all_data/Bedmap_track_plots/map_flightlines/'
 # one cache per release, so adding BM1/BM2 never re-parses BM3's 6.8 GB
 CACHE_TMPL = os.path.join(OUTPUT_BASE_PATH, 'bedmap{gen}_all_coords.npz')
 
