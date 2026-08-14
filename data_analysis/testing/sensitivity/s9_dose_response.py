@@ -19,7 +19,7 @@ sys.stdout = Tee(os.path.join(OUT, "s9_dose_response_log.txt"))
 
 transformer = Transformer.from_crs("EPSG:4326", "EPSG:3031", always_xy=True)
 
-# segment length per (trajectory, seg_idx+1), reproducing bed_analysis_23 ordering
+# segment length per (trajectory, seg_idx+1), reproducing bed_analysis ordering
 lengths = {}  # (dataset, traj, seg_num) -> length_m
 for d in load_datasets():
     name, df = d['name'], d['data']

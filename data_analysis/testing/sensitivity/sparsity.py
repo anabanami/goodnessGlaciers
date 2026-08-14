@@ -18,16 +18,16 @@ os.makedirs(OUT, exist_ok=True)
 sys.stdout = Tee(os.path.join(OUT, "sparsity_log.txt"))
 
 # --- Drift guard. nband() below reproduces the grid of analyse_sliding_windows
-# (bed_analysis_23.py); the band comes from config, the grid bins and dx floor are still
+# (bed_analysis.py); the band comes from config, the grid bins and dx floor are still
 # inline literals there, so read those two from source and warn (non-fatal) on drift.
 BAND_MIN, BAND_MAX = FIT_BAND_M
 def _prodval(pat, cast=float):
-    with open(os.path.join(ODSA, "bed_analysis_23.py")) as _f: src = _f.read()
+    with open(os.path.join(ODSA, "bed_analysis.py")) as _f: src = _f.read()
     m = re.search(pat, src); return cast(m.group(1)) if m else None
 for _label, _mine, _prod in [("grid bins", 500,   _prodval(r"geomspace\([^)]*num=(\d+)", int)),
                              ("dx floor",  15.0,  _prodval(r"max\(dx_median,\s*([\d.]+)\)"))]:
-    if _prod is None: print(f"NOTE: could not cross-check {_label} against bed_analysis_23.py.")
-    elif _mine != _prod: print(f"WARNING: nband {_label}={_mine} but bed_analysis_23.py={_prod} — nband is STALE.")
+    if _prod is None: print(f"NOTE: could not cross-check {_label} against bed_analysis.py.")
+    elif _mine != _prod: print(f"WARNING: nband {_label}={_mine} but bed_analysis.py={_prod} — nband is STALE.")
 
 tf = Transformer.from_crs("EPSG:4326","EPSG:3031",always_xy=True)
 # per-segment (L, dx_median)

@@ -33,7 +33,7 @@ BASE_DIR.mkdir(parents=True, exist_ok=True)
 _real_stdout = sys.stdout
 sys.stdout = Tee(str(BASE_DIR / "peak-masking_threshold_log.txt"))
 
-# --- Frequency grid: mirrors analyse_sliding_windows (bed_analysis_23.py).
+# --- Frequency grid: mirrors analyse_sliding_windows (bed_analysis.py).
 # WINDOW_SIZE, bin_buffer and the fit band come from config, so an env-overridden or
 # retuned run is picked up automatically. N_BINS and the dx floor are still literals in
 # that function, so they are duplicated here and guarded below.
@@ -57,19 +57,19 @@ N_FIT_BINS = len(FIT_INDICES)
 
 # --- Drift guard for the two values still mirrored. The fit band is imported above, so
 # it needs no guard; N_BINS and the dx floor are inline literals in
-# analyse_sliding_windows (bed_analysis_23.py), so read them from that source and warn
+# analyse_sliding_windows (bed_analysis.py), so read them from that source and warn
 # (non-fatal) if this copy has gone stale.
 def _prodval(pat, cast=float):
-    m = re.search(pat, (ODSA / "bed_analysis_23.py").read_text())
+    m = re.search(pat, (ODSA / "bed_analysis.py").read_text())
     return cast(m.group(1)) if m else None
 for _label, _mine, _prod in [
     ("grid bins (num=)", N_BINS,            _prodval(r"geomspace\([^)]*num=(\d+)", int)),
     ("dx floor",         DX_MEDIAN_DEFAULT, _prodval(r"max\(dx_median,\s*([\d.]+)\)")),
 ]:
     if _prod is None:
-        print(f"NOTE: could not locate {_label} in bed_analysis_23.py to cross-check.")
+        print(f"NOTE: could not locate {_label} in bed_analysis.py to cross-check.")
     elif _mine != _prod:
-        print(f"WARNING: {_label} = {_mine} here but {_prod} in bed_analysis_23.py — this mirror is STALE.")
+        print(f"WARNING: {_label} = {_mine} here but {_prod} in bed_analysis.py — this mirror is STALE.")
 
 
 def wavelengths_to_bin_indices(wavelengths):
@@ -208,7 +208,7 @@ if 'per-window' in schemas:
         print("per-window. Curves from the two are not comparable at any threshold. Re-run")
         print("every threshold_* folder on one pipeline version before reading the figure.\n")
     print("What changed: detections moved from the segment fit to per window")
-    print("(bed_analysis_23.py, 'wavelength_detections' built from window_stats). The CSV")
+    print("(bed_analysis.py, 'wavelength_detections' built from window_stats). The CSV")
     print("gained segment/window_id/residual_height; the stored sweep had only")
     print("trajectory,wavelength_m,type.\n")
     print("Panel 2 (raw counts): overlapping windows re-count the same physical wavelength,")

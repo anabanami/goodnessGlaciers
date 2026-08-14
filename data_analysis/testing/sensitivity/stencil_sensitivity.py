@@ -14,7 +14,7 @@ visible: theta itself, the flat-surface rejection (dz scales with the stencil, s
 wider stencil rejects fewer points), and the MEaSUREs flow-error that sets the
 weights.
 
-Re-runs bed_analysis_23.py for Pensacola at each factor into an isolated output
+Re-runs bed_analysis.py for Pensacola at each factor into an isolated output
 tree (this folder/stencil_sensitivity/runs/x<factor>/), then refits Delta-beta at
 window and segment level, unweighted and weighted, exactly as the pipeline does.
 
@@ -37,7 +37,7 @@ from config import Tee, WINDOW_SIZE, WINDOW_TYPE, STANDARD_WINDOW  # noqa: E402
 
 FACTORS = [2.5, 5.0, 7.5, 10.0]                  # 5.0 = production, 10.0 = McCormack 2019
 REGIONS = ['POLARGAP_2015_Pensacola_Pole']       # selective-erosion region; the open sign call
-# Built the same way bed_analysis_23 names its output, so the filename follows WINDOW_SIZE
+# Built the same way bed_analysis names its output, so the filename follows WINDOW_SIZE
 # and WINDOW_TYPE instead of mirroring them. This was one of the two unguarded mirrors in
 # CONSTANTS_AUDIT; deriving it removes the mirror rather than guarding it.
 SUFFIX = (f'_w{WINDOW_SIZE // 1000}km' if WINDOW_TYPE == STANDARD_WINDOW
@@ -54,7 +54,7 @@ def run_one(factor):
                ODSA_OUTPUT_BASE=str(base_for(factor)) + os.sep,
                ODSA_REGION_FILTER=','.join(REGIONS))
     print(f"\n{'='*70}\n  STENCIL_FACTOR = {factor} x ice thickness\n{'='*70}")
-    subprocess.run([sys.executable, 'bed_analysis_23.py'], cwd=str(ODSA), env=env, check=True)
+    subprocess.run([sys.executable, 'bed_analysis.py'], cwd=str(ODSA), env=env, check=True)
 
 
 def _ess(w):

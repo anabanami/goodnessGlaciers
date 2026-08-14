@@ -2,7 +2,7 @@
 """
 Window-size sensitivity sweep for the ODSA pipeline.
 
-Re-runs bed_analysis_23.py at several WINDOW_SIZE values on a fixed 3-region
+Re-runs bed_analysis.py at several WINDOW_SIZE values on a fixed 3-region
 subset, each into an isolated output tree (this folder/runs/), then assembles
 one comparison table of the window-size-sensitive outputs:
   - sample geometry : n segments, n exported windows
@@ -30,7 +30,7 @@ from pathlib import Path
 import numpy as np, pandas as pd
 
 HERE = Path(__file__).resolve().parent          # .../v23
-ODSA = HERE.parent                              # .../ODSA root (bed_analysis_23.py, config.py, weighted_anisotropy.py)
+ODSA = HERE.parent                              # .../ODSA root (bed_analysis.py, config.py, weighted_anisotropy.py)
 OUT_ROOT = HERE / 'window_size'                 # this script's data/results folder
 RUNS = OUT_ROOT / 'runs'
 PLOT_Z_MIN = 1.5         # --plots only draws cells where |z| (unw or wt) reaches this; tune via `--plots <z>`
@@ -59,7 +59,7 @@ def run_one(size_km):
                ODSA_OUTPUT_BASE=str(RUNS) + os.sep,
                ODSA_REGION_FILTER=','.join(REGIONS))
     print(f"\n{'='*70}\n  WINDOW_SIZE = {size_km} km\n{'='*70}")
-    subprocess.run([sys.executable, 'bed_analysis_23.py'], cwd=str(ODSA), env=env, check=True)
+    subprocess.run([sys.executable, 'bed_analysis.py'], cwd=str(ODSA), env=env, check=True)
 
 
 def _aniso(csv, level):

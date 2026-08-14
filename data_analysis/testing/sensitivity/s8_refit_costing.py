@@ -34,7 +34,7 @@ if float(FIT_BAND_M[1]) != float(WINDOW_SIZE):
 
 transformer = Transformer.from_crs("EPSG:4326", "EPSG:3031", always_xy=True)
 
-# segment length per (dataset, trajectory, seg_idx+1), reproducing bed_analysis_23 ordering
+# segment length per (dataset, trajectory, seg_idx+1), reproducing bed_analysis ordering
 lengths, loaded = {}, set()
 for d in load_datasets():
     name, df = d['name'], d['data']

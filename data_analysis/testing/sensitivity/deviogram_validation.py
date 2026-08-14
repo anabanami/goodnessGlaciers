@@ -43,16 +43,16 @@ MIN_BINS = 8                       # bins needed to fit a slope
 TOL = 1e-9                         # reconstruction-vs-CSV tolerance
 
 # --- Drift guard. The reconstruction below reproduces analyse_sliding_windows
-# (bed_analysis_23.py). The band comes from config; grid density and dx floor are still
+# (bed_analysis.py). The band comes from config; grid density and dx floor are still
 # inline literals there, so read those from source and warn (non-fatal) on drift.
-_SRC = open(os.path.join(ODSA, "bed_analysis_23.py")).read()
+_SRC = open(os.path.join(ODSA, "bed_analysis.py")).read()
 def _prodval(pat, cast=float):
     m = re.search(pat, _SRC); return cast(m.group(1)) if m else None
 N_BINS, DX_FLOOR = 500, 15.0
 BAND_MIN, BAND_MAX = FIT_BAND_M
 for _label, _mine, _prod in [("grid bins", N_BINS,   _prodval(r"geomspace\([^)]*num=(\d+)", int)),
                              ("dx floor",  DX_FLOOR, _prodval(r"max\(dx_median,\s*([\d.]+)\)"))]:
-    if _prod is None: print(f"NOTE: could not cross-check {_label} against bed_analysis_23.py.")
+    if _prod is None: print(f"NOTE: could not cross-check {_label} against bed_analysis.py.")
     elif _mine != _prod: print(f"WARNING: {_label} = {_mine} here but {_prod} in production — STALE.")
 if WINDOW_TYPE != 'hann':
     print(f"WARNING: WINDOW_TYPE is {WINDOW_TYPE!r}, not 'hann'. This test is about the hann taper.")
@@ -108,7 +108,7 @@ def segment_windows(dist, elev):
     """Reproduce analyse_sliding_windows: same loop, same detrend, same taper, same mask.
 
     Production falls back to window_size = segment length for sub-50 km segments
-    (bed_analysis_23.py:323-326), so a truncated segment yields one window spanning it.
+    (bed_analysis.py), so a truncated segment yields one window spanning it.
     That fallback is reproduced here, and it is why window length is carried per window:
     the deviogram's lag ceiling and its bias both scale with it.
 

@@ -100,7 +100,7 @@ BETA_T, RELIEF_T = 2.0, 800.0   # cliff signature: low beta AND mountainous reli
 # --- Drift guard. BETA_T mirrors the hard/transitional β boundary and RELIEF_T the
 # mountainous relief floor (bed_character.py, importable); the 5 km TZ-merge gap
 # (tz_extents_km) and 15 m dx floor mirror inline literals in segmentation.py /
-# bed_analysis_23.py. Warn (non-fatal) on any drift.
+# bed_analysis.py. Warn (non-fatal) on any drift.
 def _srcval(fname, pat, cast=float):
     with open(os.path.join(ODSA, fname)) as _f: m = re.search(pat, _f.read())
     return cast(m.group(1)) if m else None
@@ -112,7 +112,7 @@ except Exception as _e:
     print(f"NOTE: could not import β/relief thresholds from bed_character.py ({_e}).")
     _checks = []
 _checks += [("TZ merge gap (km)", 5.0, _srcval("segmentation.py", r"merge_gap_km\s*=\s*([\d.]+)")),
-            ("dx floor (m)",      15.0, _srcval("bed_analysis_23.py", r"max\(dx_median,\s*([\d.]+)\)"))]
+            ("dx floor (m)",      15.0, _srcval("bed_analysis.py", r"max\(dx_median,\s*([\d.]+)\)"))]
 for _label, _mine, _prod in _checks:
     if _prod is None: print(f"NOTE: could not cross-check {_label} against production source.")
     elif _mine != _prod: print(f"WARNING: {_label} = {_mine} here but {_prod} in production — this mirror is STALE.")

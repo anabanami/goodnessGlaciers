@@ -156,7 +156,7 @@ if skipped:
     print('skipped: ' + '; '.join(skipped) + '\n')
 if not regions:
     sys.exit('no usable detections. They must carry window_id and residual_height, which '
-             'means a run made after per-window detection was added to bed_analysis_23.py')
+             'means a run made after per-window detection was added to bed_analysis.py')
 
 print('source: ' + ', '.join(str(s) for s in SOURCES))
 print(f'bedform band {BAND_M[0]}-{BAND_M[1]} m, window {WINDOW_SIZE/1000:.0f} km')

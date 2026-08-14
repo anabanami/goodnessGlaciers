@@ -182,7 +182,7 @@ def main():
     out_png = OUT_ROOT / 'cutoff_sensitivity.png'
     fig.savefig(out_png, dpi=300, bbox_inches='tight')
     plt.close(fig)
-    print(f"\n✓ Saved {out_png}")
+    print(f"\nSaved {out_png}")
 
 
 if __name__ == "__main__":

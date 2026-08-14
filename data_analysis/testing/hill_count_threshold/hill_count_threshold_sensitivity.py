@@ -1,6 +1,6 @@
 """Which hill-count relief threshold, if any, earns a vector slot.
 
-Reads hill_count_{20,50,100,250} from the window CSVs (bed_analysis_23 emits all four
+Reads hill_count_{20,50,100,250} from the window CSVs (bed_analysis emits all four
 in one pass) and reports, per region and threshold, the resolving power of the count and
 its Spearman correlation with the elements already in the vector. A threshold is useless
 if the count is degenerate (most windows at 0-1, or saturated at the WINDOW_SIZE/5 km

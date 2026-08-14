@@ -381,7 +381,7 @@ if merge_data_available:
 else:
     print("\n\n--- TZ-merge distance: no data directories found ---")
     print(f"    Expected: {BASE}/merge_{{2,5,10}}km/{DATA_DIR}/")
-    print("    Run bed_analysis_23.py with merge_gap_km = 2, 5, 10 to generate.")
+    print("    Run bed_analysis.py with merge_gap_km = 2, 5, 10 to generate.")
 
 print("\n\nDone.")
 

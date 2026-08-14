@@ -41,7 +41,7 @@ The formal error is fine, near enough. polyfit(cov=True) scales by the observed
 residual variance, so it measures real log-PSD scatter. Only defect is the
 geomspace(500) grid oversampling the 50 km window's ~198 independent frequencies
 by ~1.8x, so sigma is small by ~1.34x. True sigma ~0.06. Shifts composition ~1%.
-SIGMA_EXTRA stays 0.0 and bed_analysis_23.py stays as it is. See §6.5.
+SIGMA_EXTRA stays 0.0 and bed_analysis.py stays as it is. See §6.5.
 
 One-off: revisit only if window size, fit band or PSD method changes.
 

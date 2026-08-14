@@ -108,7 +108,7 @@ def shared():
     fig.tight_layout()
     fig.savefig(OUT_ROOT / "threshold_sweep.png", dpi=150)
     plt.close(fig)
-    print("\n✓ Saved threshold_sweep.png")
+    print("\nSaved threshold_sweep.png")
 
     # Sweep table
     print("\n threshold   % hard     % trans     Δhard/0.1")
@@ -198,7 +198,7 @@ def run(threshold, outdir):
     fig.tight_layout()
     fig.savefig(outdir / "threshold_kde.png", dpi=150)
     plt.close(fig)
-    print("✓ Saved threshold_kde.png")
+    print("Saved threshold_kde.png")
 
     # ── Per-region KDEs with the boundary marked ─────────────────────
     regions = all_beta.groupby("region")
@@ -232,7 +232,7 @@ def run(threshold, outdir):
     fig.tight_layout()
     fig.savefig(outdir / "threshold_kde_per_region.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
-    print("✓ Saved threshold_kde_per_region.png")
+    print("Saved threshold_kde_per_region.png")
 
 
 if __name__ == "__main__":
