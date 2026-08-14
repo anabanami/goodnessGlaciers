@@ -36,8 +36,15 @@ K_SIGMA = 2.0
 # Delta_beta comes from the per-window neighbourhood fits in weighted_anisotropy
 # (*_delta_beta_local.csv). False holds the axis unavailable everywhere; True uses it,
 # and a patch that failed the coverage gate widens like any other missing observable.
-# The null run and the cos2 model test are still outstanding — see the design doc.
+# Both are now run: Stage A settled the cos2 model form and Stage E measured the null.
 ANISOTROPY_TRUSTED = True
+
+# The local-fit bootstrap resamples one bed, so it cannot see realisation variance and
+# understates the true spread by 2.52x over 21 isotropic synthetic beds (Stage E).
+DELTA_BETA_BOOTSTRAP_INFLATION = 2.52
+# Smallest delta_beta resolved on a bed known to be streamlined (Site F, +0.108). `zero`
+# is a positive claim of isotropy, so it needs an envelope tight enough to exclude that.
+DELTA_BETA_MIN_EFFECT = 0.10
 
 # Neighbourhood fits within one diameter of each other share most of their windows, so
 # the formal error of a single local fit is not the error of many. Aggregate delta_beta
@@ -255,6 +262,9 @@ def delta_beta_agg(g, min_sep_km=DELTA_BETA_DECIMATE_KM):
     v = pd.to_numeric(ok['delta_beta_local'], errors='coerce').to_numpy(float)
     formal = pd.to_numeric(ok['delta_beta_local_se'], errors='coerce').to_numpy(float)
     formal = float(np.nanmedian(formal)) if np.isfinite(formal).any() else np.nan
+    # Applied here rather than at the max() below, so the between-patch spread, which is
+    # already a realisation estimate, is not inflated twice.
+    formal *= DELTA_BETA_BOOTSTRAP_INFLATION
     med = float(np.median(v))
     iqr = float(np.percentile(v, 75) - np.percentile(v, 25)) if v.size > 1 else np.nan
     n_ind = len(_independent_subset(ok[['center_x', 'center_y']].to_numpy(float), min_sep_km))
@@ -320,13 +330,20 @@ def observe(vec, pflag):
     # coverage gate. A failed gate means my tracks do not cross here, not that the bed has
     # no directional structure, so it widens like any missing observable and never selects
     # a case. Gated windows are absent, not contradictory: they do not poison the rest.
+    # A fit that cannot separate zero from a real anisotropy is a non-detection, and
+    # `zero` excludes TRUNK/RIFT/DISSECTED, so it may only be claimed on a tight envelope.
     d, sd = vec['delta_beta'], vec['delta_beta_sigma']
     n_ok = vec.get('delta_beta_n_ok', 0)
+    full = set(AXIS_VALUES['delta_beta'])
     if not ANISOTROPY_TRUSTED or not n_ok or not np.isfinite(d) or not np.isfinite(sd) or sd <= 0:
-        s = set(AXIS_VALUES['delta_beta'])
+        s, reason = full, 'not_fitted'
+    elif abs(d) >= K_SIGMA * sd:
+        s, reason = ({'pos_sig'} if d > 0 else {'neg_sig'}), 'resolved_nonzero'
+    elif K_SIGMA * sd <= DELTA_BETA_MIN_EFFECT:
+        s, reason = {'zero'}, 'resolved_zero'
     else:
-        s = ({'pos_sig'} if d > 0 else {'neg_sig'}) if abs(d) >= K_SIGMA * sd else {'zero'}
-    obs['delta_beta'] = dict(set=s, value=d, sigma=sd)
+        s, reason = full, 'below_floor'
+    obs['delta_beta'] = dict(set=s, value=d, sigma=sd, reason=reason)
 
     # beta_spread: computable but unthresholded, so it cannot exclude Case E.
     iqr = vec['beta_iqr']
@@ -713,6 +730,8 @@ def process_region(region_name, csv_path, levels=('window', 'segment', 'region')
                 'delta_beta_coverage': (v['delta_beta_n_ok'] /
                                         max(v['delta_beta_n_ok'] + v['delta_beta_n_gated'], 1)),
                 'delta_beta_n_indep': v['delta_beta_n_indep'],
+                # Splits the two ways the axis goes unavailable: no fit vs fit too wide.
+                'delta_beta_reason': obs['delta_beta']['reason'],
                 # The sampled velocity error drives the classification, so it belongs in the
                 # output. n_ok separates "no coverage" (0, axis widened) from "no sidecar" (NaN).
                 'measures_err_m_yr': v['velocity_err'],
@@ -918,8 +937,7 @@ def compare_regions(root, z_min=2.0):
     for i, j in itertools.combinations(range(len(d)), 2):
         a, b = d.iloc[i], d.iloc[j]
         # z asks whether the medians are distinguishable and shrinks as sqrt(n_windows).
-        # d asks whether the window distributions differ and does not. A region with 283
-        # windows separates from anything on z alone, so a bed claim needs both.
+        # d asks whether the window distributions differ and does not. 
         zs, ds = {}, {}
         for c in cols:
             if not (np.isfinite(a[c]) and np.isfinite(b[c])):

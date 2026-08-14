@@ -4,7 +4,7 @@ No region boxes/polygons: every metric derives from the track geometry itself,
 referenced to the survey's own footprint (convex hull of the track points).
 Generalises to any RES track bundle keyed on `trajectory`.
 
-Inputs (written by bed_analysis_23.py):
+Inputs (written by bed_analysis.py):
   coverage_csvs/<region>_track_points.csv  -> x, y, trajectory_id (~1 km cloud)
   window_csvs/<region>_window_stats.csv    -> center_x, center_y, azimuth_deg, is_transition, beta
 
@@ -167,7 +167,7 @@ def run_all(directory=None, region_filter=None):
         regions = {r: v for r, v in regions.items() if region_filter.lower() in r.lower()}
     if not regions:
         print(f"No *_track_points.csv found under {os.path.join(directory, 'coverage_csvs')} "
-              f"(re-run bed_analysis_23.py to emit them).")
+              f"(re-run bed_analysis.py to emit them).")
         return
 
     rows = []
