@@ -12,7 +12,7 @@ import pandas as pd
 # that use it) can be removed.
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'all_data', 'Ockenden'))
 from ockenden_coords import (  # noqa: E402
-    _ps71_subset, _ppb_core_subset, _ps71_lowrelief_subset)
+    _ps71_subset, _ppb_core_subset, _ps71_lowrelief_subset, _soar_ppb_subset)
 # =================================================================================
 
 
@@ -35,6 +35,7 @@ OUTPUT_BASE_PATH = os.environ.get('ODSA_OUTPUT_BASE') or os.path.join(
     # 'Ockenden-regions/',
     'individual_region_TEST/'
     # 'v23/peak-masking_threshold/threshold_10.0/Ockenden-regions-sensitivityTEST'
+    # 'new/PPB_soar'
 )
 
 
@@ -93,62 +94,27 @@ def load_datasets():
         # [Ockenden_2026] regions — PS71 bounds from Zenodo [Ockenden_2025_data]
         # =================================================================
         
-        # # SELECTIVE EROSION: Pensacola-Pole Basin — core square (right portion of
-        # # the POLARGAP fan incl. the radial convergence node). Matches the
-        # # hand-drawn black square on the overview map; subset of the full PPB box.
+        # SELECTIVE EROSION: Pensacola-Pole Basin — core square (right portion of
+        # the POLARGAP fan incl. the radial convergence node). Matches the
+        # hand-drawn black square on the overview map; subset of the full PPB box.
+        {
+            'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
+            'label': 'POLARGAP_2015_Pensacola_Pole',
+            'subset': _ppb_core_subset,
+        },
         # {
-        #     'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
-        #     'label': 'POLARGAP_2015_Pensacola_Pole',
-        #     'subset': _ppb_core_subset,
+        #   'file': 'UTIG_1999_SOAR-LVS-WLK_AIR_BM2.csv',
+        #   'label': 'SOAR_1999_Pensacola_Pole_SOAR_BM2',
+        #   'subset': _soar_ppb_subset,
         # },
 
-        # # LOW-RELIEF: Aurora SB filtered to Ockenden low-relief cells
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'ASB_ICECAP_2010_Fig4C_Aurora_SB_lowrelief',
-        #     'subset': lambda df: _ps71_lowrelief_subset(
-        #         df, [1.05e6, 2.20e6, -0.80e6, 0.20e6]),
-        # },
-
-        # # LOW-RELIEF / SELECTIVE EROSION: Maud Subglacial Basin
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'ASB_ICECAP_2010_Fig2A_Maud_SB',
-        #     'subset': lambda df: _ps71_subset(
-        #         df, [0.15e6, 0.45e6, 1.025e6, 1.325e6]),
-        # },
-
-        # # LOW-RELIEF / SELECTIVE EROSION: Recovery Subglacial Lakes
-        # {
-        #     'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
-        #     'label': 'Rec_Catch_Fig2D_Recovery_SL',
-        #     'subset': lambda df: _ps71_subset(
-        #         df, [0.0e6, 0.30e6, 0.6e6, 0.9e6]),
-        # },
-
-        # # ALPINE/SELECTIVE EROSION/LOW RELIEF: Highland A
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'ASB_ICECAP_2010_Fig2G_Highland_A',
-        #     'subset': lambda df: _ps71_subset(
-        #         df, [1.90e6, 2.20e6, -0.725e6, -0.425e6]),
-        # },
-
-        # # ALPINE/SELECTIVE EROSION/LOW RELIEF: Golicyna Subglacial Mountains
-        # {
-        #     'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #     'label': 'ASB_ICECAP_2010_Fig2H_Golicyna_SM',
-        #     'subset': lambda df: _ps71_subset(
-        #         df, [2.15e6, 2.45e6, -0.5e6, -0.2e6]),
-        # },
-
-        # # ALPINE/SELECTIVE EROSION: Hercules Dome
-        # {
-        #     'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
-        #     'label': 'POLARGAP_2015_Fig2C_Hercules_Dome',
-        #     'subset': lambda df: _ps71_subset(
-        #         df, [-0.6e6, -0.3e6, -0.23e6, 0.07e6]),
-        # },
+        # LOW-RELIEF: Aurora SB filtered to Ockenden low-relief cells
+        {
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+            'label': 'ASB_ICECAP_2010_Fig4C_Aurora_SB_lowrelief',
+            'subset': lambda df: _ps71_lowrelief_subset(
+                df, [1.05e6, 2.20e6, -0.80e6, 0.20e6]),
+        },
 
         # # SELECTIVE EROSION/LOW RELIEF: Aurora Subglacial Basin
         # {
@@ -156,6 +122,46 @@ def load_datasets():
         #  'label': 'ASB_ICECAP_2010_Fig4C_Aurora_SB_square',
         #  'subset': lambda df, _b=[1100000.0, 1400000.0, -780000.0, -480000.0]: _ps71_subset(df, _b),
         # },
+
+        # LOW-RELIEF / SELECTIVE EROSION: Maud Subglacial Basin
+        {
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+            'label': 'ASB_ICECAP_2010_Fig2A_Maud_SB',
+            'subset': lambda df: _ps71_subset(
+                df, [0.15e6, 0.45e6, 1.025e6, 1.325e6]),
+        },
+
+        # LOW-RELIEF / SELECTIVE EROSION: Recovery Subglacial Lakes
+        {
+            'file': 'BAS_2012_ICEGRAV_AIR_BM3.csv',
+            'label': 'Rec_Catch_Fig2D_Recovery_SL',
+            'subset': lambda df: _ps71_subset(
+                df, [0.0e6, 0.30e6, 0.6e6, 0.9e6]),
+        },
+
+        # ALPINE/SELECTIVE EROSION/LOW RELIEF: Highland A
+        {
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+            'label': 'ASB_ICECAP_2010_Fig2G_Highland_A',
+            'subset': lambda df: _ps71_subset(
+                df, [1.90e6, 2.20e6, -0.725e6, -0.425e6]),
+        },
+
+        # ALPINE/SELECTIVE EROSION/LOW RELIEF: Golicyna Subglacial Mountains
+        {
+            'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+            'label': 'ASB_ICECAP_2010_Fig2H_Golicyna_SM',
+            'subset': lambda df: _ps71_subset(
+                df, [2.15e6, 2.45e6, -0.5e6, -0.2e6]),
+        },
+
+        # ALPINE/SELECTIVE EROSION: Hercules Dome
+        {
+            'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
+            'label': 'POLARGAP_2015_Fig2C_Hercules_Dome',
+            'subset': lambda df: _ps71_subset(
+                df, [-0.6e6, -0.3e6, -0.23e6, 0.07e6]),
+        },
 
         # # ALPINE/LOW RELIEF: Dome C
         # {

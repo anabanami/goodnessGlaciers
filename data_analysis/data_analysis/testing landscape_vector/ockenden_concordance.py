@@ -18,7 +18,7 @@ ODSA measures should hold a lot. That contrast is the claim.
     python ockenden_concordance.py [root]
 
 Needs ockenden_window_class.csv (run ockenden_class.py first). Writes
-ockenden_concordance.csv and ockenden_variance.csv to the tree root.
+ockenden_concordance.csv and ockenden_variance.csv into the run tree (ROOT).
 """
 import glob, os, sys
 import numpy as np, pandas as pd
@@ -55,7 +55,7 @@ def load(root):
     d = pd.concat(frames, ignore_index=True)
     n = len(d)
 
-    cls = pd.read_csv('ockenden_window_class.csv')
+    cls = pd.read_csv(os.path.join(ROOT, 'ockenden_window_class.csv'))
     need = ['ockenden_class', 'alt_agrees', 'cell_id']
     assert 'cell_id' in cls, 'stale ockenden_window_class.csv — re-run ockenden_class.py'
     d = d.merge(cls[['region'] + KEY + need], on=['region'] + KEY, how='left')
@@ -161,14 +161,17 @@ def run(d, label):
 
 
 if __name__ == '__main__':
-    sys.stdout = Tee('ockenden_concordance_log.txt')
+    sys.stdout = Tee(os.path.join(ROOT, 'ockenden_concordance_log.txt'))
     d = load(ROOT)
     res, var = run(d, 'ALL SNAPPED WINDOWS')
     res2, var2 = run(d[d.alt_agrees], 'NON-STRADDLING ONLY')
     res['subset'], res2['subset'] = 'all', 'non_straddling'
     var['subset'], var2['subset'] = 'all', 'non_straddling'
-    pd.concat([res, res2], ignore_index=True).to_csv('ockenden_concordance.csv', index=False)
-    pd.concat([var, var2], ignore_index=True).to_csv('ockenden_variance.csv', index=False)
+    pd.concat([res, res2], ignore_index=True).to_csv(
+        os.path.join(ROOT, 'ockenden_concordance.csv'), index=False)
+    pd.concat([var, var2], ignore_index=True).to_csv(
+        os.path.join(ROOT, 'ockenden_variance.csv'), index=False)
     print("\nRead the within-cell column against family: borrowed axes are smooth gridded")
     print("products and should sit low; the elements ODSA measures should sit high.")
-    print("Wrote ockenden_concordance.csv, ockenden_variance.csv")
+    print(f"Wrote {os.path.join(ROOT, 'ockenden_concordance.csv')}, "
+          f"{os.path.join(ROOT, 'ockenden_variance.csv')}")

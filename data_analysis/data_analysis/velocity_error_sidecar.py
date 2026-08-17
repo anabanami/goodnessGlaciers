@@ -34,7 +34,7 @@ Two choices worth knowing about when reading the output.
 Nothing here classifies and nothing is overwritten outside <region>/velocity/.
 
       python velocity_error_sidecar.py
-      python velocity_error_sidecar.py --root Ockenden-regions
+      python velocity_error_sidecar.py --root individual_region_TEST
       python velocity_error_sidecar.py --dry-run          # summary only, writes nothing
 """
 import argparse, glob, os, sys

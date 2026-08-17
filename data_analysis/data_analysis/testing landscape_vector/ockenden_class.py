@@ -10,7 +10,7 @@ eyeball reading in all_data/Ockenden/regions.md. Neither is authoritative; this 
 
     python ockenden_class.py [root] [--metrics DIR]
 
-Writes ockenden_window_class.csv to the tree root. Reads only.
+Writes ockenden_window_class.csv into the run tree (ROOT). Reads only.
 """
 import glob, os, sys
 import numpy as np, pandas as pd
@@ -87,9 +87,9 @@ def classify(root=ROOT, metrics_dir=METRICS):
 
 
 if __name__ == '__main__':
-    sys.stdout = Tee('ockenden_class_log.txt')
+    sys.stdout = Tee(os.path.join(ROOT, 'ockenden_class_log.txt'))
     w = classify()
-    w.to_csv('ockenden_window_class.csv', index=False)
+    w.to_csv(os.path.join(ROOT, 'ockenden_window_class.csv'), index=False)
     live = w[~w.is_transition]
     print(f"{len(w)} windows, {len(live)} non-transition | grid {len(masks()[0])} cells @ {CELL_M/1e3:.0f} km")
     print(f"unsnapped (>{SNAP_MAX_M/1e3:.1f} km from any cell): {w.ockenden_class.isna().sum()}")

@@ -87,7 +87,7 @@ def calculate_incidence_angle(flight_x, flight_y, flow_x, flow_y):
     """
     Calculates angle between flight path tangent and ice flow vector.
     Returns angle in degrees [0, 90].
-    Mirrors calculate_flow_incidence in bed_analysis_23.py.
+    Mirrors calculate_flow_incidence in bed_analysis.py.
     """
     # Calculate Flight Direction (Tangent)
     dt_x = np.gradient(flight_x)
@@ -124,7 +124,7 @@ def calculate_along_track_distance(x, y):
 
 def build_segments(df, dem_path, cache, thickness_threshold=0.20):
     """
-    Segment the region EXACTLY like bed_analysis_23.py so segment identity matches
+    Segment the region EXACTLY like bed_analysis.py so segment identity matches
     the rest of the pipeline:
       per trajectory -> split_into_segments (gaps) -> split_by_landscape (bed gradient)
     Segments are numbered per trajectory by their index in the two-step list

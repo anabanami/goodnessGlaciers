@@ -8,10 +8,10 @@ A dropped column, a changed value in a shared column, a row-key mismatch or a
 missing file does fail.
 
 Usage:  python production_output_diff.py [NEW BASELINE [NEW BASELINE ...]]
-        Default pair is Ockenden-regions vs Ockenden-regions.bak.
+        Default pair is individual_region_TEST vs individual_region_TEST.bak.
         Paths resolve against the cwd or the ODSA root, so it runs from either.
    eg:  python production_output_diff.py
-        python production_output_diff.py individual_region_TEST Ockenden-regions
+        python production_output_diff.py individual_region_TEST individual_region_TEST.bak
 """
 import sys
 from pathlib import Path
@@ -19,7 +19,7 @@ import numpy as np, pandas as pd
 from config import Tee
 
 ODSA = Path(__file__).resolve().parent
-DEFAULT = ('Ockenden-regions', 'Ockenden-regions.bak')
+DEFAULT = ('individual_region_TEST', 'individual_region_TEST.bak')
 LOG = ODSA / 'production_output_diff.log'
 
 # Both sides are CSV round-trips, so decimal formatting alone moves values by ~1e-16

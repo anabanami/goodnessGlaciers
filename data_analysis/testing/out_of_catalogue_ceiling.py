@@ -11,9 +11,9 @@ History: 44% against 44 uncovered cells. Widening DIVIDE to {very_low, low} on 2
 covered 4 heavily-occupied cells and took it to 31.9% against 40 uncovered.
 
 Observable space is the four measurable axes only (beta x relief x elevation x velocity =
-144 cells). delta_beta and beta_spread are left free: a cell counts as covered if ANY
-setting of those two admits an entry, because neither is something the survey resolves
-independently of the others.
+144 cells). delta_beta is left free: a cell counts as covered if ANY setting of it admits
+an entry, because it is not something the survey resolves independently of the others.
+beta_spread is not a free axis, it is no axis at all: no catalogue entry constrains it.
 
 Reading it: approaching the ceiling means the coverage gap fully expressed, a catalogue
 result. Materially below means ambiguity is still rescuing cells, so the rate describes the
@@ -48,14 +48,14 @@ def classify(v, classes):
 
 
 def covered_cells():
-    """Cells admitting at least one entry for some delta_beta / beta_spread setting."""
+    """Cells admitting at least one entry for some delta_beta setting."""
     out = set()
-    free = list(itertools.product(lv.AXIS_VALUES['delta_beta'], lv.AXIS_VALUES['beta_spread']))
+    free = lv.AXIS_VALUES['delta_beta']
     for combo in itertools.product(*[[n for n, _, _ in cl] for _, _, cl in AXES]):
         p = dict(zip([a for a, _, _ in AXES], combo))
-        if any(all(dict(p, delta_beta=d, beta_spread=b)[a] in allowed
+        if any(all(dict(p, delta_beta=d)[a] in allowed
                    for a, allowed in c['c'].items())
-               for d, b in free for c in lv.CATALOGUE):
+               for d in free for c in lv.CATALOGUE):
             out.add(combo)
     return out
 

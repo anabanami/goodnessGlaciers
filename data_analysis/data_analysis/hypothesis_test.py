@@ -15,7 +15,8 @@ Three parts, because the obvious test turned out to be vacuous:
 
 2. SUBSET CURVE. Resolution rate over every subset of the constraining axes, which is what
    "a range of descriptors" actually claims — how many are needed, and which combination.
-   beta_spread is excluded: it has no threshold, never fires, and returns the empty scan.
+   beta_spread is not among them: ALL_AXES is derived from the catalogue and no entry
+   constrains it, so it never enters this scan in the first place.
 
 3. PERMUTATION NULL. Shuffles each axis's observed label set independently across units,
    preserving every marginal and destroying only the joint structure. This is the null the
@@ -38,7 +39,7 @@ from landscape_vector import (load_region, build_vector, observe, match, units_f
 ROOT = sys.argv[1] if len(sys.argv) > 1 else 'individual_region_TEST'
 NPERM = int(sys.argv[2]) if len(sys.argv) > 2 else 200
 LEVEL = 'window'
-SUBSET_AXES = [a for a in sorted(ALL_AXES) if a != 'beta_spread']
+SUBSET_AXES = sorted(ALL_AXES)
 ALL_OF = {a: frozenset(AXIS_VALUES[a]) for a in ALL_AXES}
 
 

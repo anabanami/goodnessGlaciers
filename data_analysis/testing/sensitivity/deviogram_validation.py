@@ -19,8 +19,13 @@ periodogram. The reconstruction is checked against the production CSV before any
 comparison is reported: if beta_full_masked does not reproduce the CSV, nothing else in
 the output is trustworthy and the script says so.
 
-Run from v23/; writes results to v23/deviogram/."""
-import numpy as np, pandas as pd, os, re, sys
+Writes results to v23/deviogram/. Runs from v23/ or from the ODSA root, and reads either tree
+layout, flat <root>/window_csvs/ or per-region <root>/<region>/window_csvs/.
+
+    python deviogram_validation.py                       # individual_region_TEST, else Ockenden-regions
+    python deviogram_validation.py Ockenden-regions      # explicit root
+"""
+import numpy as np, pandas as pd, glob, os, re, sys
 from scipy import signal
 from pyproj import Transformer
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -31,7 +36,30 @@ from loading import load_datasets
 from segmentation import split_into_segments, split_by_landscape
 from config import (WINDOW_SIZE, STEP_SIZE, WINDOW_TYPE, WINDOW_MASK, FIT_BAND_M,
                     peak_masking_height_threshold, bin_buffer, Tee)
-RESULTS = os.path.join(ODSA, "Ockenden-regions")
+DEFAULT_ROOTS = ('individual_region_TEST', 'Ockenden-regions')
+
+
+def window_stats_files(root):
+    """Both tree layouts: flat <root>/window_csvs/ and per-region <root>/<region>/window_csvs/."""
+    return sorted(glob.glob(os.path.join(root, 'window_csvs', '*_window_stats.csv')) +
+                  glob.glob(os.path.join(root, '*', 'window_csvs', '*_window_stats.csv')))
+
+
+def resolve_root():
+    """First positional argument, else the first default tree that actually holds window CSVs.
+    Resolves against the cwd or the ODSA root, so it runs from v23/ or from either."""
+    arg = next((a for a in sys.argv[1:] if not a.startswith('-')), None)
+    tried = []
+    for name in ([arg] if arg else DEFAULT_ROOTS):
+        for p in (name, os.path.join(ODSA, name)):
+            tried.append(p)
+            if window_stats_files(p):
+                return p
+    raise SystemExit("No <root>/[<region>/]window_csvs/*_window_stats.csv under any of:\n  "
+                     + "\n  ".join(tried))
+
+
+RESULTS = resolve_root()
 os.makedirs(OUT, exist_ok=True)
 sys.stdout = Tee(os.path.join(OUT, "deviogram_validation_log.txt"))
 
@@ -251,14 +279,18 @@ for dset in load_datasets():
                     beta_match_unmasked=beta_over(w['pgram'], log_freqs, band_match)))
 
 r = pd.DataFrame(rows)
+if r.empty:
+    raise SystemExit("No windows rebuilt: load_datasets() returned nothing. This script "
+                     "resynthesises its own vectors from the raw data, so the production "
+                     "region entries in loading.py have to be uncommented, and reading the "
+                     f"CSVs under {RESULTS} is not enough.")
 print(f"reconstructed {len(r)} windows across {r.dataset.nunique()} regions")
 
 # --- Reconstruction check. beta_full_masked must reproduce the production CSV.
 prod = []
-for fn in sorted(os.listdir(os.path.join(RESULTS, 'window_csvs'))):
-    if not fn.endswith('_window_stats.csv'): continue
-    w = pd.read_csv(os.path.join(RESULTS, 'window_csvs', fn))
-    w['dataset'] = fn.replace('_w50km_window_stats.csv', '')
+for path in window_stats_files(RESULTS):
+    w = pd.read_csv(path)
+    w['dataset'] = os.path.basename(path).replace('_w50km_window_stats.csv', '')
     prod.append(w[['dataset', 'trajectory', 'segment', 'window_id', 'beta', 'is_transition']])
 prod = pd.concat(prod); prod['trajectory'] = prod.trajectory.astype(str)
 m = r.merge(prod.rename(columns={'beta': 'beta_csv', 'is_transition': 'tz_csv'}),

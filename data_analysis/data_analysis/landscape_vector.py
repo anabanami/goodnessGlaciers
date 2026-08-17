@@ -54,11 +54,6 @@ DELTA_BETA_DECIMATE_KM = 100.0  # 2 x weighted_anisotropy.NEIGHBOURHOOD_RADIUS_K
 # verdict, not for delta_beta fits — the two are different quantities, do not merge them.
 COMPOSITION_DECIMATE_KM = 200.0
 
-# No literature threshold separates a "wide" from a "narrow" within-unit beta spread,
-# so the Case E spread constraint is never exercised. Set a value in beta units to
-# switch it on once one is defended.
-BETA_IQR_WIDE = None
-
 # Fallback only, for a region with no velocity sidecar. Where the sidecar exists the sampled
 # per-window MEaSUREs error replaces this entirely, arriving through velocity_sigma.
 # 5.0 was set on a PPB run and PPB's sampled error is ~14 m/yr, since it sits in the InSAR
@@ -110,7 +105,9 @@ SEAM_THRESHOLD_M_YR = (VELOCITY_CLASSES[1][2] - VELOCITY_CLASSES[1][1]) / (2 * K
 # ---------------------------------------------------------------------------
 # Vector elements. thresholded elements drive classification; the rest are carried
 # as continuous numbers only, because no literature threshold exists for them.
-# (name, source column, formal-uncertainty column, classifying axis)
+# (name, source column, formal-uncertainty column, axis tag)
+# The tag is a classifying axis only when some CATALOGUE entry constrains it. beta_spread
+# is tagged but unconstrained, so ALL_AXES excludes it and it classifies nothing.
 ELEMENTS = [
     ('beta',              'beta',               'beta_uncertainty',           'beta_class'),
     ('psd_amplitude_1km', 'psd_amplitude_1km',  'psd_amplitude_uncertainty',  None),
@@ -158,10 +155,12 @@ CATALOGUE = [
          c={'beta_class': {'soft'}, 'delta_beta': {'pos_sig'},
             'velocity_band': {'fast'}, 'relief_class': {'flat'}},
          ext=[]),
+    # delta_beta excludes neg_sig: streamlining on a hard confined bed survives as amplitude
+    # anisotropy, not slope, so a reversed slope fabric here is structural and reads RIFT.
     dict(id='TRUNK-HARD', name='Ice stream on a confined hard bed (Cooper regime)',
          evidence='Moderate',
-         c={'beta_class': {'hard', 'transitional'}, 'velocity_band': {'fast'},
-            'relief_class': {'mountainous'}},
+         c={'beta_class': {'hard', 'transitional'}, 'delta_beta': {'pos_sig', 'zero'},
+            'velocity_band': {'fast'}, 'relief_class': {'mountainous'}},
          ext=['amplitude_anisotropy']),
     # Streamlining survives shutdown then fades, so delta_beta runs from clearly
     # positive (recent, separable from BASIN) to zero (erased, not separable).
@@ -195,9 +194,12 @@ CATALOGUE = [
             'velocity_band': {'very_low'},
             'elevation_class': {'emerged', 'elevated'}},
          ext=['composition']),
+    # beta_class excludes chaotic: a bed with no characteristic wavelength is not a
+    # trough-and-interfluve landscape. beta_spread is gone with its threshold, so the
+    # wide-spread signature the name promises is now a descriptor and not a criterion.
     dict(id='DISSECTED', name='Deeply dissected highland, trough-and-interfluve',
          evidence='Moderate',
-         c={'beta_spread': {'wide'}, 'delta_beta': {'pos_sig'},
+         c={'beta_class': {'hard', 'transitional', 'soft'}, 'delta_beta': {'pos_sig'},
             'velocity_band': {'low', 'moderate'}, 'relief_class': {'mountainous'}},
          ext=['origin']),
     # velocity runs very_low AND low: Siegert_2004's Group 2 defines this entry by the
@@ -345,13 +347,10 @@ def observe(vec, pflag):
         s, reason = full, 'below_floor'
     obs['delta_beta'] = dict(set=s, value=d, sigma=sd, reason=reason)
 
-    # beta_spread: computable but unthresholded, so it cannot exclude Case E.
-    iqr = vec['beta_iqr']
-    if BETA_IQR_WIDE is None or not np.isfinite(iqr):
-        s = set(AXIS_VALUES['beta_spread'])
-    else:
-        s = {'wide'} if iqr >= BETA_IQR_WIDE else {'narrow'}
-    obs['beta_spread'] = dict(set=s, value=iqr, sigma=np.nan)
+    # beta_iqr is a descriptor and not a classifying axis: no threshold is defensible, and
+    # inventing one on these seven regions would repeat the borrowed-boundary problem.
+    obs['beta_spread'] = dict(set=set(AXIS_VALUES['beta_spread']),
+                              value=vec['beta_iqr'], sigma=np.nan)
 
     # assumed-exact is a resolved axis carrying no uncertainty at all, so its class sits
     # on one number. It excludes archetypes as firmly as a measured one; it should not.
@@ -547,8 +546,6 @@ def reachable_groups():
     admits everything they admit once the dead axes are removed. Subsumption, not
     equality: an entry constraining no velocity subsumes one that allows only slow."""
     dead = {'delta_beta'} if not ANISOTROPY_TRUSTED else set()
-    if BETA_IQR_WIDE is None:
-        dead.add('beta_spread')
     live = [a for a in ALL_AXES if a not in dead]
     allow = {c['id']: {a: c['c'].get(a, set(AXIS_VALUES[a])) for a in live} for c in CATALOGUE}
     subsumed = {}
@@ -611,6 +608,8 @@ def unthresholded_separation(vec_df, reports, z_min=2.0, d_min=SEPARATION_D_MIN)
     two scales made amplitude look like the strongest discriminator when it was only the
     one with an error bar. A single-window unit has no spread, so it cannot enter at all;
     the returned coverage says how many pairs the question was answerable for."""
+    # Seven elements, not eight: beta_iqr is itself a within-unit spread, so it has no
+    # spread of its own and no d. Structurally ineligible here, not an omission.
     free = [n for n, _, _, a in ELEMENTS
             if not a and f'{n}_iqr' in vec_df.columns]
     rows, n_same, n_answerable = [], 0, 0

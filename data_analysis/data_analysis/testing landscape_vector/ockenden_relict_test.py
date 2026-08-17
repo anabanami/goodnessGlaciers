@@ -23,7 +23,7 @@ by construction, a vanishing one is informative. The evidence is the sign patter
 not any single region's z.
 
 Needs ockenden_window_class.csv (run ockenden_class.py first).
-Writes ockenden_relict_test.csv to the tree root.
+Writes ockenden_relict_test.csv into the run tree (ROOT).
 """
 import glob, os, sys
 import numpy as np, pandas as pd
@@ -51,7 +51,7 @@ def load(root):
         rows.append(r[KEY + ['admissible', 'n_admissible', 'verdict']])
     d = pd.concat(rows, ignore_index=True)
 
-    cls = pd.read_csv('ockenden_window_class.csv')
+    cls = pd.read_csv(os.path.join(ROOT, 'ockenden_window_class.csv'))
     n = len(d)
     d = d.merge(cls[KEY + ['ockenden_class', 'alt_agrees', 'center_x', 'center_y']],
                 on=KEY, how='left')
@@ -114,8 +114,8 @@ def by_region(d):
 
 
 if __name__ == '__main__':
-    sys.stdout = Tee('ockenden_relict_by_region_log.txt' if BY_REGION
-                     else 'ockenden_relict_test_log.txt')
+    sys.stdout = Tee(os.path.join(ROOT, 'ockenden_relict_by_region_log.txt' if BY_REGION
+                                  else 'ockenden_relict_test_log.txt'))
     d = load(ROOT)
     res = run(d, 'ALL SNAPPED WINDOWS')
     res2 = run(d[d.alt_agrees], 'NON-STRADDLING ONLY')
@@ -132,8 +132,8 @@ if __name__ == '__main__':
         print("\n>>> A lift that only appears in the PPB column is a region effect, not agreement.")
         res3 = run(d[d.region != 'PPB'],
                    'POOLED, PPB EXCLUDED — underpowered, reads as falsification only')
-        br.to_csv('ockenden_relict_by_region.csv', index=False)
-        print("Wrote ockenden_relict_by_region.csv")
+        br.to_csv(os.path.join(ROOT, 'ockenden_relict_by_region.csv'), index=False)
+        print(f"Wrote {os.path.join(ROOT, 'ockenden_relict_by_region.csv')}")
 
     # The original region-level formulation, kept because it is what the queue item asked.
     print(f"\n{TARGET} presence by region (region-level framing):")
@@ -145,5 +145,6 @@ if __name__ == '__main__':
     if BY_REGION:
         res3['subset'] = 'ppb_excluded'
         parts.append(res3)
-    pd.concat(parts, ignore_index=True).to_csv('ockenden_relict_test.csv', index=False)
-    print(f"\nWrote ockenden_relict_test.csv ({len(parts)} subsets)")
+    pd.concat(parts, ignore_index=True).to_csv(
+        os.path.join(ROOT, 'ockenden_relict_test.csv'), index=False)
+    print(f"\nWrote {os.path.join(ROOT, 'ockenden_relict_test.csv')} ({len(parts)} subsets)")
