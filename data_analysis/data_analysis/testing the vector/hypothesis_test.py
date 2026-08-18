@@ -31,12 +31,16 @@ Verdict adds RESOLVED-WITH-EXTERNAL, which turns on discriminator logic irreleva
 """
 import glob, itertools, os, sys
 import numpy as np, pandas as pd
+from pathlib import Path
+ROOT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT_DIR))
+
 from config import Tee
 import landscape_vector as lv
 from landscape_vector import (load_region, build_vector, observe, match, units_from,
                               CATALOGUE, ALL_AXES, AXIS_VALUES)
 
-ROOT = sys.argv[1] if len(sys.argv) > 1 else 'individual_region_TEST'
+ROOT = sys.argv[1] if len(sys.argv) > 1 else str(ROOT_DIR / 'individual_region_TEST')
 NPERM = int(sys.argv[2]) if len(sys.argv) > 2 else 200
 LEVEL = 'window'
 SUBSET_AXES = sorted(ALL_AXES)

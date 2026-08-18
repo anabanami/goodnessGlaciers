@@ -27,10 +27,14 @@ Writes ockenden_relict_test.csv into the run tree (ROOT).
 """
 import glob, os, sys
 import numpy as np, pandas as pd
+from pathlib import Path
+ROOT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT_DIR))
+
 from config import Tee
 from landscape_vector import CATALOGUE, _independent_subset, COMPOSITION_DECIMATE_KM
 
-ROOT = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith('-') else 'individual_region_TEST'
+ROOT = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith('-') else str(ROOT_DIR / 'individual_region_TEST')
 BY_REGION = '--by-region' in sys.argv
 ENTRIES = [e['id'] for e in CATALOGUE]
 TARGET, HER = 'TRUNK-RELICT', 'sel_erosion_relict'

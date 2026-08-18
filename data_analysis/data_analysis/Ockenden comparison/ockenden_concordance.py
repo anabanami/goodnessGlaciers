@@ -22,12 +22,16 @@ ockenden_concordance.csv and ockenden_variance.csv into the run tree (ROOT).
 """
 import glob, os, sys
 import numpy as np, pandas as pd
+from pathlib import Path
+ROOT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT_DIR))
+
 from config import Tee
 from scipy.stats import kruskal
 from landscape_vector import _independent_subset, COMPOSITION_DECIMATE_KM
 
-ROOT = sys.argv[1] if len(sys.argv) > 1 else 'individual_region_TEST'
-SNAP = 'v23/hill_count_threshold/ODSA Ockenden-regions_skew/window_csvs'
+ROOT = sys.argv[1] if len(sys.argv) > 1 else str(ROOT_DIR / 'individual_region_TEST')
+SNAP = str(ROOT_DIR / 'v23/hill_count_threshold/ODSA Ockenden-regions_skew/window_csvs')
 KEY = ['trajectory', 'segment', 'window_id']
 MIN_N = 10          # classes thinner than this are reported but not tested
 Z_MIN, D_MIN = 2.0, 1.0

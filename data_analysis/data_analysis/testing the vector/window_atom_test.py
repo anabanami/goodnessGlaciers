@@ -5,10 +5,14 @@ distance. Agreement at chance = independent. Gives the decimation distance for i
 """
 import glob, os, sys
 import numpy as np, pandas as pd
+from pathlib import Path
+ROOT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT_DIR))
+
 from config import Tee
 from landscape_vector import VELOCITY_CLASSES
 
-ROOT = sys.argv[1] if len(sys.argv) > 1 else 'individual_region_TEST'
+ROOT = sys.argv[1] if len(sys.argv) > 1 else str(ROOT_DIR / 'individual_region_TEST')
 AXES = ['bed_class', 'relief_class', 'elevation_class', 'velocity_band']
 BINS = [0, 1, 25, 50, 75, 100, 150, 200, 300, 1e9]
 

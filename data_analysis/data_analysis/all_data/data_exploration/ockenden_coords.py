@@ -1,7 +1,7 @@
 """
-Subset Bedmap radar data to match Ockenden et al. (2025) figure regions.
+Subset Bedmap radar data to match [Ockenden_2026] figure regions.
 
-Uses the EXACT PS71 bounding boxes from the Zenodo code repository
+Uses the EXACT PS71 bounding boxes from the Zenodo code repository [Ockenden_2025_data]
 (Antarctic_FIGURES.ipynb, bounds2[0..8]) instead of approximate lat/lon
 guesses. Filtering is done in PS71 space to avoid polar lat/lon distortion.
 
@@ -9,13 +9,25 @@ Usage:
     python ockenden_coords.py
 """
 
+import glob
 import pandas as pd
 import numpy as np
 import netCDF4 as nc
 from pyproj import Transformer
 
-BASE_DIR = '/home/ana/Desktop/code/Data/ODSA/all_data/bedmap3_data/bedmap3/Results/'
+# Glob over every release, not just bedmap3: the Dome C SW square pulls two
+# Bedmap2 campaigns. Mirrors loading.py's base_path, so a region's 'file' is
+# just the CSV name and the release is read off the _BM<n> suffix.
+RESULTS_GLOB = '/home/ana/Desktop/code/Data/ODSA/all_data/bedmap3_data/bedmap*/Results/'
 METRICS_DIR = '/home/ana/Desktop/code/Data/ODSA/all_data/Ockenden/Data_Science_Zenodo/Data_Science_Zenodo/Metrics_v2/'
+
+
+def resolve(filename):
+    """Absolute path of a Bedmap Results CSV, whichever release it lives in."""
+    m = glob.glob(RESULTS_GLOB + filename)
+    if not m:
+        raise FileNotFoundError(filename)
+    return m[0]
 
 # WGS84 <-> EPSG:3031 (Antarctic Polar Stereographic, PS71)
 to_ps71 = Transformer.from_crs("EPSG:4326", "EPSG:3031", always_xy=True)
@@ -26,6 +38,28 @@ to_ps71 = Transformer.from_crs("EPSG:4326", "EPSG:3031", always_xy=True)
 PPB_CORE_BOX = [-0.247e6, 0.340e6, -0.398e6, 0.280e6]
 PPB_SPUR_LEGS = ['P33.1', 'P33.3']   # the two lone southern rays (POLARGAP flight P33)
 PPB_SPUR_LAT_CUT = -88.5             # drop spur points with lat > this (|lat| < 88.5)
+
+# --- SOAR line reconstruction (UTIG_1999_SOAR-LVS-WLK, Bedmap2), used by the
+# second PPB entry. That compilation numbers trajectory_id 1..N per ROW
+# (153,103 ids / 153,103 rows), so it has no flight lines to load; the ids are
+# rebuilt by cutting the file's row order wherever consecutive points jump more
+# than SOAR_GAP_M. Nominal along-track spacing in the PPB box is 1.04 km
+# (p90 1.18 km), so 5 km is ~5x nominal and does not cut inside a line. Result:
+# 126 segments >= 5 pts, 9,053 of 9,113 in-box points, median 42 pts (~44 km),
+# median end-to-end/path-length 0.999 -- i.e. straight lines, and they plot as
+# the orthogonal SOAR grid. ---
+SOAR_GAP_M = 5000        # split row order on jumps larger than this
+SOAR_MIN_PTS = 5         # drop reconstructed segments shorter than this
+
+# --- Dome C SW square: single source of truth, shared by the four campaign
+# entries below (two Bedmap2, two Bedmap3). 300x300 km, same size as the
+# Golicyna/Highland A/Aurora squares. Centred on the hand-drawn overview box
+# (see the georeferencing note on the region entries). ---
+DOMEC_SW_BOX = [1.02e6, 1.32e6, -1.237e6, -0.937e6]
+
+# --- Dronning Maud Land 3E square: same deal, 300x300 km concentric with a
+# second hand-drawn overview box. ---
+DML_3E_BOX = [-0.05e6, 0.25e6, 1.62e6, 1.92e6]
 
 # ---------------------------------------------------------------------------
 # Exact PS71 bounds from Antarctic_FIGURES.ipynb  (bounds2, second block)
@@ -46,6 +80,28 @@ OCKENDEN_REGIONS = {
         'fig': 'Fig 1B-D',
         'core_subset': True,  # bespoke core-square + P33 trim, not a plain box
         'loading_subset_repr': "'subset': _ppb_core_subset,",  # matches loading.py
+    },
+    # Second campaign in the SAME PPB core square: the Bedmap2 SOAR grid that
+    # crosses the black overview box NE-SW (the green track under the POLARGAP
+    # fan). Same box as 'Pensacola_Pole', different platform and era, so the two
+    # are directly comparable over identical ground.
+    # CAVEAT, and it is not small: along-track spacing is 1.04 km here vs 31 m
+    # for POLARGAP in the same box. Any along-track roughness/relief metric is
+    # sampled ~34x coarser and is NOT comparable to the rest of the catalogue at
+    # face value -- treat this region as a bed-elevation / long-wavelength check
+    # (and as an independent 1999 sounding of ground POLARGAP re-flew in 2015),
+    # not as a roughness sample. Trajectories are reconstructed (see SOAR_GAP_M).
+    'Pensacola_Pole_SOAR_BM2': {
+        'file': 'UTIG_1999_SOAR-LVS-WLK_AIR_BM2.csv',
+        'dataset_label': 'SOAR_1999',
+        'ps71': PPB_CORE_BOX,
+        'description': ('Pensacola-Pole Basin -- Bedmap2 SOAR TAM/South Pole grid over the '
+                        'same core square as Pensacola_Pole. 9,053 bed points on 126 '
+                        'reconstructed lines; 1.04 km along-track spacing (POLARGAP: 31 m).'),
+        'ockenden_class': 'selective erosion',
+        'fig': 'n/a -- same box as Fig 1B-D, second campaign',
+        'soar_subset': True,  # box + gap-split line reconstruction, not a plain box
+        'loading_subset_repr': "'subset': _soar_ppb_subset,",  # matches loading.py
     },
     'Fig4C_Aurora_SB_lowrelief': {
         'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
@@ -108,6 +164,82 @@ OCKENDEN_REGIONS = {
         'ockenden_class': 'alpine / selective erosion',
         'fig': 'Fig 2C',
     },
+    # --- Dome C SW square -------------------------------------------------
+    # NOT an Ockenden figure region: added from a hand-drawn box on the
+    # Bedmap1/2/3 overview map (map_bedmap3_all.py --generations 1 2 3
+    # --by-release). The drawn box was PS71 x[941, 1399] km, y[-1311, -862] km
+    # (~457 km wide, centre 132.89E / 75.38S); DOMEC_SW_BOX is the concentric
+    # 300x300 km crop of it. Georeferenced off the 70S/60S graticule circles of
+    # the overview PNG and cross-checked against the flight-track caches.
+    # 'DomeC_SW' is positional (the box sits SW of the Dome C survey hub), not a
+    # gazetteer name -- rename if you want the actual subglacial feature.
+    # Ockenden Metrics_v2 over the box: 36 cells, median relief 960 m, median
+    # hill50 10.5, only 1/36 cells low-relief -> high-relief terrain, so no
+    # low-relief cell mask here (unlike Fig4C_Aurora_SB_lowrelief).
+    # Thirteen campaigns have tracks in the box; only the three below survive.
+    # Deliberately excluded:
+    #   - INGV Talos-Dome 1997/1999/2001/2003 (the green fan out of Dome C),
+    #     AWI_2007_ANTR, INGV_1997_ITASE -- bedrock_altitude is -9999 for every
+    #     row, so loading.py's bed filter empties them.
+    #   - UTIG_1999_SOAR-LVS-WLK (the dense orange grid the box was drawn
+    #     around) -- bed IS valid (4,505 pts) but this legacy compilation numbers
+    #     trajectory_id 1..N per ROW (153,103 ids for 153,103 rows), so it loads
+    #     as 4,505 one-point tracks and every along-track metric downstream is
+    #     meaningless. Along-track spacing is ~1.1 km vs ~25 m for the three
+    #     below. Reconstruct flight lines from point order/geometry to use it.
+    #   - PRIC_2018_CHA4 -- misses the 300 km box entirely.
+    # Each campaign gets its own entry because loading.py is one file per entry;
+    # they share DOMEC_SW_BOX.
+    'DomeC_SW_sq_WISE_ISODYN': {
+        'file': 'BAS_2005_WISE-ISODYN_AIR_BM2.csv',
+        'dataset_label': 'BM2',
+        'ps71': DOMEC_SW_BOX,
+        'description': 'Dome C SW 300x300 km square -- BAS 2005 WISE-ISODYN box transects',
+        'ockenden_class': 'unclassified (high-relief)',
+        'fig': 'n/a -- hand-drawn overview box',
+    },
+    'DomeC_SW_sq_ICECAP': {
+        'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        'dataset_label': 'BM3',
+        'ps71': DOMEC_SW_BOX,
+        'description': 'Dome C SW 300x300 km square -- UTIG 2010 ICECAP long NE-SW lines',
+        'ockenden_class': 'unclassified (high-relief)',
+        'fig': 'n/a -- hand-drawn overview box',
+    },
+    'DomeC_SW_sq_ICEBRIDGE': {
+        'file': 'NASA_2013_ICEBRIDGE_AIR_BM3.csv',
+        'dataset_label': 'BM3',
+        'ps71': DOMEC_SW_BOX,
+        'description': ('Dome C SW 300x300 km square -- NASA 2013 IceBridge. Stands in for '
+                        'the INGV Talos-Dome lines, which look like the dominant BM3 coverage '
+                        'on the overview map but carry no bed.'),
+        'ockenden_class': 'unclassified (high-relief)',
+        'fig': 'n/a -- hand-drawn overview box',
+    },
+    # --- Dronning Maud Land 3E square -------------------------------------
+    # Second hand-drawn overview box, same treatment as DomeC_SW. Drawn box was
+    # PS71 x[-119, 318] km, y[1547, 1991] km (~440 km wide, centre 3.23E /
+    # 73.79S); DML_3E_BOX is the concentric 300x300 km crop.
+    # Eighteen campaigns have tracks in the box and exactly ONE is usable. The
+    # solid orange on the overview map is the AWI DML1-10 / ANTR series plus
+    # AWI_2018_JURAS and BAS_2001_MAMOG -- all bedrock_altitude = -9999
+    # throughout. BEDMAP1 has valid bed but the row-counter trajectory_id.
+    # So this region is UTIG_2010_ICECAP alone: the green fan on the overview
+    # map, hub at the box's north edge, rays running south across it.
+    # Ockenden Metrics_v2 over the box: 42 cells, median relief 1120 m, median
+    # hill50 18.0, 0/42 low-relief -- the most rugged of the ODSA regions
+    # (DomeC_SW is 960 m / 10.5), consistent with the DML mountain ranges.
+    'DML_3E_sq_ICECAP': {
+        'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        'dataset_label': 'BM3',
+        'ps71': DML_3E_BOX,
+        'description': ('Dronning Maud Land 3E 300x300 km square -- UTIG 2010 ICECAP. '
+                        '101,492 bed points over 25 trajectories (median 3,586 pts/track, '
+                        '~23 m spacing), bed -853 to 2567 m. Disjoint from Fig2A_Maud_SB, '
+                        'which is the same campaign file ~500 km to the south.'),
+        'ockenden_class': 'unclassified (very high relief)',
+        'fig': 'n/a -- hand-drawn overview box',
+    },
 }
 
 
@@ -169,6 +301,23 @@ def spatial_subset_ps71(df, ps71_bounds):
     ].copy()
 
 
+def _gap_split_ids(x, y, gap=SOAR_GAP_M, prefix='SOAR_L'):
+    """Label runs of consecutive rows as lines, cutting where the point-to-point
+    step exceeds `gap`. Relies on file row order being acquisition order."""
+    cut = np.hypot(np.diff(x), np.diff(y)) > gap
+    return np.array([f'{prefix}{i:03d}' for i in np.concatenate([[0], np.cumsum(cut)])])
+
+
+def soar_ppb_subset(df, ps71_bounds):
+    """PPB core square over the Bedmap2 SOAR file, with trajectory_id rebuilt from
+    row-order gaps. Report-side twin of _soar_ppb_subset (below)."""
+    sub = spatial_subset_ps71(df, ps71_bounds)
+    sub = sub[sub['bed'] != -9999].copy()      # split on real soundings only
+    sub['traj_id'] = _gap_split_ids(sub['x_ps71'].values, sub['y_ps71'].values)
+    keep = sub.groupby('traj_id')['traj_id'].transform('size') >= SOAR_MIN_PTS
+    return sub[keep].copy()
+
+
 def ppb_core_subset(df, ps71_bounds):
     """PPB core square + trim of the two lone southern rays (POLARGAP P33.1/P33.3)
     below 88.5 S. Report-side twin of _ppb_core_subset (below), using this
@@ -207,6 +356,23 @@ def _ppb_core_subset(df):
     spur = sub['trajectory_id'].astype(str).isin(PPB_SPUR_LEGS)
     south = sub['latitude (degree_north)'] > PPB_SPUR_LAT_CUT
     return sub[~(spur & south)].copy()
+
+
+def _soar_ppb_subset(df):
+    """PPB core square over UTIG_1999_SOAR-LVS-WLK, with trajectory_id REPLACED by
+    lines reconstructed from row-order gaps (the file's own ids are a row counter,
+    see _warn_degenerate_trajectories in loading.py). Bed nulls are dropped here so
+    the split runs on real soundings; loading.py's own null filter then finds none.
+    Segments shorter than SOAR_MIN_PTS points are dropped."""
+    sub = _ps71_subset(df, PPB_CORE_BOX)
+    sub = sub[sub['bedrock_altitude (m)'] != -9999].copy()
+    x, y = to_ps71.transform(
+        sub['longitude (degree_east)'].values,
+        sub['latitude (degree_north)'].values,
+    )
+    sub['trajectory_id'] = _gap_split_ids(x, y)
+    keep = sub.groupby('trajectory_id')['trajectory_id'].transform('size') >= SOAR_MIN_PTS
+    return sub[keep].copy()
 
 
 def _ps71_lowrelief_subset(df, ps71_bounds,
@@ -250,7 +416,7 @@ def ps71_to_latlon_corners(ps71_bounds):
 
 def main():
     print("=" * 80)
-    print("SUBSET BEDMAP DATA FOR OCKENDEN et al. (2025) -- PS71 BOUNDS")
+    print("SUBSET BEDMAP DATA FOR OCKENDEN_2026 -- PS71 BOUNDS")
     print("=" * 80)
 
     # Print region summary
@@ -267,7 +433,11 @@ def main():
     # Iterate regions in loading.py order. Regions interleave source files, so we
     # cache each loaded CSV to avoid re-reading the large files.
     for rkey, region in OCKENDEN_REGIONS.items():
-        filepath = BASE_DIR + region['file']
+        try:
+            filepath = resolve(region['file'])
+        except FileNotFoundError:
+            print(f"\n  x {rkey}: {region['file']} *** NOT FOUND ***")
+            continue
         label = region['dataset_label']
 
         if filepath not in file_cache:
@@ -297,6 +467,8 @@ def main():
             sub = cell_mask_subset(df, region['ps71'])
         elif region.get('core_subset'):
             sub = ppb_core_subset(df, region['ps71'])
+        elif region.get('soar_subset'):
+            sub = soar_ppb_subset(df, region['ps71'])
         else:
             sub = spatial_subset_ps71(df, region['ps71'])
 

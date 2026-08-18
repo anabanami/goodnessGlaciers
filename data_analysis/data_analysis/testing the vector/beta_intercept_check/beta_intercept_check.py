@@ -1,9 +1,23 @@
+"""Retired, superseded by vector_independence.py. Kept for the figures the two docs embed.
+
+    ODSA_OUTPUT_BASE=individual_region_TEST/RSL python "testing the vector/beta_intercept_check/beta_intercept_check.py"
+
+Globs <ODSA_OUTPUT_BASE>/window_csvs/, which is a flat tree, so it runs one region at a time.
+The multi-region root has no top-level window_csvs and fails on an empty concat. Writes four
+diagnostics and a log into <ODSA_OUTPUT_BASE>/bed_character/beta_intercept_check/. The env
+value is used as given, so pass an absolute path if you want absolute paths in the log.
+
+Window set and retirement note: papers/sensitivity testing/beta_intercept_check🧪/beta_intercept_check.md
+"""
 import sys
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 from scipy.stats import pearsonr
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(ROOT_DIR))
+
 from loading import OUTPUT_BASE_PATH
 from config import Tee, PROCESSING_FLAG_NOTE, processing_flag_of
 from plotting import flag_title

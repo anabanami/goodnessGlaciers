@@ -9,10 +9,14 @@ import numpy as np, pandas as pd
 from scipy.spatial import cKDTree
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score, adjusted_rand_score, normalized_mutual_info_score
+from pathlib import Path
+ROOT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT_DIR))
+
 from config import Tee
 from landscape_vector import _independent_subset, COMPOSITION_DECIMATE_KM
 
-ROOT = sys.argv[1] if len(sys.argv) > 1 else 'individual_region_TEST'
+ROOT = sys.argv[1] if len(sys.argv) > 1 else str(ROOT_DIR / 'individual_region_TEST')
 ROBUST = '--robust' in sys.argv
 KS = range(2, 11)
 N_NULL = 200
