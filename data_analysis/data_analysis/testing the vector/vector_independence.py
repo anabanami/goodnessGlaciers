@@ -48,7 +48,7 @@ CONTINUOUS = list(AXIS_SOURCE.values()) + DESCRIPTORS
 
 # Short labels for the matrix axes; the CSVs keep the full column names.
 SHORT = {'beta': 'β', 'measures_speed_mean': 'speed', 'relief_m': 'relief',
-         'delta_beta_local': 'Δβ', 'bed_elev_mean': 'elev', 'psd_amplitude_1km': 'A_1km',
+         'delta_beta_local': 'Δβ', 'bed_elev_mean': 'elevation', 'psd_amplitude_1km': 'A_1km',
          'rms_roughness': 'rms', 'eta_wavelength_m': 'η_wl', 'hill_count': 'hills',
          'skewness': 'skew', 'kurtosis': 'kurt', 'xi_band': 'ξ_band',
          'psd_intercept': 'intercept'}
@@ -65,6 +65,27 @@ PARAMETRISATION_PAIRS = [
     ('relief_m', 'beta'),               # how much of the slope axis relief already carries
     ('relief_m', 'psd_amplitude_1km'),  # and how much of the amplitude axis
 ]
+
+# The classifying axes against each other: does each one earn its place in the vector?
+# beta x relief_m is deliberately absent, already drawn under the parametrisation prefix.
+CLASSIFIER_PAIRS = [
+    ('beta', 'measures_speed_mean'),
+    ('relief_m', 'measures_speed_mean'),
+    ('bed_elev_mean', 'measures_speed_mean'),   # the one classifier pair that is not weak
+    ('relief_m', 'bed_elev_mean'),
+]
+
+# By-construction pairs, so the ranking never picks them. Drawn anyway: they are the
+# evidence for how few independent dimensions the descriptors really carry.
+REDUNDANCY_PAIRS = [
+    ('beta', 'eta_wavelength_m'),              # beta's strongest correlation with anything
+    ('psd_amplitude_1km', 'xi_band'),          # strongest pair in the matrix
+    ('relief_m', 'rms_roughness'),             # two space-domain amplitude measures
+]
+
+# Dead axis: it returns its full value set on every unit, so whether it is redundant with
+# anything cannot matter. Its correlations stay in the tables and out of the panels.
+RANK_EXCLUDE = {'delta_beta_local'}
 
 # Class labels are thresholds on the columns above, so they are derived here rather than
 # read from the window CSV: the script then does not depend on bed_character having run.
@@ -514,7 +535,7 @@ def process_region(region, csv_path, out_dir):
     top = free.reindex(free.spearman.abs().sort_values(ascending=False).index).head(5)
     print(f"    strongest measured pairs (by |ρ|, by-construction pairs excluded):")
     for _, r in top.iterrows():
-        print(f"      {SHORT.get(r['a'], r['a']):>7s} × {SHORT.get(r['b'], r['b']):<7s} "
+        print(f"      {SHORT.get(r['a'], r['a']):>9s} × {SHORT.get(r['b'], r['b']):<9s} "
               f"ρ={r['spearman']:+.2f}  r={r['pearson']:+.2f}  n={r['n']:.0f}")
     print(f"    dimensionality of the {len(DESCRIPTORS)} descriptors: ", end='')
     ed = effective_dimensions(df, DESCRIPTORS, region)
@@ -646,7 +667,7 @@ def cross_region(all_df, per_region, root, n_axis_scatter=4, n_scatter=4):
                 v = (rw.loc[(r['a'], r['b'])].dropna() if (r['a'], r['b']) in rw.index
                      else pd.Series(dtype=float))
                 flip = ' SIGN FLIP' if (v > 0).any() and (v < 0).any() else ''
-                print(f"      Δβ × {SHORT.get(other, other):<7s} ρ={r['spearman']:+.2f} "
+                print(f"      Δβ × {SHORT.get(other, other):<9s} ρ={r['spearman']:+.2f} "
                       f"n={r['n']:.0f}   (all {len(ok)} gated fits: "
                       f"ρ={full['spearman']:+.2f} n={full['n']:.0f})   per region "
                       f"{', '.join(f'{k} {x:+.2f}' for k, x in v.items()) or 'n/a'}{flip}")
@@ -662,14 +683,14 @@ def cross_region(all_df, per_region, root, n_axis_scatter=4, n_scatter=4):
     free = free.reindex(free.spearman.abs().sort_values(ascending=False).index)
     for _, r in free.head(10).iterrows():
         flip = ' SIGN FLIP' if r['sign_flip'] else ''
-        print(f"    {SHORT.get(r['a'], r['a']):>7s} × {SHORT.get(r['b'], r['b']):<7s} "
+        print(f"    {SHORT.get(r['a'], r['a']):>9s} × {SHORT.get(r['b'], r['b']):<9s} "
               f"ρ={r['spearman']:+.2f}  n={r['n']:.0f}  "
               f"med|ρ| within region {r['median_abs_rho_region']:.2f}{flip}")
     print(f"\n  BY-CONSTRUCTION PAIRS (labelled, not findings)")
     bc = side.reset_index()
     bc = bc[bc.by_construction != '']
     for _, r in bc.reindex(bc.spearman.abs().sort_values(ascending=False).index).iterrows():
-        print(f"    {SHORT.get(r['a'], r['a']):>7s} × {SHORT.get(r['b'], r['b']):<7s} "
+        print(f"    {SHORT.get(r['a'], r['a']):>9s} × {SHORT.get(r['b'], r['b']):<9s} "
               f"ρ={r['spearman']:+.2f}  [{r['by_construction']}] {r['mechanism']}")
 
     # Dimensionality: pooled AND per region. Pooled alone would be the same between-region
@@ -726,13 +747,23 @@ def cross_region(all_df, per_region, root, n_axis_scatter=4, n_scatter=4):
                      vlines=breaks.get(x, ()), hlines=breaks.get(y, ()),
                      note='parametrisation diagnostic behind 2.1h, not a vector element')
 
+    seen = {frozenset(p) for p in PARAMETRISATION_PAIRS}
+    for label, pairs, prefix in [('CLASSIFIER', CLASSIFIER_PAIRS, 'classifier'),
+                                 ('REDUNDANCY', REDUNDANCY_PAIRS, 'redundancy')]:
+        todo = [(x, y) for x, y in pairs if frozenset((x, y)) not in seen]
+        print(f"\n  {label} PANELS ({len(todo)} pairs, always drawn)")
+        for x, y in todo:
+            seen.add(frozenset((x, y)))
+            scatter_grid(all_df, x, y, os.path.join(root, f'{prefix}_{x}_vs_{y}.png'),
+                         vlines=breaks.get(x, ()), hlines=breaks.get(y, ()))
+
     # Scatters for the pairs the matrix picked out: the top axis pairs, then the top measured
     # pairs anywhere. Deduplicated, so a pair that is both is drawn once.
-    draw, seen = [], {frozenset(p) for p in PARAMETRISATION_PAIRS}
+    draw = []
     for _, r in list(ax_pairs.head(n_axis_scatter).iterrows()) + \
             list(free.head(n_scatter).iterrows()):
         k = frozenset((r['a'], r['b']))
-        if k not in seen and np.isfinite(r['spearman']):
+        if k not in seen and np.isfinite(r['spearman']) and not (k & RANK_EXCLUDE):
             seen.add(k)
             draw.append((r['a'], r['b']))
     print(f"\n  SCATTER PANELS ({len(draw)} pairs)")

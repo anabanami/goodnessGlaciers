@@ -22,7 +22,7 @@ KS = range(2, 11)
 N_NULL = 200
 SEED = 0
 
-# Primary set is the measured elements only: what a transect contributes, no borrowed axes.
+# Primary set is the texture elements only: what a transect contributes, no long-wavelength axes.
 # rms_roughness (r=+0.906 with relief) and xi_band (tracks amplitude) are left out as
 # near-duplicates that would double-weight the magnitude family under standardisation.
 FEATURES = {

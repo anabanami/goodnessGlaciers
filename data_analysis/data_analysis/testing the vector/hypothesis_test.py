@@ -1,17 +1,25 @@
 """The paper's claim, measured rather than asserted.
 
-"Identification of subglacial landscape class is not possible from a single measured
-statistic. Landscape class becomes identifiable from a range of spectral and morphometric
-descriptors. Falsified if a single statistic separated classes as well as the vector."
+Landscape class is not identifiable from a single measured statistic, and a transect bounds
+the class rather than pinpointing it. This script measures the bound: how far the admissible
+set falls as axes are added, and whether the joint structure does anything a marginals-
+preserving null does not.
 
-Three parts, because the obvious test turned out to be vacuous:
+>>> Falsified here if the subset curve had not fallen, or if resolution had beaten the null.
+It falls 11 -> ~2 and resolution sits below the null, so the bound is the result and the
+resolution rate carries no inference. The claim's other falsifiers are tested elsewhere and
+are stated in NEXT.md under HYPOTHESIS.
+
+Three parts, because the preregistered single-statistic test cannot fail:
 
 1. SINGLE AXIS. Runs the match-all scan with one axis live at a time. An axis that is not
-   live is widened to every value it can take, so it constrains nothing. >>> The resolution
-   rate here is STRUCTURALLY ZERO: every axis has a floor of 2 or more admissible entries
+   live is widened to every value it can take, so it constrains nothing. >>> Resolution here
+   is structurally capped: every axis except beta floors at 2 or more admissible entries
    (printed below), because an entry that does not constrain the live axis always matches.
-   That column re-derives the catalogue's shape and says nothing about the bed. Only the
-   set-size column carries information.
+   Beta floors at 1 only because SHATTERED is the sole entry admitting `chaotic`, so its
+   3.1% is that entry's uncontested footprint and not a bed measurement. That column
+   re-derives the catalogue's shape and says nothing about the bed. Only the set-size
+   column carries information.
 
 2. SUBSET CURVE. Resolution rate over every subset of the constraining axes, which is what
    "a range of descriptors" actually claims — how many are needed, and which combination.
@@ -31,6 +39,9 @@ Verdict adds RESOLVED-WITH-EXTERNAL, which turns on discriminator logic irreleva
 """
 import glob, itertools, os, sys
 import numpy as np, pandas as pd
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
@@ -103,6 +114,66 @@ def permute(units, regions, rng, within_region):
     return out
 
 
+def plot_subset_curve(curve, tag):
+    """The claim in one panel: how far the admissible set falls as axes are added, and
+    where resolution stops improving. The flat step is delta_beta contributing nothing."""
+    x = curve['n_axes'].to_numpy()
+    fig, (a1, a2) = plt.subplots(2, 1, figsize=(7.2, 6.4), sharex=True,
+                                 gridspec_kw={'height_ratios': [1.15, 1]})
+
+    a1.plot(x, curve['mean'], 'o-', color='#1a6faf', lw=1.8, ms=6, label='mean')
+    a1.plot(x, curve['median'], 's--', color='0.45', lw=1.2, ms=5, label='median')
+    a1.set_ylabel(f'admissible archetypes\nof {len(CATALOGUE)}')
+    a1.set_ylim(0, len(CATALOGUE) + 0.6)
+    a1.legend(fontsize=8, frameon=False)
+
+    a2.plot(x, curve['resolved'], 'o-', color='#2e7d32', lw=1.8, ms=6,
+            label='resolved to one entry')
+    a2.plot(x, curve['ooc'], '^-', color='#b22222', lw=1.4, ms=5,
+            label='out of catalogue')
+    a2.set_ylabel('% of units')
+    a2.set_xlabel('axes live')
+    a2.legend(fontsize=8, frameon=False)
+
+    # The dead axis reads as a flat step: whichever k adds it changes nothing.
+    flat = [k for k in range(1, len(curve))
+            if np.isclose(curve['resolved'].iloc[k], curve['resolved'].iloc[k - 1])
+            and np.isclose(curve['mean'].iloc[k], curve['mean'].iloc[k - 1])]
+    for k in flat:
+        for ax in (a1, a2):
+            ax.axvspan(k - 1, k, color='0.85', alpha=0.55, zorder=0)
+        a1.annotate('no change:\nthe added axis\nexcludes nothing',
+                    xy=(k - 0.5, a1.get_ylim()[1] * 0.72), ha='center',
+                    fontsize=7.5, color='0.35')
+
+    # Initials, because the full combination names overrun the axes by n_axes = 4.
+    sym = {'beta_class': 'B', 'relief_class': 'R', 'velocity_band': 'V',
+           'elevation_class': 'E', 'delta_beta': 'D'}
+    for _, r in curve.iterrows():
+        lab = '+'.join(sym.get(a, a) for a in r['best_combination'].split('+')) \
+            if r['best_combination'] != '(none)' else 'none'
+        last = r['n_axes'] == curve['n_axes'].max()
+        a1.annotate(lab, xy=(r['n_axes'], r['mean']), xytext=(-4 if last else 0, 10),
+                    textcoords='offset points', ha='right' if last else 'center',
+                    fontsize=7.5, color='0.30')
+
+    for ax in (a1, a2):
+        ax.grid(alpha=0.25, lw=0.6)
+        ax.set_xticks(x)
+    fig.suptitle('No single statistic identifies landscape class', fontsize=13)
+    fig.text(0.5, 0.005,
+             f'Best axis combination at each size, {LEVEL} units, '
+             f'migration widening {"on" if tag == "widened" else "off"}.  '
+             f'B beta, R relief, V velocity, E elevation, D delta-beta.\n'
+             f'A set of one is a bound that excluded ten entries, not an identification.',
+             ha='center', va='top', fontsize=7.5, color='0.35')
+    plt.tight_layout()
+    out = os.path.join(ROOT, f'hypothesis_test_subset_curve_{tag}.png')
+    fig.savefig(out, dpi=200, bbox_inches='tight')
+    plt.close(fig)
+    print(f"  Saved: {out}")
+
+
 def run(regions, units, tag):
     full = [n_match(u) for u in units]
 
@@ -157,6 +228,8 @@ def run(regions, units, tag):
               f"p_better = {p_high:.3f}, p_worse = {p_low:.3f})")
         print(f"  {'':14s} median set size: observed {obs_st['median']:.0f}  null "
               f"{med.mean():.2f} ± {med.std(ddof=1):.2f}")
+
+    plot_subset_curve(pd.DataFrame(curve), tag)
 
     # Every summary persisted: these are the numbers that get quoted, so they must not
     # live only in a terminal buffer.
