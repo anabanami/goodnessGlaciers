@@ -17,7 +17,7 @@ fields and should hold little within-cell variance, while the fast-decorrelating
 elements should hold a lot. That contrast is the claim. Only velocity is borrowed, from
 MEaSUREs; bed_elev_mean is a radar pick, so its smoothness is the field and not a grid.
 
-    python ockenden_concordance.py [root]
+    python ockenden_concordance.py [root] [--snap DIR]
 
 Needs ockenden_window_class.csv (run ockenden_class.py first). Writes
 ockenden_concordance.csv and ockenden_variance.csv into the run tree (ROOT), which
@@ -34,8 +34,12 @@ from scipy.stats import kruskal
 from landscape_vector import _independent_subset, COMPOSITION_DECIMATE_KM
 from loading import OUTPUT_BASE_PATH as _REGION_BASE
 
-ROOT = sys.argv[1] if len(sys.argv) > 1 else _REGION_BASE
-SNAP = str(ROOT_DIR / 'v23/hill_count_threshold/ODSA Ockenden-regions_skew/window_csvs')
+ROOT = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith('-') else _REGION_BASE
+# The gates beyond the adopted 20 m come from a run of this pipeline with
+# ODSA_HILL_THRESHOLDS widened. One snapshot per region set.
+SNAP = str(ROOT_DIR / 'v23/hill_count_threshold/snapshot_new/window_csvs')
+if '--snap' in sys.argv:
+    SNAP = sys.argv[sys.argv.index('--snap') + 1]
 KEY = ['trajectory', 'segment', 'window_id']
 MIN_N = 10          # classes thinner than this are reported but not tested
 Z_MIN, D_MIN = 2.0, 1.0
@@ -64,6 +68,13 @@ def snapshot_guard(d):
     # trees carry. beta is the pipeline's primary output and any provenance difference moves
     # it. Fatal, not a warning: a stale snapshot corrupts every row rather than shifting one.
     m = d.beta.notna() & d.beta_snap.notna()
+    if not m.any():
+        print(f"ERROR: no window in the snapshot matches this run tree, so hill_count_50 "
+              f"would be empty for every row.\n"
+              f"       {SNAP}\n"
+              f"       holds a different region set. Point --snap at the snapshot for these "
+              f"regions, or run this tree's regions through the widened-gate pipeline.")
+        sys.stdout.flush(); sys.exit(1)
     diff = (d.beta[m] - d.beta_snap[m]).abs()
     bad = int((diff > BETA_ULP * np.spacing(d.beta[m].abs())).sum())
     print(f"snapshot provenance: {int(m.sum())} windows share beta with the snapshot, "
@@ -115,7 +126,7 @@ def load(root):
     n_nogate = int(d.hill_count_50.isna().sum())
     print(f"\nwindow attrition\n"
           f"  {n:5d}  read from {root}\n"
-          f"  {-n_tr:5d}  is_transition (ASB-LR and MSB have none, so they check this stage)\n"
+          f"  {-n_tr:5d}  is_transition\n"
           f"  {n - n_tr:5d}  non-transition\n"
           f"  {-n_nocls:5d}  no ockenden_class, unsnapped in ockenden_class.py\n"
           f"  {-n_dunes:5d}  invalid_dunes\n"

@@ -9,7 +9,7 @@ import sys
 from config import (WINDOW_SIZE, STEP_SIZE, WINDOW_TYPE, STANDARD_WINDOW,
                     peak_masking_height_threshold, bin_buffer, WINDOW_MASK,
                     HILL_BOX_M, HILL_RELIEF_THRESHOLDS, HILL_THRESHOLD_M, BEDFORM_BAND_M, FIT_BAND_M,
-                    Tee, get_region_folder, ensure_output_dirs)
+                    SAVE_PLOTS, Tee, get_region_folder, ensure_output_dirs)
 from loading import  OUTPUT_BASE_PATH, load_datasets
 from segmentation import detect_data_gaps, split_into_segments, split_by_landscape
 from plotting import plot_raw_data_with_segmentation_check, plot_spectra, psd_spectrum_plot, psd_residuals_plot
@@ -574,15 +574,16 @@ def analyse_bedrock():
                         'self_affine_valid': self_affine_valid
                     })
 
-                    plot_spectra(segment_distance, detrended, wavelengths_calc, avg_psd, fitted_psd, beta, psd_intercept, A_1km, residual_psd, traj_id, dataset_name, segment_number=seg_idx+1, output_path=output_paths['psd'], processing_flag=pflag)
-                    psd_spectrum_plot(wavelengths_calc, avg_psd, fitted_psd, beta, psd_intercept, A_1km, traj_id, dataset_name, segment_number=seg_idx+1, output_path=output_paths['psd'], processing_flag=pflag)
-                    psd_residuals_plot(wavelengths_calc, residual_psd, traj_id, dataset_name, segment_number=seg_idx+1, output_path=output_paths['psd'], processing_flag=pflag)
+                    if SAVE_PLOTS:
+                        plot_spectra(segment_distance, detrended, wavelengths_calc, avg_psd, fitted_psd, beta, psd_intercept, A_1km, residual_psd, traj_id, dataset_name, segment_number=seg_idx+1, output_path=output_paths['psd'], processing_flag=pflag)
+                        psd_spectrum_plot(wavelengths_calc, avg_psd, fitted_psd, beta, psd_intercept, A_1km, traj_id, dataset_name, segment_number=seg_idx+1, output_path=output_paths['psd'], processing_flag=pflag)
+                        psd_residuals_plot(wavelengths_calc, residual_psd, traj_id, dataset_name, segment_number=seg_idx+1, output_path=output_paths['psd'], processing_flag=pflag)
                 else:
                     print(f"Skipping Line {traj_id}: Not enough data points in 250m–50km range.")
 
                 segment_results.append(stats_dict)
 
-            if valid_segments:
+            if valid_segments and SAVE_PLOTS:
                 plot_raw_data_with_segmentation_check(dist, elev, valid_segments, traj_id, gap_mask, output_path=output_paths['trajectories'], processing_flag=pflag)
 
             if segment_results:
@@ -782,9 +783,11 @@ if __name__ == "__main__":
                     'rms_roughness': w.get('roughness_rms'),
                     'skewness': w.get('window_skewness'),
                     'kurtosis': w.get('window_kurtosis'),
-                    # One column at the adopted gate. The snapshot pipeline that ran the
-                    # threshold sweep emits hill_count_<threshold> for each of the four.
+                    # One column at the adopted gate, and one per additional gate in
+                    # HILL_RELIEF_THRESHOLDS.
                     'hill_count': w.get(f'hill_count_{HILL_THRESHOLD_M}'),
+                    **{f'hill_count_{t}': w.get(f'hill_count_{t}')
+                       for t in HILL_RELIEF_THRESHOLDS if t != HILL_THRESHOLD_M},
                     'eta_wavelength_m': w.get('window_eta_wavelength'),
                     'xi_band': w.get('window_xi_band'),
                     'flow_error_mean': w.get('flow_error_mean'),

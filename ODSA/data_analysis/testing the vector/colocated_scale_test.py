@@ -55,13 +55,19 @@ BINS = [1, 1.5 * STEP_SIZE / 1e3, 1.2 * WINDOW_SIZE / 1e3, 200, 1e9]
 LABELS = ['overlapping', 'one-window-apart', f'{int(1.2 * WINDOW_SIZE / 1e3)}-200km', '>200km']
 
 
-def load(root, per_region_folders=True):
-    """Non-transition windows, one frame per region, keyed by the region folder name."""
+def load(root, per_region_folders=True, token=None):
+    """Non-transition windows, one frame per region, keyed by the region folder name. A flat
+    tree holds several window sizes, so `token` selects one of them."""
     pat = os.path.join(root, '*', 'window_csvs', '*_window_stats.csv') if per_region_folders \
-        else os.path.join(root, '*_window_stats.csv')
+        else os.path.join(root, f'*_{token}_window_stats.csv' if token else '*_window_stats.csv')
     out = {}
     for f in sorted(glob.glob(pat)):
-        d = pd.read_csv(f)
+        # A region whose windows all fall below the point threshold writes an empty CSV.
+        try:
+            d = pd.read_csv(f)
+        except pd.errors.EmptyDataError:
+            print(f"  ! {os.path.basename(f)}: no windows exported, skipped")
+            continue
         missing = [e for e in ELEMENTS if e not in d.columns]
         if missing:
             raise SystemExit(f"{f} is missing {missing}. Both runs must carry the same "
@@ -234,7 +240,7 @@ def plot_crossing(med, tbl, out_path):
 
 if __name__ == '__main__':
     sys.stdout = Tee(os.path.join(ROOT, 'colocated_scale_test_log.txt'))
-    prod, alt = load(ROOT), load(ALT, per_region_folders=False)
+    prod, alt = load(ROOT), load(ALT, per_region_folders=False, token=ALT_TOKEN)
     if not alt:
         raise SystemExit(f"No {ALT_TOKEN} window CSVs under {ALT}. Regenerate the reference "
                          f"with v23/run_window_size_sweep.py, or pass its tree as argument 2.")
@@ -256,6 +262,14 @@ if __name__ == '__main__':
         m = madogram(d)
         if m is not None:
             mado.append(m)
+
+    if not t1:
+        raise SystemExit(
+            f"No production region has a {ALT_TOKEN} partner. The two trees are joined on the "
+            f"loading.py label, and {ALT} holds {len(alt)}: {', '.join(sorted(alt))}.\n"
+            f"Re-run bed_analysis.py at 30 km over the current regions with "
+            f"ODSA_WINDOW_SIZE=30000 and ODSA_OUTPUT_BASE set to a tree of its own, or pass "
+            f"an existing 30 km tree as argument 2.")
 
     print("window counts and co-located pairs\n" +
           pd.DataFrame(n_rows).to_string(index=False) + "\n")

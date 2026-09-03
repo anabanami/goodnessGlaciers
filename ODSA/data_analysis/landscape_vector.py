@@ -879,7 +879,7 @@ if __name__ == "__main__":
 
     # Compare regions already processed.
     if arg == '--compare':
-        root = sys.argv[2] if len(sys.argv) > 2 else 'individual_region_TEST'
+        root = sys.argv[2] if len(sys.argv) > 2 else _REGION_BASE
         sys.stdout = Tee(os.path.join(root, 'cross_region_log.txt'))
         compare_regions(root)
         sys.exit(0)

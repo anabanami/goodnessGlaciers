@@ -57,7 +57,12 @@ def processing_flag_of(df):
 # which pins the whole pipeline and not just these values.
 HILL_BOX_M = 5000.0
 HILL_THRESHOLD_M = 20
-HILL_RELIEF_THRESHOLDS = (HILL_THRESHOLD_M,)
+# ODSA_HILL_THRESHOLDS is a comma-separated list of gates in metres.
+HILL_RELIEF_THRESHOLDS = tuple(int(t) for t in os.environ.get(
+    'ODSA_HILL_THRESHOLDS', str(HILL_THRESHOLD_M)).split(','))
+
+# ODSA_NO_PLOTS=1 runs the pipeline for its CSVs alone.
+SAVE_PLOTS = os.environ.get('ODSA_NO_PLOTS') != '1'
 
 # Band the Li_2010 two-parameter roughness index is integrated over. Spagnolo_2017's
 # MSGL range, the same anchor item 7 rests on. The band matters: over the full fit band

@@ -11,9 +11,11 @@ Three colourings of the same geometry, written to separate files:
   bed_class   the beta class, point estimate
   archetype   the entry, where exactly one survives
 
-Reads the output tree directly, so it does not depend on which regions are live in loading.py.
+The region list is read from the output tree itself, not from the regions live in loading.py.
 
-    python fig6b_maps.py [individual_region_TEST] [scheme]
+    python fig6b_maps.py [output_tree] [scheme]
+
+The output tree defaults to OUTPUT_BASE_PATH in loading.py.
 """
 import glob, json, os, sys
 import numpy as np, pandas as pd
@@ -24,6 +26,7 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import _bootstrap  # noqa: F401  (sets sys.path + cwd to ODSA/)
 from config import Tee
+from loading import OUTPUT_BASE_PATH as _REGION_BASE
 
 PS71 = ccrs.SouthPolarStereo(true_scale_latitude=-71)
 WINDOW_M = 50_000
@@ -238,7 +241,7 @@ def main(root, only=None, **kw):
 
 if __name__ == '__main__':
     args = [a for a in sys.argv[1:]]
-    root = args[0] if args and args[0] not in SCHEMES else 'individual_region_TEST'
+    root = args[0] if args and args[0] not in SCHEMES else _REGION_BASE
     only = next((a for a in args if a in SCHEMES), None)
     os.makedirs(os.path.join(root, 'landscape_vector'), exist_ok=True)
     sys.stdout = Tee(os.path.join(root, 'landscape_vector', 'fig6b_maps_log.txt'))
