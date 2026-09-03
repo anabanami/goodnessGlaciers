@@ -23,7 +23,9 @@ contributes; reliable AND slow-decorrelating is already carried by a gridded pro
 The 30 km side is a separate run tree and is not regenerated here. Default points at the
 window-size sweep; pass a second argument to point elsewhere.
 
-    python colocated_scale_test.py [individual_region_TEST] [30km_run_tree]
+Usage:
+    python colocated_scale_test.py                                    # walks OUTPUT_BASE_PATH
+    python colocated_scale_test.py individual_region_TEST [30km_tree] # walk any tree of region folders
 """
 import glob, json, os, sys
 import numpy as np, pandas as pd
@@ -35,8 +37,9 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from config import Tee, WINDOW_SIZE, STEP_SIZE
+from loading import OUTPUT_BASE_PATH as _REGION_BASE
 
-ROOT = sys.argv[1] if len(sys.argv) > 1 else str(ROOT_DIR / 'individual_region_TEST')
+ROOT = sys.argv[1] if len(sys.argv) > 1 else _REGION_BASE
 ALT = sys.argv[2] if len(sys.argv) > 2 else str(
     ROOT_DIR / 'v23' / 'window_size' / 'runs' / 'window_csvs')
 

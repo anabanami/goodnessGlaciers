@@ -2,6 +2,10 @@
 
 Measures how fast the class tuple (beta, relief, elevation, velocity) decorrelates with
 distance. Agreement at chance = independent. Gives the decimation distance for item 5.
+
+Usage:
+  python window_atom_test.py                        # walks OUTPUT_BASE_PATH
+  python window_atom_test.py individual_region_TEST # walk any tree of region folders
 """
 import glob, os, sys
 import numpy as np, pandas as pd
@@ -11,8 +15,9 @@ sys.path.insert(0, str(ROOT_DIR))
 
 from config import Tee
 from landscape_vector import VELOCITY_CLASSES
+from loading import OUTPUT_BASE_PATH as _REGION_BASE
 
-ROOT = sys.argv[1] if len(sys.argv) > 1 else str(ROOT_DIR / 'individual_region_TEST')
+ROOT = sys.argv[1] if len(sys.argv) > 1 else _REGION_BASE
 AXES = ['bed_class', 'relief_class', 'elevation_class', 'velocity_band']
 BINS = [0, 1, 25, 50, 75, 100, 150, 200, 300, 1e9]
 

@@ -18,6 +18,7 @@ from plotting import flag_title as _flag_title, flag_suptitle as _flag_suptitle
 # reverse direction only.
 from landscape_vector import (ELEMENTS, VELOCITY_CLASSES, AXIS_VALUES,
                               COMPOSITION_DECIMATE_KM, _independent_subset)
+from loading import OUTPUT_BASE_PATH as _REGION_BASE
 
 """
 Dependence check across the landscape vector.
@@ -29,11 +30,11 @@ classifying axes by how far they duplicate each other. It reports an ordering an
 verdict: no redundancy threshold is defensible on seven regions.
 
 Usage:
-  python vector_independence.py                        # walks individual_region_TEST
+  python vector_independence.py                        # walks OUTPUT_BASE_PATH
   python vector_independence.py individual_region_TEST # walk any tree of region folders
 """
 
-DEFAULT_ROOT = str(ROOT_DIR / 'individual_region_TEST')
+DEFAULT_ROOT = _REGION_BASE
 
 # The continuous variable behind each classifying axis, read off ELEMENTS rather than
 # retyped: ELEMENTS is the definitive list of vector elements and its axis tag is the link.

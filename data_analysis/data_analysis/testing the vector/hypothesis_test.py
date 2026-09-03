@@ -35,7 +35,9 @@ Three parts, because the preregistered single-statistic test cannot fail:
 Reports admissible-set size, not verdict: 0 = out of catalogue, 1 = resolved, >1 = degenerate.
 Verdict adds RESOLVED-WITH-EXTERNAL, which turns on discriminator logic irrelevant here.
 
-    python hypothesis_test.py [individual_region_TEST] [n_permutations]
+Usage:
+    python hypothesis_test.py                                   # walks OUTPUT_BASE_PATH
+    python hypothesis_test.py individual_region_TEST [n_perm]   # walk any tree of region folders
 """
 import glob, itertools, json, os, sys
 import numpy as np, pandas as pd
@@ -50,8 +52,9 @@ from config import Tee
 import landscape_vector as lv
 from landscape_vector import (load_region, build_vector, observe, match, units_from,
                               CATALOGUE, ALL_AXES, AXIS_VALUES)
+from loading import OUTPUT_BASE_PATH as _REGION_BASE
 
-ROOT = sys.argv[1] if len(sys.argv) > 1 else str(ROOT_DIR / 'individual_region_TEST')
+ROOT = sys.argv[1] if len(sys.argv) > 1 else _REGION_BASE
 NPERM = int(sys.argv[2]) if len(sys.argv) > 2 else 200
 LEVEL = 'window'
 SUBSET_AXES = sorted(ALL_AXES)

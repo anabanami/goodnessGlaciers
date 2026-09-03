@@ -1,8 +1,12 @@
 """Queue item 6: does the catalogue exist in feature space?
 
-Clusters the 651 non-transition windows on the standardised measured vector and asks three
+Clusters the non-transition windows on the standardised measured vector and asks three
 things: is there cluster tendency at all, how many clusters, and do they map onto catalogue
 entries or onto geography. Decimates to 200 km to answer the same questions at the honest n.
+
+Usage:
+  python cluster_test.py                        # walks OUTPUT_BASE_PATH
+  python cluster_test.py individual_region_TEST # walk any tree of region folders
 """
 import glob, itertools, os, sys
 import numpy as np, pandas as pd
@@ -15,8 +19,9 @@ sys.path.insert(0, str(ROOT_DIR))
 
 from config import Tee
 from landscape_vector import _independent_subset, COMPOSITION_DECIMATE_KM
+from loading import OUTPUT_BASE_PATH as _REGION_BASE
 
-ROOT = sys.argv[1] if len(sys.argv) > 1 else str(ROOT_DIR / 'individual_region_TEST')
+ROOT = sys.argv[1] if len(sys.argv) > 1 else _REGION_BASE
 ROBUST = '--robust' in sys.argv
 KS = range(2, 11)
 N_NULL = 200
