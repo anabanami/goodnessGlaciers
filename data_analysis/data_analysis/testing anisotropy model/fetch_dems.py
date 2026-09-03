@@ -11,6 +11,7 @@ Bboxes come from the FRIDGE selection manifests in data/. Mosaic not strips: 2 m
     python fetch_dems.py --strips            # + 2 m strip selection            ~19.5 GB
     python fetch_dems.py --verify            # HEAD local files, refetch short ones
     python fetch_dems.py --verify --hydro    # flags combine
+    python fetch_dems.py --tile 24_18 --site Dubawnt   # one mosaic tile the manifest misses
 
 Resumable: complete files are skipped, partials land in .part and are redone. Never run two
 copies at once — they share .part paths. Writes to data/<site>/mosaic_10m/, data/pangaea/,
@@ -52,6 +53,24 @@ def bbox(site):
     feats = json.loads((site / 'fridge_export.json').read_text())['features']
     pts = [p for f in feats for p in coords(f['geometry']['coordinates'])]
     lon, lat = zip(*pts)
+    return [min(lon), min(lat), max(lon), max(lat)]
+
+
+def tile_bbox(name, edge=20):
+    """Lon/lat bbox of a named ArcticDEM mosaic tile, from its EPSG:3413 footprint.
+
+    Tile ROW_COL covers 100 km from ((COL - 41), (ROW - 41)) * 100 km. The boundary is
+    sampled rather than cornered, since a tile's edges are curved in lon/lat.
+    """
+    from pyproj import Transformer
+    row, col = (int(v) for v in name.split('_'))
+    left, bottom = (col - 41) * 1e5, (row - 41) * 1e5
+    xs, ys = [], []
+    for i in range(edge + 1):
+        f = i / edge
+        xs += [left + f * 1e5, left + f * 1e5, left, left + 1e5]
+        ys += [bottom, bottom + 1e5, bottom + f * 1e5, bottom + f * 1e5]
+    lon, lat = Transformer.from_crs('EPSG:3413', 'EPSG:4326', always_xy=True).transform(xs, ys)
     return [min(lon), min(lat), max(lon), max(lat)]
 
 
@@ -126,6 +145,19 @@ if __name__ == '__main__':
     dry, strips = '--dry-run' in args, '--strips' in args
     hydro = '--hydro' in args or '--hydro50k' in args
     verify = '--verify' in args
+    if '--tile' in args:
+        name = args[args.index('--tile') + 1]
+        site = DATA / args[args.index('--site') + 1]
+        items = [it for it in stac_items(tile_bbox(name)) if it['id'].startswith(name + '_')]
+        print(f'{name}: {len(items)} matching tiles into {site}/mosaic_10m')
+        got = 0.0
+        for it in items:
+            for k in [k for k in ASSETS if k in it['assets']]:
+                href = it['assets'][k]['href']
+                got += get(href, site / 'mosaic_10m' / Path(href).name, dry, verify=verify)
+        print(f'fetched {got / 1000:.2f} GB')
+        sys.exit()
+
     sites = sorted(p for p in DATA.iterdir() if (p / 'fridge_export.json').exists())
     if not sites:
         sys.exit(f'no fridge_export.json under {DATA}')
