@@ -17,7 +17,8 @@ my windows. A positive here is weaker than it looks; a negative is clean.
 
 `--by-region` controls the one thing the pooled run cannot: her relict class is 72% PPB, so a
 pooled lift may be a region effect. It scores each region separately and pools again with PPB
-dropped. **Read it as falsification only.** Dropping PPB takes n_eff on the relict side from 17
+dropped. **Read it as falsification only.** Dropping PPB takes the independent count on the
+relict side from 17
 to about 9, so z falls by ~1.4x even if a lift holds exactly — a surviving lift is inconclusive
 by construction, a vanishing one is informative. The evidence is the sign pattern across regions,
 not any single region's z.
@@ -69,20 +70,21 @@ def load(root):
     return d
 
 
-def n_eff(g):
+def n_independent(g):
     return max(len(_independent_subset(g[['center_x', 'center_y']].values, COMPOSITION_DECIMATE_KM)), 1)
 
 
 def contrast(d, col, by='is_her_relict'):
-    """Presence rate inside vs outside the group, z on n_eff rather than on window count."""
+    """Presence rate inside vs outside the group, z on the independent count rather than on
+    window count."""
     a, b = d[d[by]], d[~d[by]]
     if not len(a) or not len(b):
         return None
     pa, pb = a[col].mean(), b[col].mean()
-    ea, eb = n_eff(a), n_eff(b)
+    ea, eb = n_independent(a), n_independent(b)
     se = np.hypot(np.sqrt(max(pa * (1 - pa), 1e-9) / ea), np.sqrt(max(pb * (1 - pb), 1e-9) / eb))
     return {'entry': col, 'rate_in': pa, 'rate_out': pb, 'lift': pa - pb,
-            'n_in': len(a), 'n_out': len(b), 'n_eff_in': ea, 'n_eff_out': eb,
+            'n_in': len(a), 'n_out': len(b), 'n_independent_in': ea, 'n_independent_out': eb,
             'z': (pa - pb) / se if se else np.nan}
 
 
@@ -93,7 +95,7 @@ def run(d, label):
 
     res = pd.DataFrame([r for e in ENTRIES if (r := contrast(d, e)) is not None])
     res = res.sort_values('lift', ascending=False)
-    print(f"\nentry presence, her relict windows vs the rest (z on n_eff):")
+    print(f"\nentry presence, her relict windows vs the rest (z on the independent count):")
     print(res.round(3).to_string(index=False))
 
     rank = list(res.entry).index(TARGET) + 1

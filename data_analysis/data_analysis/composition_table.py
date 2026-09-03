@@ -5,8 +5,9 @@ to print. This keeps each region's leading sets up to a coverage threshold, coll
 into one row, and keeps `(none)` explicit wherever it lands.
 
 Fractions are over every window, because the composition is an areal statement and every window
-covers real ground whether or not it is independent of its neighbour. `n_eff` governs the error
-bar only, and no CI is attached: at n_eff 2 to 6 the SE on a fraction rivals the fraction itself.
+covers real ground whether or not it is independent of its neighbour. `n_independent` governs the
+error bar only, and no CI is attached: at 2 to 6 independent windows the SE on a fraction rivals
+the fraction itself.
 For the same reason the table carries no cross-region comparison.
 
     python composition_table.py [individual_region_TEST] [--cover 0.8]
@@ -44,21 +45,21 @@ def collapse(g, cover=COVER):
 
 def main(root):
     d = load(root)
-    lines = ['| region | n | n_eff | admissible set | windows | fraction |',
+    lines = ['| region | n | n independent | admissible set | windows | fraction |',
              '| --- | --- | --- | --- | --- | --- |']
     flat = []
     for region, g in d.groupby('region'):
-        n, n_eff, n_sets = int(g.n_windows_total.iloc[0]), int(g.n_eff.iloc[0]), len(g)
+        n, n_ind, n_sets = int(g.n_windows_total.iloc[0]), int(g.n_independent.iloc[0]), len(g)
         rows = collapse(g)
         for i, r in enumerate(rows):
             # the set separator is itself a pipe, so it has to be escaped for the cell
             cell = r['admissible'].replace('|', ESCAPED_PIPE)
             lines.append(f"| {region if i == 0 else ''} | {n if i == 0 else ''} | "
-                         f"{n_eff if i == 0 else ''} | {cell} | "
+                         f"{n_ind if i == 0 else ''} | {cell} | "
                          f"{r['n_windows']} | {r['fraction']:.3f} |")
-            flat.append(dict(region=region, n_windows_total=n, n_eff=n_eff,
+            flat.append(dict(region=region, n_windows_total=n, n_independent=n_ind,
                              n_sets_total=n_sets, **r))
-        print(f"{region:8s} {n:4d} windows, n_eff {n_eff}, {n_sets} distinct sets, "
+        print(f"{region:8s} {n:4d} windows, {n_ind} independent, {n_sets} distinct sets, "
               f"{len(rows)} rows printed")
 
     print(f"\ncoverage threshold {COVER:.0%}, `(none)` never collapsed\n")

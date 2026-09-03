@@ -116,12 +116,12 @@ def load_datasets():
                 df, [1.05e6, 2.20e6, -0.80e6, 0.20e6]),
         },
 
-        # # SELECTIVE EROSION/LOW RELIEF: Aurora Subglacial Basin
-        # {
-        #  'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        #  'label': 'ASB_ICECAP_2010_Fig4C_Aurora_SB_square',
-        #  'subset': lambda df, _b=[1100000.0, 1400000.0, -780000.0, -480000.0]: _ps71_subset(df, _b),
-        # },
+        # # # SELECTIVE EROSION/LOW RELIEF: Aurora Subglacial Basin
+        # # {
+        # #  'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        # #  'label': 'ASB_ICECAP_2010_Fig4C_Aurora_SB_square',
+        # #  'subset': lambda df, _b=[1100000.0, 1400000.0, -780000.0, -480000.0]: _ps71_subset(df, _b),
+        # # },
 
         # LOW-RELIEF / SELECTIVE EROSION: Maud Subglacial Basin
         {

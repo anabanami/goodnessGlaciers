@@ -4,7 +4,7 @@ Continent-wide flight-track overview from the Bedmap Results CSVs.
 Same map as map_flightlines.plot_antarctica_overview, but over whole releases
 instead of one region: 84 campaign files for Bedmap3 (~6.8 GB), 66 for Bedmap2
 (~2.7 GB), 1 compiled file for Bedmap1 (~157 MB). Lon/lat are parsed once per
-release into a subsampled .npz cache; plotting reads only the cache.
+release into a thinned .npz cache; plotting reads only the cache.
 
 USAGE: run from the ODSA root:
 
@@ -16,12 +16,15 @@ USAGE: run from the ODSA root:
   python map_bedmap3_all.py --generations 1 2 3 --by-release   # Bedmap1/2/3 legend
   python map_bedmap3_all.py --generations 2 3 --by-release     # any subset
 
-  # --stride applies to every release named by --generations, but only bites when
-  # a cache is (re)parsed. Caches record their stride, so any release still held
-  # at a different one is rebuilt automatically — no mixed-density maps.
-  python map_bedmap3_all.py --rebuild --stride 50                    # BM3 only (default gens)
-  python map_bedmap3_all.py --generations 1 2 3 --stride 50 --by-release   # all three at 50
-  python map_bedmap3_all.py --generations 1 --stride 50          # only gen1 at 50
+  # --spacing is the cell size in metres of the grid the points are thinned onto:
+  # one point per occupied cell, so every campaign plots at the same density and
+  # repeat coverage of the same ground collapses to a single point. It applies to
+  # every release named by --generations, but only bites when a cache is
+  # (re)parsed. Caches record their spacing, so any release still held at a
+  # different one is rebuilt automatically — no mixed-density maps.
+  python map_bedmap3_all.py --rebuild --spacing 5000                    # BM3 only (default gens)
+  python map_bedmap3_all.py --generations 1 2 3 --spacing 5000 --by-release
+  python map_bedmap3_all.py --generations 1 --spacing 500          # only gen1, finer
 
 """
 
@@ -53,7 +56,8 @@ OUTPUT_BASE_PATH = 'all_data/Bedmap_track_plots/map_flightlines/'
 # one cache per release, so adding BM1/BM2 never re-parses BM3's 6.8 GB
 CACHE_TMPL = os.path.join(OUTPUT_BASE_PATH, 'bedmap{gen}_all_coords.npz')
 
-STRIDE = 100        # keep every Nth trace; ~70M points -> ~700k plotted
+SPACING_M = 2000    # grid spacing of the cached points, in metres
+CACHE_VERSION = 2   # bumped when the thinning changes; older caches are re-parsed
 CHUNK_ROWS = 2_000_000
 
 ANTARCTIC_STEREO = ccrs.SouthPolarStereo(true_scale_latitude=-71)
@@ -106,38 +110,56 @@ def frame_radius_ps(coords, pad_frac=0.03):
     return (1 + pad_frac) * max(np.abs(x).max(), np.abs(y).max())
 
 
-def build_cache(gen=3, stride=STRIDE):
-    """Parse lon/lat from every CSV of one Bedmap release, subsample, save one .npz."""
+def _grid_cells(xy, spacing, seen):
+    """Rows of `xy` falling in cells of a `spacing`-metre PS71 grid not already in `seen`.
+
+    One row is kept per cell, so a dataset is reduced to the distinct ground it
+    covers however many times it was flown. `seen` holds the cell keys kept so
+    far for the dataset, and is returned extended.
+    """
+    x, y = _TO_PS.transform(xy[:, 0], xy[:, 1])
+    key = (np.round(x / spacing).astype(np.int64) << 32) + np.round(y / spacing).astype(np.int64)
+    cells, first = np.unique(key, return_index=True)
+    fresh = ~np.isin(cells, seen)
+    return xy[first[fresh]], np.union1d(seen, cells[fresh])
+
+
+def build_cache(gen=3, spacing=SPACING_M):
+    """Parse lon/lat from every CSV of one Bedmap release, decimate, save one .npz."""
     results_dir, cache_path = RESULTS_DIRS[gen], CACHE_TMPL.format(gen=gen)
     files = sorted(glob.glob(os.path.join(results_dir, '*.csv')))
-    print(f"Caching {len(files)} Bedmap{gen} CSVs (stride {stride}) -> {cache_path}")
+    print(f"Caching {len(files)} Bedmap{gen} CSVs ({spacing} m grid) -> {cache_path}")
 
     out, total_kept = {}, 0
     for i, path in enumerate(files, 1):
         name = os.path.basename(path).replace('.csv', '')
-        parts, offset = [], 0
+        parts, seen = [], np.empty(0, dtype=np.int64)
         # chunked so the multi-GB campaigns never sit in memory whole
         for chunk in pd.read_csv(path, usecols=[LON, LAT], comment='#',
                                  chunksize=CHUNK_ROWS):
-            parts.append(chunk.values[(-offset) % stride::stride])
-            offset = (offset + len(chunk)) % stride
-        xy = np.vstack(parts) if parts else np.empty((0, 2))
-        valid = (np.abs(xy[:, 0]) <= 180) & (xy[:, 1] < -55)
-        out[name] = xy[valid].astype(np.float32)
+            xy = chunk.values
+            xy = xy[(np.abs(xy[:, 0]) <= 180) & (xy[:, 1] < -55)]
+            if not len(xy):
+                continue
+            kept, seen = _grid_cells(xy, spacing, seen)
+            parts.append(kept)
+        out[name] = (np.vstack(parts) if parts else np.empty((0, 2))).astype(np.float32)
         total_kept += len(out[name])
         print(f"  [{i:2d}/{len(files)}] {name}: {len(out[name])} points kept")
 
     os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-    np.savez_compressed(cache_path, _stride=np.int32(stride), **out)
+    np.savez_compressed(cache_path, _spacing=np.int32(spacing),
+                    _version=np.int32(CACHE_VERSION), **out)
     print(f"Cached {total_kept} points from {len(files)} datasets")
     return {k: v for k, v in out.items()}
 
 
-def load_coords(gens=(3,), rebuild=False, stride=STRIDE):
+def load_coords(gens=(3,), rebuild=False, spacing=SPACING_M):
     """Merged {dataset_name: xy} for the requested releases, building caches as needed.
 
-    A cache built at a different stride is rebuilt rather than loaded, so mixing
-    releases can never silently mix densities.
+    A cache built at a different spacing, or by an earlier CACHE_VERSION, is
+    rebuilt rather than loaded, so mixing releases can never silently mix
+    densities.
     """
     coords = {}
     for gen in gens:
@@ -145,15 +167,19 @@ def load_coords(gens=(3,), rebuild=False, stride=STRIDE):
         stale = True
         if not rebuild and os.path.exists(cache_path):
             with np.load(cache_path) as z:
-                cached = int(z['_stride']) if '_stride' in z.files else None
-                stale = cached != stride
-                if stale:
-                    print(f"Cache {cache_path} is stride {cached}, want {stride} — re-parsing")
+                cached = int(z['_spacing']) if '_spacing' in z.files else None
+                version = int(z['_version']) if '_version' in z.files else 0
+                stale = cached != spacing or version != CACHE_VERSION
+                if version != CACHE_VERSION:
+                    print(f"Cache {cache_path} is version {version}, want {CACHE_VERSION} — re-parsing")
+                elif stale:
+                    print(f"Cache {cache_path} is a {cached} m grid, want {spacing} m — re-parsing")
                 else:
-                    print(f"Loading cache {cache_path} (stride {stride}, --rebuild to re-parse)")
-                    coords.update({k: z[k] for k in z.files if k != '_stride'})
+                    print(f"Loading cache {cache_path} ({spacing} m grid, --rebuild to re-parse)")
+                    coords.update({k: z[k] for k in z.files
+                                   if k not in ('_spacing', '_version')})
         if stale:
-            coords.update(build_cache(gen, stride))
+            coords.update(build_cache(gen, spacing))
     return coords
 
 
@@ -240,7 +266,8 @@ def print_summary(coords, key=institution_of, heading='INSTITUTION'):
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument('--rebuild', action='store_true', help='re-parse the CSVs')
-    p.add_argument('--stride', type=int, default=STRIDE)
+    p.add_argument('--spacing', type=int, default=SPACING_M,
+                   help='cell size in metres of the grid the points are thinned onto')
     p.add_argument('--generations', type=int, nargs='+', default=[3], choices=[1, 2, 3],
                    help='Bedmap releases to include (default: 3)')
     p.add_argument('--by-release', action='store_true',
@@ -253,7 +280,7 @@ if __name__ == "__main__":
     os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
     sys.stdout = Tee(os.path.join(OUTPUT_BASE_PATH, f'map_bedmap{tag}_all_log.txt'))
 
-    coords = load_coords(gens, args.rebuild, args.stride)
+    coords = load_coords(gens, args.rebuild, args.spacing)
 
     by_inst = not args.by_release
     print_summary(coords, institution_of if by_inst else generation_of,

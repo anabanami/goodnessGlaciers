@@ -135,7 +135,7 @@ def plot_raw_data_with_segmentation_check(dist, elev, segments, traj_id, gap_mas
     plt.close()
 
 
-def plot_spectra(dist, detrended, wavelengths, psd, fitted_psd, beta, psd_intercept, psd_amplitude_1km, residual_psd,
+def plot_spectra(dist, detrended, wavelengths, psd, fitted_psd, beta, psd_intercept, A_1km, residual_psd,
                  traj_id, dataset_name, segment_number=None, output_path=None, processing_flag=None):
     fig = plt.figure(figsize=(20, 15))
     gs = fig.add_gridspec(2, 2)
@@ -155,10 +155,10 @@ def plot_spectra(dist, detrended, wavelengths, psd, fitted_psd, beta, psd_interc
     ax2.set_ylabel('Power Spectral Density ($m^3$)')
     ax2.set_title('Segment-averaged Power Spectrum')
     ax2.grid(True, linestyle=":", alpha=0.5)
-    if np.isfinite(psd_amplitude_1km):
+    if np.isfinite(A_1km):
         ax2.axvline(x=1000, color='C2', ls='--', lw=1,
-                    label=f'log10 psd_amplitude_1km={psd_amplitude_1km:.1f} @ λ=1 km')
-        ax2.axhline(y=10 ** psd_amplitude_1km, color='C2', ls='--', lw=1)
+                    label=f'log10 A_1km={A_1km:.1f} @ λ=1 km')
+        ax2.axhline(y=10 ** A_1km, color='C2', ls='--', lw=1)
     ax2.legend()
 
     ax3 = fig.add_subplot(gs[1, :])
@@ -180,7 +180,7 @@ def plot_spectra(dist, detrended, wavelengths, psd, fitted_psd, beta, psd_interc
     plt.close()
 
 
-def psd_spectrum_plot(wavelengths, psd, fitted_psd, beta, psd_intercept, psd_amplitude_1km,
+def psd_spectrum_plot(wavelengths, psd, fitted_psd, beta, psd_intercept, A_1km,
                  traj_id, dataset_name, segment_number=None, output_path=None, processing_flag=None):
 
     fig, ax = plt.subplots(figsize=(10, 7.5))
@@ -191,10 +191,10 @@ def psd_spectrum_plot(wavelengths, psd, fitted_psd, beta, psd_intercept, psd_amp
     segment_label = f' - Segment {segment_number}' if segment_number is not None else ''
     flag_title(ax, f'Segment-averaged Power Spectrum: {traj_id}{segment_label}', processing_flag)
     ax.grid(True, linestyle=":", alpha=0.5)
-    if np.isfinite(psd_amplitude_1km):
+    if np.isfinite(A_1km):
         ax.axvline(x=1000, color='C2', ls='--', lw=1,
-                   label=f'log10 psd_amplitude_1km={psd_amplitude_1km:.1f} @ λ=1 km')
-        ax.axhline(y=10 ** psd_amplitude_1km, color='C2', ls='--', lw=1)
+                   label=f'log10 A_1km={A_1km:.1f} @ λ=1 km')
+        ax.axhline(y=10 ** A_1km, color='C2', ls='--', lw=1)
     ax.legend()
 
     plt.tight_layout()

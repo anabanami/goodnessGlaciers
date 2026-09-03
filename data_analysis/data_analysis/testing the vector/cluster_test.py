@@ -26,9 +26,9 @@ SEED = 0
 # rms_roughness (r=+0.906 with relief) and xi_band (tracks amplitude) are left out as
 # near-duplicates that would double-weight the magnitude family under standardisation.
 FEATURES = {
-    'measured': ['beta', 'psd_amplitude_1km', 'relief_m', 'eta_wavelength_m', 'hill_count'],
+    'measured': ['beta', 'A_1km', 'relief_m', 'eta_wavelength_m', 'hill_count'],
     'catalogue': ['beta', 'relief_m', 'bed_elev_mean', 'measures_speed_mean'],
-    'all': ['beta', 'psd_amplitude_1km', 'relief_m', 'bed_elev_mean', 'measures_speed_mean',
+    'all': ['beta', 'A_1km', 'relief_m', 'bed_elev_mean', 'measures_speed_mean',
             'eta_wavelength_m', 'hill_count', 'skewness', 'kurtosis'],
 }
 

@@ -1,4 +1,4 @@
-import os, sys, glob, re
+import json, os, sys, glob, re
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -32,19 +32,18 @@ BED_CLASSES = [
     ('soft',          2.5,     np.inf),
 ]
 
-# Relief thresholds — anchored to Ockenden et al. (2026) reference regions
+# Relief thresholds, anchored to Ockenden et al. (2026) reference regions
 RELIEF_CLASSES = [
     ('flat',        -np.inf, 350),
     ('subdued',     350,     800),
     ('mountainous', 800,     np.inf),
 ]
 
-# The two finite class boundaries, exposed so the derivation tool
-# (v23/relief_distribution.py) can cross-check its sweep value against the
-# adopted production value. Kept in step by that check, not by a shared source.
+# The two finite class boundaries. v23/relief_distribution.py reads these to check
+# its sweep value against the production value.
 RELIEF_THRESHOLDS = [hi for _, _, hi in RELIEF_CLASSES if np.isfinite(hi)]
 
-# Elevation thresholds — absolute bed elevation (m a.s.l.) [Siegert_2004, Frederick_2016]
+# Elevation thresholds, absolute bed elevation (m a.s.l.) [Siegert_2004, Frederick_2016]
 ELEVATION_CLASSES = [
     ('submerged',  -np.inf, 0),
     ('emerged',   0,       1000),
@@ -58,7 +57,7 @@ BED_COLORS = {
     'soft':         '#1f77b4',
 }
 
-# Output configuration - nested inside region output from loading.py
+# Nested inside the region output directory from loading.py
 from loading import OUTPUT_BASE_PATH as _REGION_BASE
 OUTPUT_DIR = os.path.join(_REGION_BASE, 'bed_character/')
 
@@ -68,34 +67,71 @@ BED_EDGES = np.array([BED_CLASSES[0][1]] + [hi for _, _, hi in BED_CLASSES])  # 
 P_COLS = [f'p_{name}' for name in CLASS_ORDER]
 
 # Excess beta uncertainty beyond the formal PSD-fit error, added in quadrature.
-# Stays 0.0: beta_uncertainty is a lower bound (the geomspace frequency grid
-# oversamples the window's Fourier resolution and the Hann taper correlates
-# adjacent bins), sigma_fit = 0.051 on the masked production fit; how much
-# higher the true sigma runs is not measured. Class composition is
-# insensitive to sigma across the measured bracket and any plausible
-# value. Per-window class_confidence is NOT, so don't quote it as measured.
+# beta_uncertainty is a lower bound: the geomspace frequency grid oversamples the
+# window's Fourier resolution, and the Hann taper correlates adjacent bins.
+# sigma_fit = 0.051 on the masked production fit, and the true sigma is not measured.
+# Class composition is insensitive to sigma across the measured bracket; per-window
+# class_confidence is not, so it must not be quoted as a measured value.
 # See v23/beta_sigma_calibration.py and "Sensitivity test - beta_sigma".
 SIGMA_EXTRA = 0.0
 
 # Band-truncation offset: segments shorter than WINDOW_SIZE are fit over a narrower
-# band and read this much steeper. Measured at Pensacola, relief-matched (v23 §9);
-# NOT applied to any exported beta. Used here only to show, per panel, where the
-# offline debias would land the region median relative to a class break.
+# band, which makes beta steeper by this amount. Measured at Pensacola,
+# relief-matched (v23 §9); not applied to any exported beta. Used here to show, per
+# panel, the position of the debiased region median relative to a class break.
 TRUNC_OFFSET = 0.30
-ON_BREAK_MARGIN = 0.10   # debiased median this close to a break -> no bare class label
-# The label is the class of the MEDIAN, so it can differ from the class holding the
-# most windows, and neither test implies the other: a region can sit far from every
-# break and still be a near-tie between two classes.
-TIE_MARGIN = 0.10        # top two class shares this close -> plurality is not stable
+# Minimum distance from a break for the debiased median to carry a bare class label.
+ON_BREAK_MARGIN = 0.10
+# The label is the class of the median, so it can differ from the class that holds
+# the most windows. Neither test implies the other: a region median can be far from
+# every break while the top two classes are a near-tie.
+# Minimum margin between the top two class shares for a stable plurality.
+TIE_MARGIN = 0.10
+
+
+_BREAKS = ', '.join(f'{hi:g}' for _, _, hi in BED_CLASSES if np.isfinite(hi))
+
+CAPTIONS = {
+    'bed_character':
+        'Left: kernel density of window beta, shaded by the class interval of each grid '
+        f'point, with the class breaks at {_BREAKS} marked. Right: class fractions per '
+        'segment, which are expected windows summed over the per-window memberships. '
+        'Above 40 segments only the multi-window segments are drawn. Diagnostic figure: '
+        'the publication figure is the cross-region comparison.',
+    'beta_along_track':
+        'Beta against along-track distance, one panel per segment holding more than three '
+        f'windows, with the class breaks at {_BREAKS} marked. Marker opacity scales with '
+        'class_confidence. Error bars are beta_uncertainty, which is a lower bound on the '
+        'beta error.',
+    'bed_elevation_heatmap':
+        'Expected window count for each pair of bed class and elevation class, summed over '
+        'the per-window bed-class memberships, so a cell is not an integer. Rows and '
+        'columns holding less than 0.05 expected windows are dropped.',
+    'region_comparison':
+        'Class counts are expected windows, summed over the per-window class memberships, '
+        "so they are not integers. Fill opacity scales with each class's share of the "
+        "region's windows, not with the area under the curve. * marks the class of the "
+        'region median, which is the label; it is not always the class holding the most '
+        'windows.',
+}
+
+
+def write_metadata(png, title, caption):
+    """Sidecar JSON holding the caption, written next to the figure it describes."""
+    out = os.path.splitext(png)[0] + '.json'
+    meta = {'figure': os.path.basename(png), 'title': title, 'caption': caption}
+    with open(out, 'w') as f:
+        json.dump(meta, f, indent=2)
+    return out
 
 
 def add_soft_membership(df, sigma_extra=None):
     """Per-window class membership P(class | beta, sigma).
 
-    The class boundaries are conventions on a continuous variable, and beta is a
-    fit with a standard error, so a hard label discards real information near a
-    threshold. Treating beta as Normal(beta, sigma) gives each window a fractional
-    membership in every class; sigma -> 0 recovers the hard threshold assignment.
+    Beta is a fit with a standard error and the class boundaries are conventions on
+    a continuous variable, so we treat beta as Normal(beta, sigma) and give each
+    window a fractional membership in every class. sigma -> 0 recovers the hard
+    threshold assignment.
 
     sigma = sqrt(beta_uncertainty**2 + sigma_extra**2); see SIGMA_EXTRA.
     """
@@ -113,8 +149,8 @@ def add_soft_membership(df, sigma_extra=None):
         P[~ok, np.searchsorted(BED_EDGES[1:-1], b[~ok], side='right')] = 1.0
 
     df[P_COLS] = P
-    df['bed_class'] = [CLASS_ORDER[i] for i in P.argmax(1)]  # MAP label, for description
-    df['class_confidence'] = P.max(1)                        # 1.0 = unambiguous, 0.5 = coin-flip
+    df['bed_class'] = [CLASS_ORDER[i] for i in P.argmax(1)]  # MAP label, descriptive only
+    df['class_confidence'] = P.max(1)  # 1.0 = unambiguous, 0.5 = split evenly between two classes
     return df
 
 
@@ -203,10 +239,10 @@ def segment_summary(df):
         }
         row.update({f'frac_{c}': f for c, f in zip(CLASS_ORDER, frac)})
         row.update({f'frac_{c}_se': e for c, e in zip(CLASS_ORDER, frac_se)})
-        if 'psd_amplitude_1km' in g.columns:
-            row['psd_amp_1km_median'] = g['psd_amplitude_1km'].median()
-            row['psd_amp_1km_iqr'] = (g['psd_amplitude_1km'].quantile(0.75)
-                                      - g['psd_amplitude_1km'].quantile(0.25)) if n > 1 else np.nan
+        if 'A_1km' in g.columns:
+            row['A_1km_median'] = g['A_1km'].median()
+            row['A_1km_iqr'] = (g['A_1km'].quantile(0.75)
+                                      - g['A_1km'].quantile(0.25)) if n > 1 else np.nan
         if 'bed_elev_mean' in g.columns:
             row['bed_elev_median'] = g['bed_elev_mean'].median()
             row['elevation_class'] = classify_elevation(g['bed_elev_mean'].median())
@@ -228,12 +264,12 @@ def print_summary(summary, region_name, df, pflag=None):
         iqr = f"{r['beta_iqr']:.2f}" if np.isfinite(r['beta_iqr']) else '—'
         agree = f"{r['agreement']:.0%}" if r['n_windows'] > 1 else '(1win)'
         conf = f"{r['class_confidence']:.0%}"
-        amp = f"{r['psd_amp_1km_median']:.1f}" if 'psd_amp_1km_median' in r and np.isfinite(r['psd_amp_1km_median']) else '—'
+        amp = f"{r['A_1km_median']:.1f}" if 'A_1km_median' in r and np.isfinite(r['A_1km_median']) else '—'
         print(f"{r['trajectory']:>8} {r['segment']:>4.0f} {r['n_windows']:>3.0f} "
               f"{r['beta_median']:>6.2f} {iqr:>6s} {r['relief_median']:>7.0f} "
               f"{amp:>6s} {r['bed_class']:>14s} {agree:>6s} {conf:>5s}  {r['class_detail']}")
 
-    # Region totals — expected composition over soft memberships, not hard counts
+    # Region totals: expected composition over soft memberships, not hard counts
     n = len(df)
     frac, frac_se = expected_fractions(df)
     parts = ' | '.join(f"{c} {f:.0%}±{e:.0%}" for c, f, e in zip(CLASS_ORDER, frac, frac_se)
@@ -245,9 +281,9 @@ def print_summary(summary, region_name, df, pflag=None):
     amb = (df['class_confidence'] < 0.9).mean()
     print(f"  Class confidence: median {df['class_confidence'].median():.0%}, "
           f"{amb:.0%} of windows ambiguous (<90%)")
-    if 'psd_amplitude_1km' in df.columns:
-        print(f"  PSD amp @ 1 km: median {df['psd_amplitude_1km'].median():.2f}, "
-              f"IQR [{df['psd_amplitude_1km'].quantile(0.25):.2f} – {df['psd_amplitude_1km'].quantile(0.75):.2f}]")
+    if 'A_1km' in df.columns:
+        print(f"  A_1km: median {df['A_1km'].median():.2f}, "
+              f"IQR [{df['A_1km'].quantile(0.25):.2f} – {df['A_1km'].quantile(0.75):.2f}]")
     print(f"{'='*90}")
 
 
@@ -255,23 +291,21 @@ def plot_bed_character(df, summary, region_name, pflag=None, out_dir=None):
     """Two-panel diagnostic: beta histogram + per-segment stacked bars.
 
     QC only. The publication figure is the cross-region comparison built from the
-    left panel alone (plot_region_comparison); the right panel is not published.
+    left panel (plot_region_comparison).
     """
     out_dir = out_dir or OUTPUT_DIR
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7),
                                     gridspec_kw={'width_ratios': [1, 1.2]})
 
     # --- Left: beta density (KDE) shaded by class region ---
-    # A continuous density decouples the distribution shape from the discrete
-    # class labels: color follows the β-axis thresholds, not per-window class,
-    # so there is no seam where windows straddle a boundary. If a real density
-    # peak sits on a threshold, the smooth curve still shows it (diagnostic).
+    # Colour follows the β-axis thresholds rather than per-window class, so the
+    # shading has no seam where windows straddle a boundary.
     boundaries = [1.5, 2.0, 2.5]
     beta = df['beta'].dropna().values
     beta_min, beta_max = beta.min() - 0.1, beta.max() + 0.1
     grid = np.linspace(beta_min, beta_max, 512)
     dens = gaussian_kde(beta)(grid)
-    # Fill under the curve, colored by which class region each grid point is in
+    # Fill under the curve, coloured by the class region of each grid point
     for name, lo, hi in BED_CLASSES:
         seg = (grid >= lo) & (grid < hi)
         if seg.any():
@@ -288,7 +322,6 @@ def plot_bed_character(df, summary, region_name, pflag=None, out_dir=None):
     ax1.grid(True, alpha=0.3)
 
     # --- Right: per-segment stacked horizontal bars ---
-    # Build labels and fractions
     seg_labels = []
     class_fractions = {name: [] for name, _, _ in BED_CLASSES}
 
@@ -299,9 +332,8 @@ def plot_bed_character(df, summary, region_name, pflag=None, out_dir=None):
 
     y_pos = np.arange(len(seg_labels))
 
-    # Only show segments — if too many, limit to those with >1 window or cap at 40
+    # Above 40 segments, show only the multi-window ones
     if len(seg_labels) > 40:
-        # Show only multi-window segments
         multi = summary[summary['n_windows'] > 1].index
         if len(multi) > 0:
             seg_labels = [seg_labels[i] for i in multi]
@@ -329,14 +361,17 @@ def plot_bed_character(df, summary, region_name, pflag=None, out_dir=None):
     ax2.legend(fontsize=9, loc='lower right')
     ax2.grid(True, alpha=0.3, axis='x')
 
-    _flag_suptitle(fig, f'Bed Character — {region_name}', pflag)
+    title = f'Bed Character — {region_name}'
+    _flag_suptitle(fig, title, pflag)
     plt.tight_layout()
 
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f'{region_name}_bed_character.png')
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
     plt.close()
+    meta = write_metadata(out_path, title, CAPTIONS['bed_character'])
     print(f"  Plot saved: {out_path}")
+    print(f"  Metadata saved: {meta}")
 
 
 def parse_window_km(csv_path):
@@ -365,8 +400,6 @@ def plot_beta_along_track(df, region_name, csv_path, pflag=None, out_dir=None):
         dist = g['window_id'].values * step_km
         beta = g['beta'].values
 
-        # Plot colored scatter + connecting line. Marker opacity tracks class
-        # confidence, so windows sitting near a threshold read as uncertain.
         conf = g['class_confidence'].values
         ax.plot(dist, beta, color='0.6', lw=0.8, zorder=1)
         if 'beta_uncertainty' in g.columns:
@@ -395,21 +428,24 @@ def plot_beta_along_track(df, region_name, csv_path, pflag=None, out_dir=None):
     unique = [(h, l) for h, l in zip(handles, labels) if l not in seen and not seen.update({l: 1})]
     fig.legend(*zip(*unique), loc='upper right', fontsize=9, framealpha=0.9)
 
-    _flag_suptitle(fig, f'β along track — {region_name}', pflag, fontsize=13)
+    title = f'β along track — {region_name}'
+    _flag_suptitle(fig, title, pflag, fontsize=13)
     plt.tight_layout(rect=[0, 0, 1, 0.97])
 
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f'{region_name}_beta_along_track.png')
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
     plt.close()
+    meta = write_metadata(out_path, title, CAPTIONS['beta_along_track'])
     print(f"  Along-track plot saved: {out_path}")
+    print(f"  Metadata saved: {meta}")
 
 
 def plot_bed_elevation_heatmap(df, region_name, pflag=None, out_dir=None):
     """Contingency heatmap of bed class vs elevation_class (expected window counts).
 
-    Cells are sums of soft memberships, so a boundary-straddling window is split
-    across bed classes rather than being forced into one cell.
+    Cells are sums of soft memberships, so a window near a boundary is split across
+    bed classes.
     """
     out_dir = out_dir or OUTPUT_DIR
     if 'elevation_class' not in df.columns:
@@ -447,7 +483,8 @@ def plot_bed_elevation_heatmap(df, region_name, pflag=None, out_dir=None):
     ax.set_xlabel('Elevation class', fontsize=12)
     ax.set_ylabel('Bed class (β)', fontsize=12)
     ax.set_title(f'n={total:.0f} windows (expected counts)', fontsize=10)
-    _flag_suptitle(fig, f'Bed class × Elevation — {region_name}', pflag, fontsize=13)
+    title = f'Bed class × Elevation — {region_name}'
+    _flag_suptitle(fig, title, pflag, fontsize=13)
     fig.colorbar(im, ax=ax, label='Expected window count', shrink=0.8)
     plt.tight_layout()
 
@@ -455,7 +492,9 @@ def plot_bed_elevation_heatmap(df, region_name, pflag=None, out_dir=None):
     out_path = os.path.join(out_dir, f'{region_name}_bed_elevation_heatmap.png')
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
     plt.close()
+    meta = write_metadata(out_path, title, CAPTIONS['bed_elevation_heatmap'])
     print(f"  Elevation heatmap saved: {out_path}")
+    print(f"  Metadata saved: {meta}")
 
 
 def process_region(region_name, csv_path, out_dir=None):
@@ -505,9 +544,8 @@ def process_region(region_name, csv_path, out_dir=None):
 
 
 # ---------------------------------------------------------------------------
-# Cross-region comparison. One region's beta distribution is a single number
-# dressed up; the comparison across regions is the result. Walks a tree of
-# region folders and writes to the top of it, not into any one region.
+# Cross-region comparison. Walks a tree of region folders and writes to the top of
+# the tree.
 # ---------------------------------------------------------------------------
 
 def walk_tree(root):
@@ -544,12 +582,10 @@ def _tkey(t):
 def segment_lengths(root, refresh=False):
     """(dataset, trajectory, segment) -> segment length in m, cached at <root>/segment_lengths.csv.
 
-    Truncation is a segment-LENGTH property: bed_analysis falls back to a single
+    Truncation is a segment-length property: bed_analysis falls back to a single
     window when a segment is shorter than WINDOW_SIZE. No exported CSV carries the
     length, so it is re-derived from the raw data by replaying the same
-    segmentation. The single-window window-count proxy is deliberately not used:
-    it misclassifies 13 of 30 windows at ASB-LR (v23 §8), which is the size of the
-    effect being reported. Returns None if the raw data is not reachable.
+    segmentation. Returns None if the raw data is not reachable.
     """
     path = os.path.join(root, 'segment_lengths.csv')
     if os.path.exists(path) and not refresh:
@@ -608,7 +644,7 @@ def class_of(beta):
 
 
 def region_panel(csv_path, lengths=None):
-    """Everything one comparison panel needs, read off an already-written window CSV."""
+    """Everything one comparison panel needs, read from an already-written window CSV."""
     df = pd.read_csv(csv_path).dropna(subset=['beta'])
     if len(df) == 0:
         return None
@@ -624,15 +660,13 @@ def region_panel(csv_path, lengths=None):
     beta = kept['beta'].to_numpy(float)
     counts = kept[P_COLS].to_numpy().sum(0)   # expected windows per class, soft memberships
 
-    # Spatially independent window count, over exactly the windows this panel counts.
-    # _independent_subset is greedy and walks rows in order, keeping the first that
-    # clears the separation from everything already kept, so this is a LOWER BOUND on
-    # independent units and not a canonical count: the same points in a different row
-    # order can return a different number. It will also differ from the value in
-    # landscape_vector's composition CSV, which decimates that module's own kept set
-    # rather than this one. Neither difference is a bug.
-    # Imported, not mirrored; the import is lazy because landscape_vector imports this
-    # module at its own top level.
+    # Spatially independent window count over the windows this panel counts.
+    # _independent_subset is greedy and walks rows in order, keeping the first row
+    # that clears the separation from the rows already kept, so this is a lower bound
+    # on independent units: the same points in a different row order can return a
+    # different number. It also differs from the value in landscape_vector's
+    # composition CSV, which decimates that module's own kept set.
+    # The import is lazy because landscape_vector imports this module at its top level.
     n_indep, decim = np.nan, np.nan
     if {'center_x', 'center_y'} <= set(kept.columns):
         from landscape_vector import _independent_subset, COMPOSITION_DECIMATE_KM
@@ -652,7 +686,7 @@ def region_panel(csv_path, lengths=None):
                       for t, s in zip(kept['trajectory'], kept['segment'])], float)
         known = np.isfinite(L)
         if not known.any():
-            # Dataset not in loading.py's target list — no length, so no claim.
+            # Dataset not in loading.py's target list, so no segment length is known.
             print(f"  {tree_region_name(csv_path)}: no segment lengths matched "
                   f"{dataset_name(csv_path)!r}; truncation left blank.")
         else:
@@ -660,8 +694,8 @@ def region_panel(csv_path, lengths=None):
                 print(f"  {tree_region_name(csv_path)}: {(~known).sum()} of {len(kept)} "
                       f"retained windows have no segment length; truncation is over the rest.")
             n_len, n_trunc = int(known.sum()), int((L[known] < WINDOW_SIZE).sum())
-            # Offline debias: shift the truncated windows, re-take the median. Never
-            # written back to any beta; it exists to show how far the median can move.
+            # Offline debias: shift the truncated windows and re-take the median.
+            # Not written back to any beta.
             debias = float(np.median(np.where(known & (L < WINDOW_SIZE),
                                               beta - TRUNC_OFFSET, beta)))
 
@@ -672,9 +706,7 @@ def region_panel(csv_path, lengths=None):
     on_break = np.isfinite(gap) and gap < ON_BREAK_MARGIN
     moved = np.isfinite(debias) and class_of(debias) != class_of(med)
 
-    # Composition, on the same expected-window basis as the shading. Independent of
-    # the break test above: the label follows the median, so it can name a class that
-    # is not the one holding the most windows.
+    # Composition, on the same expected-window basis as the shading.
     share = counts / max(counts.sum(), 1e-12)
     rank = np.argsort(share)[::-1]
     plur, second = CLASS_ORDER[rank[0]], CLASS_ORDER[rank[1]]
@@ -703,16 +735,15 @@ def plot_region_comparison(panels, out_path, alpha_min=0.10, alpha_max=0.60,
                            share_y=True, legend_alpha=0.45):
     """Stacked beta KDEs, one row per region, on a shared beta axis.
 
-    Shading opacity tracks each class's share of the region's WINDOWS, not the KDE
-    area under the band: the smoother pushes mass across a break, so a class can
-    look occupied on the curve while holding almost no windows. The counts are
-    printed in-band for the same reason. Both channels are expected windows summed
-    over the soft memberships, hence non-integer; the footnote says so, because a
-    fractional count reads as a bug otherwise.
+    Shading opacity scales with each class's share of the region's windows, not with
+    the KDE area under the band: the smoother moves density across a break, so a
+    class can be shaded on the curve while holding almost no windows. The in-band
+    counts are on the same basis. Both are expected windows summed over the soft
+    memberships, so they are not integers, which the footnote states.
 
-    Both §4.4 caveats are printed per panel rather than left to a caption, because
-    both vary by region: the retained-of-total window count (transition-zone
-    exclusion, §1) and the truncated fraction (band truncation, §4.4).
+    Two §4.4 caveats are printed per panel because both vary by region: the
+    retained-of-total window count (transition-zone exclusion, §1) and the truncated
+    fraction (band truncation, §4.4).
     """
     n = len(panels)
     fig, axes = plt.subplots(n, 1, figsize=(width, panel_height * n + 1.2),
@@ -723,15 +754,15 @@ def plot_region_comparison(panels, out_path, alpha_min=0.10, alpha_max=0.60,
     hi = max(p['beta'].max() for p in panels) + pad
     grid = np.linspace(lo, hi, 512)
 
-    # The point of the figure is the comparison, so the density axis is shared by
-    # default: an independent axis makes a narrow distribution look peakier.
+    # The density axis is shared by default: an independent axis exaggerates the peak
+    # of a narrow distribution.
     dens_all = [gaussian_kde(p['beta'])(grid) for p in panels]
     top_shared = max(d.max() for d in dens_all) / curve_frac
 
     for ax, p, dens in zip(axes, panels, dens_all):
         share = p['counts'] / max(p['counts'].sum(), 1e-12)
-        # The curve is held to the lower curve_frac of the panel so the annotation
-        # strip above it never lands on the density.
+        # The curve occupies the lower curve_frac of the panel, which leaves the
+        # strip above it for the annotations.
         top = top_shared if share_y else dens.max() / curve_frac
         for (name, cl, ch), sh, cnt in zip(BED_CLASSES, share, p['counts']):
             seg = (grid >= cl) & (grid < ch)
@@ -741,11 +772,9 @@ def plot_region_comparison(panels, out_path, alpha_min=0.10, alpha_max=0.60,
             ax.fill_between(grid, 0, dens, where=seg, color=BED_COLORS[name],
                             alpha=a, linewidth=0)
             if label_counts:
-                # Every visible class is labelled, zero included, so panels line up
-                # and an empty class is stated rather than silently absent.
-                # The label class is starred and bolded on every panel: the label is the
-                # class of the median, which need not be the class holding the most
-                # windows, and that disagreement has no threshold to hide behind.
+                # Every visible class is labelled, zero counts included, so the panels
+                # line up. The label class is starred and bolded: it is the class of
+                # the median, which need not be the class that holds the most windows.
                 is_label = name == p['bed_class']
                 xs = grid[seg]
                 ax.text(0.5 * (max(xs[0], lo) + min(xs[-1], hi)), y_counts * top,
@@ -757,9 +786,8 @@ def plot_region_comparison(panels, out_path, alpha_min=0.10, alpha_max=0.60,
         ax.plot(grid, dens, color='0.25', lw=1.2)
         for b in BED_EDGES[1:-1]:
             ax.axvline(b, color='k', ls='--', lw=1, alpha=0.6)
-        # Stems to the density at the median rather than spanning the axis: the count
-        # strip and the annotation boxes sit above the curve, and a full-height rule
-        # reads straight through them.
+        # The median rule stops at the density rather than spanning the axis, which
+        # would draw it through the count strip and the annotation boxes.
         stem = min(curve_frac, 1.08 * float(np.interp(p['beta_median'], grid, dens)) / top)
         ax.axvline(p['beta_median'], ymax=stem if median_ymax is None else median_ymax,
                    color='k', lw=1.6, alpha=0.85)
@@ -769,19 +797,16 @@ def plot_region_comparison(panels, out_path, alpha_min=0.10, alpha_max=0.60,
         _flag_title(ax, f"{p['region']}   median β = {p['beta_median']:.2f}", p['pflag'],
                     fontsize=11)
 
-        # Caveat block: both numbers vary by region, so neither belongs in a caption.
         trunc = ('truncated: not derivable' if not np.isfinite(p['n_truncated'])
                  else f"truncated: {p['n_truncated'] / max(p['n_length_known'], 1):.0%} "
                       f"({p['n_truncated']} of {p['n_length_known']}), uncorrected "
                       f"+{TRUNC_OFFSET:.2f} on those")
-        # Not called n_eff: that name is already the Kish weighted ESS elsewhere in
-        # this project, and this is a greedy spatial-decimation count.
         indep = (f", {int(p['n_independent'])} independent at "
                  f"{p['decimate_km']:.0f} km" if np.isfinite(p['n_independent']) else '')
         lines = [f"{p['n_kept']} of {p['n_total']} windows{indep} "
                  f"({p['n_excluded']} transition-zone excluded)", trunc]
-        # The debias distance is printed on every panel, not only the flagged ones,
-        # so the margin below only sets emphasis and never hides a narrow hold.
+        # The debias distance is printed on every panel; the margin below only sets
+        # the emphasis.
         if np.isfinite(p['beta_median_debiased']):
             b = p['break_nearest']
             lines.append(f"debias → {p['beta_median_debiased']:.2f}, "
@@ -792,9 +817,9 @@ def plot_region_comparison(panels, out_path, alpha_min=0.10, alpha_max=0.60,
                 bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.85,
                           edgecolor='0.8'))
 
-        # Two independent ways a bare class label misleads: the median sits near a
-        # break, or the composition is a near-tie. Neither implies the other, so both
-        # are tested and a panel can carry both lines.
+        # Two independent ways a bare class label misleads: the median is near a
+        # break, or the composition is a near-tie. Neither implies the other, so a
+        # panel can carry both lines.
         notes = []
         if p['on_break'] or p['class_moves']:
             b = p['break_nearest']
@@ -813,9 +838,9 @@ def plot_region_comparison(panels, out_path, alpha_min=0.10, alpha_max=0.60,
         if notes:
             note = (f"{notes[0]} — do not quote a bare class label" if len(notes) == 1
                     else '\n'.join(notes) + '\n— do not quote a bare class label')
-            # Offset in points, not axes fraction: the panels shrink in fraction terms
-            # as the fixed-height footer takes a bigger share at small n, and a fixed
-            # fraction puts this box through the caveat box at n=2.
+            # Offset in points, not axes fraction: the fixed-height footer takes a
+            # larger fraction of a short figure, and a fixed fraction overlaps the
+            # caveat box at n=2.
             drop = len(lines) * fs * 1.35 + note_gap
             ax.annotate(note, xy=(0.985, y_caveat), xycoords='axes fraction',
                         xytext=(0, -drop), textcoords='offset points',
@@ -827,27 +852,22 @@ def plot_region_comparison(panels, out_path, alpha_min=0.10, alpha_max=0.60,
     axes[-1].set_xlabel(r'$\beta$', fontsize=12)
     axes[-1].set_xlim(lo, hi)
 
-    # Swatches are drawn at one fixed alpha, not harvested off a panel: opacity is a
-    # data channel here, so a legend key at a panel's alpha would assert a value.
+    # Swatches are drawn at one fixed alpha: opacity is a data channel here, so a
+    # legend key at a panel's alpha would assert a value.
     keys = [Patch(facecolor=BED_COLORS[c], alpha=legend_alpha, label=c) for c in CLASS_ORDER]
-    # Footer heights are inches converted to figure fraction: the figure grows with
-    # the region count, so a fixed fraction would drift.
+    # Footer heights are inches converted to figure fraction, because the figure
+    # height grows with the region count.
     fig_h = fig.get_size_inches()[1]
     fig.legend(handles=keys, loc='lower center', ncol=len(keys), fontsize=9,
                frameon=False, bbox_to_anchor=(0.5, 0.52 / fig_h))
-    fig.text(0.5, 0.10 / fig_h,
-             'Class counts are expected windows, summed over the per-window class '
-             'memberships, so they are not integers. Fill opacity scales with each '
-             "class's share of the region's windows, not with the area under the curve. "
-             '*marks the class of the region median, which is the label; it is not '
-             'always the class holding the most windows.',
-             ha='center', va='bottom', fontsize=fs - 0.5, color='0.35', wrap=True)
-
-    _flag_suptitle(fig, f'Bed character across {n} regions — window β distributions', None)
+    title = f'Bed character across {n} regions — window β distributions'
+    _flag_suptitle(fig, title, None)
     plt.tight_layout(rect=[0, 0.85 / fig_h, 1, 0.985])
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
     plt.close()
+    meta = write_metadata(out_path, title, CAPTIONS['region_comparison'])
     print(f"\n  Comparison figure saved: {out_path}")
+    print(f"  Metadata saved: {meta}")
 
 
 def compare_regions(root, order='beta', **plot_kw):
@@ -871,7 +891,6 @@ def compare_regions(root, order='beta', **plot_kw):
                 else (lambda p: p['region']))
 
     print(f"\n{'='*104}\n  BED CHARACTER ACROSS {len(panels)} REGIONS\n{'='*104}")
-    # 'indep' rather than n_eff: n_eff is the Kish weighted ESS in this project.
     print(f"{'Region':>10s} {'flag':>10s} {'kept/tot':>10s} {'indep':>6s} {'trunc':>14s} "
           f"{'β_med':>6s} {'class':>13s} {'share':>6s} {'plurality':>14s} {'margin':>7s} "
           f"{'debias':>7s} {'gap':>6s}  note")
@@ -922,15 +941,15 @@ def compare_regions(root, order='beta', **plot_kw):
 if __name__ == "__main__":
     arg = sys.argv[1] if len(sys.argv) > 1 else None
 
-    # Compare regions already processed, without reprocessing them.
+    # Compare regions already processed.
     if arg == '--compare':
         root = sys.argv[2] if len(sys.argv) > 2 else _REGION_BASE
         sys.stdout = Tee(os.path.join(root, 'bed_character_comparison_log.txt'))
         compare_regions(root)
         sys.exit(0)
 
-    # Walk a tree of region folders: per-region QC outputs stay in each region's
-    # own bed_character/, the comparison goes to the top of the tree.
+    # Walk a tree of region folders: per-region QC outputs stay in each region's own
+    # bed_character/; the comparison goes to the top of the tree.
     if arg and os.path.isdir(arg):
         found = walk_tree(arg)
         sys.stdout = Tee(os.path.join(arg, 'bed_character_comparison_log.txt'))
@@ -944,10 +963,9 @@ if __name__ == "__main__":
     log_path = os.path.join(OUTPUT_DIR, 'bed_character_log.txt')
     sys.stdout = Tee(log_path)
 
-    # Discover CSVs
     csvs = discover_window_csvs(os.path.join(_REGION_BASE, 'window_csvs'))
     if not csvs:
-        # Try from region base directory in case of flat layout
+        # Flat layout
         csvs = discover_window_csvs(_REGION_BASE)
 
     if len(sys.argv) > 1:

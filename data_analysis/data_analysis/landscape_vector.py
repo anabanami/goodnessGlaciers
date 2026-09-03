@@ -21,52 +21,35 @@ Usage:
   python landscape_vector.py individual_region_TEST # walk a tree of region folders
 """
 
-# Output goes beside the window CSV's own region folder, so a tree of per-region
-# test outputs each gets its own landscape_vector/.
+# Output goes beside the window CSV's own region folder, so each region in a tree gets
+# its own landscape_vector/.
 def output_dir_for(csv_path):
     d = os.path.dirname(os.path.abspath(csv_path))
     if os.path.basename(d) == 'window_csvs':
         d = os.path.dirname(d)
     return os.path.join(d, 'landscape_vector')
 
-# Half-width of the uncertainty envelope used to decide whether a class boundary
-# is resolved. 2 sigma; an axis whose envelope crosses a break returns both classes.
+# Half-width of the uncertainty envelope used to decide whether a class boundary is
+# resolved, in sigma. An axis with an envelope that crosses a break returns both classes.
 K_SIGMA = 2.0
 
-# Delta_beta comes from the per-window neighbourhood fits in weighted_anisotropy
-# (*_delta_beta_local.csv). False holds the axis unavailable everywhere; True uses it,
-# and a patch that failed the coverage gate widens like any other missing observable.
-# Both are now run: Stage A settled the cos2 model form and Stage E measured the null.
-ANISOTROPY_TRUSTED = True
-
-# The local-fit bootstrap resamples one bed, so it cannot see realisation variance and
-# understates the true spread by 2.52x over 21 isotropic synthetic beds (Stage E).
-DELTA_BETA_BOOTSTRAP_INFLATION = 2.52
-# Smallest delta_beta resolved on a bed known to be streamlined (Site F, +0.108). `zero`
-# is a positive claim of isotropy, so it needs an envelope tight enough to exclude that.
-DELTA_BETA_MIN_EFFECT = 0.10
-
-# Neighbourhood fits within one diameter of each other share most of their windows, so
-# the formal error of a single local fit is not the error of many. Aggregate delta_beta
-# over fits whose neighbourhoods do not overlap and let their spread carry the error.
-DELTA_BETA_DECIMATE_KM = 100.0  # 2 x weighted_anisotropy.NEIGHBOURHOOD_RADIUS_KM
 # Lag at which the class tuple reaches chance agreement (window_atom_test.py). Set for the
-# verdict, not for delta_beta fits — the two are different quantities, do not merge them.
+# verdict.
 COMPOSITION_DECIMATE_KM = 200.0
 
-# Fallback only, for a region with no velocity sidecar. Where the sidecar exists the sampled
-# per-window MEaSUREs error replaces this entirely, arriving through velocity_sigma.
-# 5.0 was set on a PPB run and PPB's sampled error is ~14 m/yr, since it sits in the InSAR
-# pole hole at CNT 2, so this number is wrong wherever it fires: over-confident by 3x where
-# it was set and under-confident by 10x at MSB and ASB-LR. Kept so that a region without a
-# sidecar classifies the way it did before. None restores the over-confident behaviour.
+# Fallback only, for a region with no velocity sidecar. Where the sidecar exists, the
+# sampled per-window MEaSUREs error replaces this entirely through velocity_sigma.
+# This value is wrong wherever it fires: over-confident by 3x at PPB, which is in the InSAR
+# pole hole at CNT 2 and has a sampled error of ~14 m/yr, and under-confident by 10x at MSB
+# and ASB-LR. None drops the floor and leaves velocity_sigma as the across-window spread
+# alone, which v23/velocity_error_sweep.py uses.
 VELOCITY_ERROR_M_YR = 5.0
 
 # Same problem as velocity, one level down: a single-window unit has no across-window
-# spread and no formal error, so relief and elevation would resolve against their breaks
-# with zero uncertainty. Both now carry a nominal error from Pritchard_2025 (Bedmap3),
-# whose point data this pipeline reads. Setting them to None restores the assumed-exact
-# behaviour and is only useful for the sensitivity sweep.
+# spread and no formal error, so relief and elevation would resolve their class breaks with
+# zero uncertainty. Both carry a nominal error from Pritchard_2025 (Bedmap3), the point data
+# of which this pipeline reads. None makes both axes assumed-exact on a single-window unit,
+# which v23/relief_elevation_error_sweep.py uses.
 #
 # [Pritchard_2025] sec. Uncertainty estimates.
 # Bedmap3 quotes +/-20 m 1-sigma thickness uncertainty for single-measurement cells and
@@ -77,18 +60,15 @@ VELOCITY_ERROR_M_YR = 5.0
 RELIEF_ERROR_M = 30.0
 ELEVATION_ERROR_M = 10.0
 
-# Partial/unmigrated radar biases beta upward, so the true class may be the one below
-# the measured one. True adds that neighbour to the admissible beta set.
-# Off since 2026-08-08. Unvalidatable against Bedmap (no campaign ships under two processing
-# chains), it made a headline coverage rate track survey provenance, it cost more resolutions
-# than it created, and it drove the resolution rate below the permutation null. The widened
-# numbers stay reachable via beta_class_unwidened / widened_only / n_admissible_unwidened.
+# Partial/unmigrated radar biases beta upward, so the true class may be the one below the
+# measured one. True adds that neighbour to the admissible beta set, and the unwidened
+# numbers stay available through beta_class_unwidened, widened_only and
+# n_admissible_unwidened.
 MIGRATION_WIDENS_BETA = False
-# Beta's systematic as a symmetric envelope, in quadrature with the formal fit error. Set from
-# the deviogram validation (levels agree to 0.02 in zeta = 0.04 in beta), not from the 0.251
-# taper ladder, which measures rectangular's bias rather than hann's uncertainty. The sweep is
-# flat below 0.10, so nothing rests on the exact value. Floor, not an estimate: per-window
-# agreement between the two estimators is only r = 0.48 and is still open.
+# Beta's systematic as a symmetric envelope, in quadrature with the formal fit error. Set
+# from the deviogram validation: levels agree to 0.02 in zeta, which is 0.04 in beta. The
+# sweep is flat below 0.10, so nothing rests on the exact value. A floor rather than an
+# estimate: per-window agreement between the two estimators is only r = 0.48 and is open.
 BETA_SYSTEMATIC_ERROR = 0.05
 
 VELOCITY_CLASSES = [
@@ -98,8 +78,8 @@ VELOCITY_CLASSES = [
     ('fast',      50.0,  np.inf),
 ]
 
-# Above this the velocity envelope is wider than the `low` band it has to jump, so no
-# sharpening of anything else can separate ONSET from DIVIDE. Reported, never a gate.
+# Above this the velocity envelope is wider than the `low` band itself, so no sharpening
+# of anything else can separate ONSET from DIVIDE. Reported, never a gate.
 SEAM_THRESHOLD_M_YR = (VELOCITY_CLASSES[1][2] - VELOCITY_CLASSES[1][1]) / (2 * K_SIGMA)
 
 # ---------------------------------------------------------------------------
@@ -107,17 +87,16 @@ SEAM_THRESHOLD_M_YR = (VELOCITY_CLASSES[1][2] - VELOCITY_CLASSES[1][1]) / (2 * K
 # as continuous numbers only, because no literature threshold exists for them.
 # (name, source column, formal-uncertainty column, axis tag)
 # The tag is a classifying axis only when some CATALOGUE entry constrains it. beta_spread
-# is tagged but unconstrained, so ALL_AXES excludes it and it classifies nothing.
+# is tagged but unconstrained, so ALL_AXES excludes it.
 ELEMENTS = [
     ('beta',              'beta',               'beta_uncertainty',           'beta_class'),
-    ('psd_amplitude_1km', 'psd_amplitude_1km',  'psd_amplitude_uncertainty',  None),
+    ('A_1km', 'A_1km',  'A_1km_uncertainty',  None),
     ('beta_iqr',          None,                 None,                         'beta_spread'),
     ('velocity',          'measures_speed_mean', 'measures_err_m_yr',         'velocity_band'),
     ('relief',            'relief_m',            None,                        'relief_class'),
     ('rms_roughness',     'rms_roughness',       None,                        None),
     ('eta_wavelength_m',  'eta_wavelength_m',    None,                        None),
     ('hill_count',        'hill_count',          None,                        None),
-    ('delta_beta',        'delta_beta_local',    'delta_beta_local_se',       'delta_beta'),
     ('elevation',         'bed_elev_mean',       None,                        'elevation_class'),
     ('skewness',          'skewness',            None,                        None),
     ('kurtosis',          'kurtosis',            None,                        None),
@@ -129,12 +108,11 @@ AXIS_VALUES = {
     'relief_class':    [n for n, _, _ in RELIEF_CLASSES],
     'elevation_class': [n for n, _, _ in ELEVATION_CLASSES],
     'velocity_band':   [n for n, _, _ in VELOCITY_CLASSES],
-    'delta_beta':      ['pos_sig', 'neg_sig', 'zero'],
     'beta_spread':     ['wide', 'narrow'],
 }
 NUMERIC_AXES = {'beta_class': BED_CLASSES, 'relief_class': RELIEF_CLASSES,
                 'elevation_class': ELEVATION_CLASSES, 'velocity_band': VELOCITY_CLASSES}
-MEASURABLE = list(NUMERIC_AXES)  # the axes ODSA can actually put a number on today
+MEASURABLE = list(NUMERIC_AXES)  # the axes ODSA can measure
 
 # Observables that would break a degeneracy but that ODSA cannot supply from RES.
 EXTERNAL = {
@@ -152,62 +130,54 @@ EXTERNAL = {
 # Ids and fingerprints follow papers/landscape_catalogue.md §2, which is the authority.
 CATALOGUE = [
     dict(id='TRUNK', name='Ice stream trunk', evidence='Strong',
-         c={'beta_class': {'soft'}, 'delta_beta': {'pos_sig'},
-            'velocity_band': {'fast'}, 'relief_class': {'flat'}},
+         c={'beta_class': {'soft'}, 'velocity_band': {'fast'},
+            'relief_class': {'flat'}},
          ext=[]),
-    # delta_beta excludes neg_sig: streamlining on a hard confined bed survives as amplitude
-    # anisotropy, not slope, so a reversed slope fabric here is structural and reads RIFT.
     dict(id='TRUNK-HARD', name='Ice stream on a confined hard bed (Cooper regime)',
          evidence='Moderate',
-         c={'beta_class': {'hard', 'transitional'}, 'delta_beta': {'pos_sig', 'zero'},
-            'velocity_band': {'fast'}, 'relief_class': {'mountainous'}},
+         c={'beta_class': {'hard', 'transitional'}, 'velocity_band': {'fast'},
+            'relief_class': {'mountainous'}},
          ext=['amplitude_anisotropy']),
-    # Streamlining survives shutdown then fades, so delta_beta runs from clearly
-    # positive (recent, separable from BASIN) to zero (erased, not separable).
     dict(id='TRUNK-RELICT', name='Relict ice stream, shut down and still smooth',
          evidence='Moderate',
-         c={'beta_class': {'soft'}, 'delta_beta': {'pos_sig', 'zero'},
-            'velocity_band': {'very_low', 'low'}, 'relief_class': {'flat'}},
+         c={'beta_class': {'soft'}, 'velocity_band': {'very_low', 'low'},
+            'relief_class': {'flat'}},
          ext=['flow_history']),
     dict(id='ONSET', name='Ice stream onset', evidence='Moderate',
-         c={'beta_class': {'transitional'}, 'delta_beta': {'pos_sig', 'zero'},
-            'velocity_band': {'moderate', 'fast'}, 'relief_class': {'flat', 'subdued'}},
+         c={'beta_class': {'transitional'}, 'velocity_band': {'moderate', 'fast'},
+            'relief_class': {'flat', 'subdued'}},
          ext=[]),
     dict(id='HIGHLAND', name='Crystalline highland', evidence='Strong',
-         c={'beta_class': {'hard'}, 'delta_beta': {'zero'},
-            'velocity_band': {'very_low', 'low'},
+         c={'beta_class': {'hard'}, 'velocity_band': {'very_low', 'low'},
             'relief_class': {'subdued', 'mountainous'},
             'elevation_class': {'emerged', 'elevated'}},
          ext=[]),
     dict(id='RIFT', name='Rift / tectonic corridor', evidence='Moderate',
-         c={'beta_class': {'hard', 'transitional'}, 'delta_beta': {'neg_sig'},
-            'relief_class': {'mountainous'}},
+         c={'beta_class': {'hard', 'transitional'}, 'relief_class': {'mountainous'}},
          ext=[]),
-    # Absorbs the old quiescent-basin entry, which added velocity very_low/low and so
-    # was admitted by every bed this one admits. Sediment and water are not separable here.
+    # Sediment and water are not separable here.
     dict(id='BASIN', name='Sedimentary basin or subglacial lake', evidence='Moderate',
-         c={'beta_class': {'soft'}, 'delta_beta': {'zero'},
-            'relief_class': {'flat'}, 'elevation_class': {'submerged'}},
+         c={'beta_class': {'soft'}, 'relief_class': {'flat'},
+            'elevation_class': {'submerged'}},
          ext=['reflectivity']),
     dict(id='BASIN-HIGH', name='Candidate hard bed, smooth and elevated', evidence='Moderate',
-         c={'beta_class': {'soft'}, 'delta_beta': {'zero'},
-            'velocity_band': {'very_low'},
+         c={'beta_class': {'soft'}, 'velocity_band': {'very_low'},
             'elevation_class': {'emerged', 'elevated'}},
          ext=['composition']),
     # beta_class excludes chaotic: a bed with no characteristic wavelength is not a
-    # trough-and-interfluve landscape. beta_spread is gone with its threshold, so the
-    # wide-spread signature the name promises is now a descriptor and not a criterion.
+    # trough-and-interfluve landscape. The wide spread implied by the name is a descriptor
+    # here and not a criterion.
     dict(id='DISSECTED', name='Deeply dissected highland, trough-and-interfluve',
          evidence='Moderate',
-         c={'beta_class': {'hard', 'transitional', 'soft'}, 'delta_beta': {'pos_sig'},
+         c={'beta_class': {'hard', 'transitional', 'soft'},
             'velocity_band': {'low', 'moderate'}, 'relief_class': {'mountainous'}},
          ext=['origin']),
-    # velocity runs very_low AND low: Siegert_2004's Group 2 defines this entry by the
+    # velocity covers very_low AND low: Siegert_2004's Group 2 defines this entry by the
     # absence of basal sliding, not by a speed, and interior ice deforming internally
-    # reaches 5-10 m/yr with no sliding. Closes the transitional + `low` catalogue hole.
+    # reaches 5-10 m/yr with no sliding.
     dict(id='DIVIDE', name='Warm-base divide / plateau', evidence='Moderate',
-         c={'beta_class': {'transitional'}, 'delta_beta': {'zero'},
-            'velocity_band': {'very_low', 'low'}, 'relief_class': {'flat', 'subdued'},
+         c={'beta_class': {'transitional'}, 'velocity_band': {'very_low', 'low'},
+            'relief_class': {'flat', 'subdued'},
             'elevation_class': {'submerged', 'emerged'}},
          ext=[]),
     dict(id='SHATTERED', name='Shattered / chaotic', evidence='Speculative',
@@ -249,36 +219,6 @@ def _independent_subset(xy, min_sep_km):
     return keep
 
 
-def delta_beta_agg(g, min_sep_km=DELTA_BETA_DECIMATE_KM):
-    """Median local delta_beta and its error. The error shrinks with the number of
-    spatially independent fits, not the number of windows. Spread is taken over all fits
-    (3-7 independent ones is far too few to estimate an sd from) and only the shrinkage
-    uses the independent count."""
-    need = {'delta_beta_local', 'delta_beta_local_se', 'delta_beta_status',
-            'center_x', 'center_y'}
-    if not need <= set(g.columns):
-        return np.nan, np.nan, np.nan, 0
-    ok = g[(g['delta_beta_status'] == 'ok') & g['delta_beta_local'].notna()]
-    if not len(ok):
-        return np.nan, np.nan, np.nan, 0
-    v = pd.to_numeric(ok['delta_beta_local'], errors='coerce').to_numpy(float)
-    formal = pd.to_numeric(ok['delta_beta_local_se'], errors='coerce').to_numpy(float)
-    formal = float(np.nanmedian(formal)) if np.isfinite(formal).any() else np.nan
-    # Applied here rather than at the max() below, so the between-patch spread, which is
-    # already a realisation estimate, is not inflated twice.
-    formal *= DELTA_BETA_BOOTSTRAP_INFLATION
-    med = float(np.median(v))
-    iqr = float(np.percentile(v, 75) - np.percentile(v, 25)) if v.size > 1 else np.nan
-    n_ind = len(_independent_subset(ok[['center_x', 'center_y']].to_numpy(float), min_sep_km))
-    if n_ind > 1 and v.size > 1:
-        # Between-patch spread already contains measurement noise, so take the larger of
-        # the two rather than adding them.
-        sig = max(1.253 * v.std(ddof=1) / np.sqrt(n_ind), formal / np.sqrt(n_ind))
-    else:
-        sig = formal  # one independent patch: its own bootstrap error is all there is
-    return med, iqr, float(sig), n_ind
-
-
 def classify_set(value, sigma, classes):
     """Admissible class labels for value +/- K_SIGMA*sigma. NaN value -> every label,
     so a missing observable never excludes anything."""
@@ -305,9 +245,9 @@ def observe(vec, pflag):
             n_ok = vec.get('velocity_err_n_ok', np.nan)
             if np.isfinite(n_ok):
                 # Sidecar ran, so the sampled error is already inside velocity_sigma and the
-                # constant must not go on top. No coverage widens to every band: a failed
-                # measurement may never narrow, and exact=not isfinite(sig) below would
-                # otherwise make it assumed-exact, which is the opposite.
+                # constant must not be added on top. No coverage widens to every band: a
+                # failed measurement must never narrow the set, and `exact = not
+                # isfinite(sig)` below would otherwise mark it assumed-exact.
                 nominal = None
                 if n_ok == 0 or not np.isfinite(sig):
                     obs[axis] = dict(set={n for n, _, _ in classes}, value=val,
@@ -328,32 +268,13 @@ def observe(vec, pflag):
             obs['beta_class']['set'] |= {order[i - 1]}
             obs['beta_class']['widened'] = True
 
-    # delta_beta from the local neighbourhood fits, over the windows that passed the
-    # coverage gate. A failed gate means my tracks do not cross here, not that the bed has
-    # no directional structure, so it widens like any missing observable and never selects
-    # a case. Gated windows are absent, not contradictory: they do not poison the rest.
-    # A fit that cannot separate zero from a real anisotropy is a non-detection, and
-    # `zero` excludes TRUNK/RIFT/DISSECTED, so it may only be claimed on a tight envelope.
-    d, sd = vec['delta_beta'], vec['delta_beta_sigma']
-    n_ok = vec.get('delta_beta_n_ok', 0)
-    full = set(AXIS_VALUES['delta_beta'])
-    if not ANISOTROPY_TRUSTED or not n_ok or not np.isfinite(d) or not np.isfinite(sd) or sd <= 0:
-        s, reason = full, 'not_fitted'
-    elif abs(d) >= K_SIGMA * sd:
-        s, reason = ({'pos_sig'} if d > 0 else {'neg_sig'}), 'resolved_nonzero'
-    elif K_SIGMA * sd <= DELTA_BETA_MIN_EFFECT:
-        s, reason = {'zero'}, 'resolved_zero'
-    else:
-        s, reason = full, 'below_floor'
-    obs['delta_beta'] = dict(set=s, value=d, sigma=sd, reason=reason)
-
     # beta_iqr is a descriptor and not a classifying axis: no threshold is defensible, and
     # inventing one on these seven regions would repeat the borrowed-boundary problem.
     obs['beta_spread'] = dict(set=set(AXIS_VALUES['beta_spread']),
                               value=vec['beta_iqr'], sigma=np.nan)
 
-    # assumed-exact is a resolved axis carrying no uncertainty at all, so its class sits
-    # on one number. It excludes archetypes as firmly as a measured one; it should not.
+    # assumed-exact is a resolved axis with no uncertainty behind it, so its class turns on
+    # a single number while excluding archetypes as firmly as a measured axis does.
     for axis, o in obs.items():
         o['status'] = ('unavailable' if o['set'] == set(AXIS_VALUES[axis])
                        else 'ambiguous' if len(o['set']) > 1
@@ -383,9 +304,9 @@ def widened_only(cases, obs):
 
 
 def narrowing_axes(cases, obs):
-    """Axes that are currently unresolved and would exclude at least one admissible case
-    if sharpened. Narrowing the set is weaker than resolving it: against a sparse
-    catalogue this is almost always non-empty, so it cannot carry a verdict on its own."""
+    """Axes that are unresolved and would exclude at least one admissible case if
+    sharpened. Narrowing the set is weaker than resolving it: with a sparse catalogue this
+    is almost always non-empty, so it cannot carry a verdict on its own."""
     axes = []
     for a in ALL_AXES:
         if obs[a]['status'] == 'resolved':
@@ -402,7 +323,7 @@ _POINT_MATCHES = {}
 
 
 def _match_point(key):
-    """Archetypes matching one fully-specified point. Cached, since units re-tread points."""
+    """Archetypes matching one fully-specified point. Cached, since units repeat points."""
     hit = _POINT_MATCHES.get(key)
     if hit is None:
         pt = dict(zip(ALL_AXES, key))
@@ -413,11 +334,11 @@ def _match_point(key):
 
 
 def separability(cases, obs):
-    """Sharpen every axis to a point, every way this observation allows, and see what
-    survives. Returns whether any sharpening isolates a single archetype, and the pairs
-    that coincide on at least one of those points. A coincident pair is not inseparable
-    everywhere: it means that where the truth lands on such a point, nothing ODSA
-    measures separates the two."""
+    """Sharpen every axis to a point, in every way this observation allows, and take the
+    archetypes that remain. Returns whether any sharpening isolates a single archetype, and
+    the pairs that coincide on at least one of those points. A coincident pair is not
+    inseparable everywhere: it means that for a truth at such a point, nothing ODSA measures
+    separates the two."""
     if len(cases) < 2:
         return True, []
     single, pairs = False, set()
@@ -432,8 +353,8 @@ def separability(cases, obs):
 
 def verdict(cases, obs, sep=None):
     """RESOLVED / RESOLVED-WITH-EXTERNAL / OUT-OF-CATALOGUE / DEGENERATE, plus the reason.
-    Degeneracy is reported as data (which axes narrow it, which pairs nothing separates)
-    rather than sorted into kinds, because the kinds were not separating anything."""
+    Degeneracy is reported as data: the axes that narrow it, and the pairs that nothing
+    separates."""
     if not cases:
         return ('OUT-OF-CATALOGUE', '', 'vector matches no archetype fingerprint')
     if len(cases) == 1:
@@ -483,23 +404,7 @@ def build_vector(g, unit, pflag):
         c = pd.to_numeric(g['measures_cnt'], errors='coerce').dropna()
         if len(c):
             row['velocity_cnt'] = float(c.median())
-    # How much of the unit had a usable local anisotropy fit behind its delta_beta.
-    st = g['delta_beta_status'] if 'delta_beta_status' in g.columns else pd.Series(dtype=object)
-    row['delta_beta_n_ok'] = int((st == 'ok').sum())
-    row['delta_beta_n_gated'] = int((st != 'ok').sum()) if len(st) else 0
-    # Overlapping neighbourhoods, so delta_beta gets its error from independent fits only.
-    (row['delta_beta'], row['delta_beta_iqr'],
-     row['delta_beta_sigma'], row['delta_beta_n_indep']) = delta_beta_agg(g)
     return row
-
-
-def load_delta_beta(csv_path):
-    """Per-window local delta_beta written by weighted_anisotropy.local_anisotropy,
-    which lives in the region's anisotropy/ folder beside window_csvs/."""
-    region = os.path.dirname(os.path.dirname(os.path.abspath(csv_path)))
-    p = os.path.join(region, 'anisotropy', os.path.basename(csv_path)
-                     .replace('_window_stats.csv', '_delta_beta_local.csv'))
-    return pd.read_csv(p) if os.path.exists(p) else None
 
 
 def load_velocity_error(csv_path):
@@ -525,41 +430,42 @@ def units_from(df, level):
 def composition(rep, df, region_name):
     """The region as a mixture of admissible sets over windows, not one label.
 
-    The fraction is areal, so every window counts — overlap and all, it covers real ground.
-    Independence governs only the error bar, and n_eff is far too small to carry one, so this
-    reports the fraction with n_eff beside it and no interval. See NEXT.md, queue item 5.
+    The fraction is areal, so every window counts, overlapping ones included. Independence
+    governs only the error bar, and n_independent is far too small to carry one, so the
+    fraction is reported with n_independent beside it and no interval. See NEXT.md, queue
+    item 5.
     """
     w = rep[rep.level == 'window']
     if not len(w):
         return None
     xy = df[['center_x', 'center_y']].to_numpy(float)
-    n_eff = len(_independent_subset(xy, COMPOSITION_DECIMATE_KM)) if len(xy) else 0
+    n_independent = len(_independent_subset(xy, COMPOSITION_DECIMATE_KM)) if len(xy) else 0
     c = w['admissible'].fillna('').value_counts()
     return pd.DataFrame({'region': region_name, 'admissible': c.index.where(c.index != '', '(none)'),
                          'n_windows': c.values, 'fraction': (c.values / len(w)).round(3),
-                         'n_windows_total': len(w), 'n_eff': n_eff,
+                         'n_windows_total': len(w), 'n_independent': n_independent,
                          'decimate_km': COMPOSITION_DECIMATE_KM})
 
 
 def reachable_groups():
     """Catalogue entries that can never be the sole match, because some other entry
-    admits everything they admit once the dead axes are removed. Subsumption, not
-    equality: an entry constraining no velocity subsumes one that allows only slow."""
-    dead = {'delta_beta'} if not ANISOTROPY_TRUSTED else set()
-    live = [a for a in ALL_AXES if a not in dead]
-    allow = {c['id']: {a: c['c'].get(a, set(AXIS_VALUES[a])) for a in live} for c in CATALOGUE}
+    admits everything they admit. Subsumption, not equality: an entry constraining no
+    velocity subsumes one that allows only slow."""
+    allow = {c['id']: {a: c['c'].get(a, set(AXIS_VALUES[a])) for a in ALL_AXES}
+             for c in CATALOGUE}
     subsumed = {}
     for x in CATALOGUE:
         by = [y['id'] for y in CATALOGUE if y['id'] != x['id']
-              and all(allow[x['id']][a] <= allow[y['id']][a] for a in live)]
+              and all(allow[x['id']][a] <= allow[y['id']][a] for a in ALL_AXES)]
         if by:
             subsumed[x['id']] = by
-    return subsumed, dead
+    return subsumed
 
 
 # Two units differ on an element when their medians are distinguishable (z, from the
 # standard error of the median) AND their window distributions differ (d, from the
-# population spread). z alone shrinks as sqrt(n), so a big region separates from anything.
+# population spread). z alone shrinks as sqrt(n), so on z alone a large region would
+# separate from everything.
 # 1.0 population spread is a convention, not a literature value.
 SEPARATION_D_MIN = 1.0
 
@@ -567,7 +473,7 @@ SEPARATION_D_MIN = 1.0
 def _spread_se(row, col):
     """Population spread and standard error of the median for one element on one unit,
     both from the within-unit IQR so every element is measured the same way. Undefined
-    for a single-window unit, which has no spread at all."""
+    for a single-window unit, which has no spread."""
     iqr, n = row.get(f'{col}_iqr', np.nan), row.get('n_windows', np.nan)
     sp = iqr / 1.349 if np.isfinite(iqr) else np.nan
     if not (np.isfinite(sp) and sp > 0 and np.isfinite(n) and n > 1):
@@ -599,17 +505,16 @@ def collapse_pairs(vec_df, reports, z_min=2.0):
 
 
 def unthresholded_separation(vec_df, reports, z_min=2.0, d_min=SEPARATION_D_MIN):
-    """Pairs the catalogue gives the same answer for, but which differ on an element
-    carrying no threshold. Keyed on the admissible set rather than on the axes, because
-    two units can share an answer while both are unresolved on an axis.
+    """Pairs for which the catalogue gives the same answer, but which differ on an element
+    carrying no threshold. Keyed on the admissible set rather than on the axes, because two
+    units can share an answer while both are unresolved on an axis.
 
-    Every element uses the same scale, taken from the within-unit spread. Formal sigmas
-    are deliberately not used: only beta and psd_amplitude_1km have one, so mixing the
-    two scales made amplitude look like the strongest discriminator when it was only the
-    one with an error bar. A single-window unit has no spread, so it cannot enter at all;
-    the returned coverage says how many pairs the question was answerable for."""
-    # Seven elements, not eight: beta_iqr is itself a within-unit spread, so it has no
-    # spread of its own and no d. Structurally ineligible here, not an omission.
+    Every element uses the same scale, taken from the within-unit spread. Formal sigmas are
+    not used: only beta and A_1km carry one, and mixing the two scales would
+    rank amplitude by its error bar rather than by its separation. A single-window unit has
+    no spread, so it cannot enter; the returned coverage is the number of pairs for which
+    the question was answerable."""
+    # beta_iqr is itself a within-unit spread, so it has no spread of its own and no d.
     free = [n for n, _, _, a in ELEMENTS
             if not a and f'{n}_iqr' in vec_df.columns]
     rows, n_same, n_answerable = [], 0, 0
@@ -639,8 +544,8 @@ def unthresholded_separation(vec_df, reports, z_min=2.0, d_min=SEPARATION_D_MIN)
 # ---------------------------------------------------------------------------
 def load_region(csv_path, quiet=False):
     """Window CSV plus both sidecars, transitions dropped. Returns (df, pflag), or
-    (None, None) if there is nothing to classify. Split out so anything testing the
-    classifier sees exactly the frame the classifier sees."""
+    (None, None) if there is nothing to classify. Separated so that a test sees exactly
+    the frame the classifier reads."""
     say = (lambda *a: None) if quiet else print
     df = pd.read_csv(csv_path).dropna(subset=['beta'])
     if len(df) == 0:
@@ -653,24 +558,6 @@ def load_region(csv_path, quiet=False):
         n = int(df['is_transition'].sum())
         df = df[~df['is_transition']].copy()
         say(f"  Excluded {n} transition windows ({len(df)} remain)")
-
-    dbl = load_delta_beta(csv_path)
-    if dbl is None:
-        say("  Delta-beta: no *_delta_beta_local.csv — axis stays unavailable "
-            "(run weighted_anisotropy.py first)")
-    else:
-        keys = [c for c in ('trajectory', 'segment', 'window_id')
-                if c in dbl.columns and c in df.columns]
-        df = df.merge(dbl[keys + ['delta_beta_local', 'delta_beta_local_se',
-                                  'delta_beta_status', 'delta_beta_label']],
-                      on=keys, how='left')
-        vc = df['delta_beta_status'].value_counts()
-        n_ok = int(vc.get('ok', 0))
-        say(f"  Delta-beta: {n_ok}/{len(df)} windows with a usable local fit "
-            f"({', '.join(f'{k} {v}' for k, v in vc.items())})")
-        if n_ok / max(len(df), 1) < 0.5:
-            say("    ** anisotropy unresolvable at this scale in this region; the axis will "
-                "read 'not_fitted' on most units and exclude nothing **")
 
     vel = load_velocity_error(csv_path)
     if vel is None:
@@ -695,10 +582,9 @@ def process_region(region_name, csv_path, levels=('window', 'segment', 'region')
     if df is None:
         return
 
-    subsumed, dead = reachable_groups()
+    subsumed = reachable_groups()
     live = len(CATALOGUE) - len(subsumed)
-    print(f"\n  Catalogue: {live}/{len(CATALOGUE)} entries can ever be a sole match "
-          f"({sorted(dead) or 'no'} axes unusable)")
+    print(f"\n  Catalogue: {live}/{len(CATALOGUE)} entries can ever be a sole match")
     for x, by in sorted(subsumed.items()):
         print(f"    {x:11s} never alone: anything matching it also matches {', '.join(by)}")
 
@@ -726,11 +612,6 @@ def process_region(region_name, csv_path, levels=('window', 'segment', 'region')
                 # correction, which is the comparator for the preregistered ceiling.
                 'n_admissible_unwidened': len(ids) - len(wo),
                 'verdict': kind, 'discriminator': on, 'why': why,
-                'delta_beta_coverage': (v['delta_beta_n_ok'] /
-                                        max(v['delta_beta_n_ok'] + v['delta_beta_n_gated'], 1)),
-                'delta_beta_n_indep': v['delta_beta_n_indep'],
-                # Splits the two ways the axis goes unavailable: no fit vs fit too wide.
-                'delta_beta_reason': obs['delta_beta']['reason'],
                 # The sampled velocity error drives the classification, so it belongs in the
                 # output. n_ok separates "no coverage" (0, axis widened) from "no sidecar" (NaN).
                 'measures_err_m_yr': v['velocity_err'],
@@ -804,14 +685,14 @@ def process_region(region_name, csv_path, levels=('window', 'segment', 'region')
             print(f"    of {len(deg)} degenerate segments, {n_ns} have no sharpening that "
                   f"isolates a single archetype")
 
-        # Axes resolved off a single number, with no error of any kind behind them.
+        # Axes resolved from a single number, with no error behind them.
         ex = {a: (seg[f'status_{a}'] == 'assumed-exact').sum() for a in MEASURABLE}
         ex = {a: n for a, n in ex.items() if n}
         if ex:
             print("    assumed-exact axes (resolved with zero uncertainty): "
                   + ', '.join(f"{a.replace('_class', '').replace('_band', '')} {n}"
                               for a, n in ex.items()))
-            # Only the axes actually carrying no error bar, each against its own breaks.
+            # Only the axes carrying no error bar, each at its own breaks.
             breaks = {'relief_class': ('relief', RELIEF_CLASSES),
                       'elevation_class': ('elevation', ELEVATION_CLASSES)}
             edges = {a: (col, [h for _, _, h in cl if np.isfinite(h)])
@@ -828,7 +709,7 @@ def process_region(region_name, csv_path, levels=('window', 'segment', 'region')
                   f"100 m of that axis's own break, so the label turns on a number carrying "
                   f"no error bar")
 
-        # Beta widened downward for migration bias, and what that admission alone bought.
+        # Beta widened downward for migration bias, and the archetypes it alone admits.
         nw = int(seg['beta_widened'].sum())
         if nw:
             print(f"    migration widening applied on {nw}/{len(seg)} segments "
@@ -854,21 +735,20 @@ def process_region(region_name, csv_path, levels=('window', 'segment', 'region')
             print("      ** every resolution in this region is widening-dependent; it has no "
                   "measured resolution at all **")
 
-    # The region as a mixture rather than one label. Fractions are areal and use every window;
-    # n_eff is the independent count at 200 km and is reported, never turned into an interval.
+    # The region as a mixture rather than one label.
     comp = composition(rep, df, region_name)
     if comp is not None:
         comp.to_csv(os.path.join(out, f'{region_name}_composition.csv'), index=False)
-        n_w, n_eff = comp['n_windows_total'].iloc[0], comp['n_eff'].iloc[0]
-        print(f"\n  COMPOSITION ({n_w} windows, n_eff = {n_eff} at "
+        n_w, n_ind = comp['n_windows_total'].iloc[0], comp['n_independent'].iloc[0]
+        print(f"\n  COMPOSITION ({n_w} windows, {n_ind} independent at "
               f"{COMPOSITION_DECIMATE_KM:.0f} km):")
         for _, r in comp.head(8).iterrows():
             print(f"    {r['fraction']:6.1%}  {r['n_windows']:4d}  {r['admissible']}")
         if len(comp) > 8:
             print(f"    ... {len(comp) - 8} further sets")
-        print(f"    descriptive only: at n_eff = {n_eff} a fraction of 0.28 carries an SE of "
-              f"{np.sqrt(0.28 * 0.72 / max(n_eff, 1)):.2f}, so no interval is quoted and "
-              f"fractions are not comparable between regions")
+        print(f"    descriptive only: at {n_ind} independent a fraction of 0.28 carries an "
+              f"SE of {np.sqrt(0.28 * 0.72 / max(n_ind, 1)):.2f}, so no interval is quoted "
+              f"and fractions are not comparable between regions")
 
     cp = collapse_pairs(vec[vec.level == 'segment'], admissible_by_unit)
     if len(cp):
@@ -907,7 +787,7 @@ def process_region(region_name, csv_path, levels=('window', 'segment', 'region')
 
 def compare_regions(root, z_min=2.0):
     """Cross-region degeneracy: regions the catalogue answers identically, and what
-    separates them anyway. Runs off already-written outputs, so it needs no re-processing."""
+    separates them anyway. Runs from already-written outputs, so it reprocesses nothing."""
     vecs, reps = [], []
     for f in sorted(glob.glob(os.path.join(root, '*', 'landscape_vector',
                                            '*_landscape_vector.csv'))):
@@ -936,7 +816,7 @@ def compare_regions(root, z_min=2.0):
     for i, j in itertools.combinations(range(len(d)), 2):
         a, b = d.iloc[i], d.iloc[j]
         # z asks whether the medians are distinguishable and shrinks as sqrt(n_windows).
-        # d asks whether the window distributions differ and does not. 
+        # d asks whether the window distributions differ and does not shrink with n.
         zs, ds = {}, {}
         for c in cols:
             if not (np.isfinite(a[c]) and np.isfinite(b[c])):
@@ -997,7 +877,7 @@ def walk_tree(root):
 if __name__ == "__main__":
     arg = sys.argv[1] if len(sys.argv) > 1 else None
 
-    # Compare regions already processed, without reprocessing them.
+    # Compare regions already processed.
     if arg == '--compare':
         root = sys.argv[2] if len(sys.argv) > 2 else 'individual_region_TEST'
         sys.stdout = Tee(os.path.join(root, 'cross_region_log.txt'))

@@ -48,22 +48,22 @@ CONTINUOUS = list(AXIS_SOURCE.values()) + DESCRIPTORS
 
 # Short labels for the matrix axes; the CSVs keep the full column names.
 SHORT = {'beta': 'β', 'measures_speed_mean': 'speed', 'relief_m': 'relief',
-         'delta_beta_local': 'Δβ', 'bed_elev_mean': 'elevation', 'psd_amplitude_1km': 'A_1km',
+         'bed_elev_mean': 'elevation', 'A_1km': 'A_1km',
          'rms_roughness': 'rms', 'eta_wavelength_m': 'η_wl', 'hill_count': 'hills',
          'skewness': 'skew', 'kurtosis': 'kurt', 'xi_band': 'ξ_band',
          'psd_intercept': 'intercept'}
 
 # psd_intercept is NOT a landscape vector element and never enters CONTINUOUS or the matrix.
 # The matrix is ELEMENTS, and keeping that true is what makes this script's scope readable.
-# It is here only as the parametrisation diagnostic behind 2.1h: psd_amplitude_1km =
+# It is here only as the parametrisation diagnostic behind 2.1h: A_1km =
 # psd_intercept + 3β, and the raw intercept is close to a restatement of β, which is the
 # reason the vector carries the in-band amplitude instead. These numbers live in their own
 # table and these pairs are drawn unconditionally, never ranked against the vector's own.
 PARAMETRISATION_PAIRS = [
     ('beta', 'psd_intercept'),          # before: the raw intercept coordinate
-    ('beta', 'psd_amplitude_1km'),      # after: the in-band coordinate the vector uses
+    ('beta', 'A_1km'),      # after: the in-band coordinate the vector uses
     ('relief_m', 'beta'),               # how much of the slope axis relief already carries
-    ('relief_m', 'psd_amplitude_1km'),  # and how much of the amplitude axis
+    ('relief_m', 'A_1km'),  # and how much of the amplitude axis
 ]
 
 # The classifying axes against each other: does each one earn its place in the vector?
@@ -79,13 +79,9 @@ CLASSIFIER_PAIRS = [
 # evidence for how few independent dimensions the descriptors really carry.
 REDUNDANCY_PAIRS = [
     ('beta', 'eta_wavelength_m'),              # beta's strongest correlation with anything
-    ('psd_amplitude_1km', 'xi_band'),          # strongest pair in the matrix
+    ('A_1km', 'xi_band'),          # strongest pair in the matrix
     ('relief_m', 'rms_roughness'),             # two space-domain amplitude measures
 ]
-
-# Dead axis: it returns its full value set on every unit, so whether it is redundant with
-# anything cannot matter. Its correlations stay in the tables and out of the panels.
-RANK_EXCLUDE = {'delta_beta_local'}
 
 # Class labels are thresholds on the columns above, so they are derived here rather than
 # read from the window CSV: the script then does not depend on bed_character having run.
@@ -104,9 +100,9 @@ def _mark(a, b, tier, why):
     BY_CONSTRUCTION[frozenset((a, b))] = (tier, why)
 
 
-_mark('beta', 'psd_amplitude_1km', 'identity',
-      'algebraic: psd_amplitude_1km = psd_intercept + 3β')
-for _c in ('beta', 'psd_amplitude_1km'):
+_mark('beta', 'A_1km', 'identity',
+      'algebraic: A_1km = psd_intercept + 3β')
+for _c in ('beta', 'A_1km'):
     _mark(_c, 'rms_roughness', 'identity',
           'Parseval: rms_roughness is an integral of the PSD this is fit to')
     # xi_band is the same mechanism over two octaves instead of the whole band. Not in the
@@ -120,7 +116,7 @@ _mark('relief_m', 'rms_roughness', 'shared',
 for _a, _b in itertools.combinations(('hill_count', 'skewness', 'kurtosis'), 2):
     _mark(_a, _b, 'shared', 'same detrended profile (bed_analysis window block)')
 for _a in ('hill_count', 'skewness', 'kurtosis'):
-    for _b in ('beta', 'psd_amplitude_1km', 'rms_roughness'):
+    for _b in ('beta', 'A_1km', 'rms_roughness'):
         _mark(_a, _b, 'shared',
               'same detrended profile as the PSD fit (bed_analysis _hill_counts / window block)')
 # For an exact power law over a fixed band, eta is a function of beta and the band edges
@@ -137,17 +133,6 @@ MIN_N_FOR_P = 5
 
 
 # ---------------------------------------------------------------------------
-def delta_beta_path(csv_path):
-    """The local-fit sidecar for a window CSV: weighted_anisotropy writes it to the region's
-    anisotropy/ folder beside window_csvs/, under the same stem."""
-    p = os.path.abspath(csv_path)
-    d, f = os.path.split(p)
-    if os.path.basename(d) != 'window_csvs':
-        return None
-    return os.path.join(os.path.dirname(d), 'anisotropy',
-                        f.replace('_window_stats.csv', '_delta_beta_local.csv'))
-
-
 def velocity_band(v):
     for name, lo, hi in VELOCITY_CLASSES:
         if lo <= v < hi:
@@ -156,7 +141,7 @@ def velocity_band(v):
 
 
 def load_windows(csv_path, region):
-    """Window CSV plus the delta_beta sidecar, transitions dropped, labels derived.
+    """Window CSV with transitions dropped and labels derived.
 
     Transitions go first, matching bed_character and landscape_vector: a window spanning a
     landscape boundary samples neither side, and every other number in the project is quoted
@@ -175,38 +160,6 @@ def load_windows(csv_path, region):
     df['region'] = region
     df['processing_flag'] = pflag
 
-    p = delta_beta_path(csv_path)
-    if p is None or not os.path.exists(p):
-        df['delta_beta_local'] = np.nan
-        df['delta_beta_label'] = np.nan
-        print(f"    Δβ: no *_delta_beta_local.csv — axis skipped in this region "
-              f"(run weighted_anisotropy.py first)")
-    else:
-        dbl = pd.read_csv(p)
-        keys = [c for c in ('trajectory', 'segment', 'window_id')
-                if c in dbl.columns and c in df.columns]
-        df = df.merge(dbl[keys + ['delta_beta_local', 'delta_beta_status',
-                                  'delta_beta_label']], on=keys, how='left')
-        n_ok = int((df['delta_beta_status'] == 'ok').sum())
-        # Only 'ok' fits carry a delta_beta. A gated window has no measurement, and a flat
-        # correlation over values that are mostly below their own noise floor is not
-        # evidence of independence, so the rest are dropped rather than zeroed.
-        df['delta_beta_local'] = df['delta_beta_local'].where(df['delta_beta_status'] == 'ok')
-        df['delta_beta_label'] = df['delta_beta_label'].where(df['delta_beta_status'] == 'ok')
-        vc = df['delta_beta_status'].value_counts()
-        print(f"    Δβ: {n_ok}/{len(df)} windows with a usable local fit "
-              f"({', '.join(f'{k} {v}' for k, v in vc.items())})")
-        if not n_ok:
-            print("      ** no fit survives here, so every Δβ cell in this region is empty **")
-        else:
-            # Passing the gate is not the same as resolving a direction: most 'ok' fits return
-            # `zero`. Printed here as well as pooled, because a Δβ cell built mostly on
-            # non-detections reads flat whatever the bed does.
-            lv = df['delta_beta_label'].value_counts()
-            n_res = int(lv.get('pos_sig', 0) + lv.get('neg_sig', 0))
-            print(f"      of those, {n_res} resolve a direction "
-                  f"({', '.join(f'{k} {v}' for k, v in lv.items())})")
-
     for axis, fn in LABEL_OF.items():
         col = AXIS_SOURCE[axis]
         df[axis] = [fn(v) if np.isfinite(v) else None
@@ -214,7 +167,6 @@ def load_windows(csv_path, region):
     df['velocity_band'] = [velocity_band(v) if np.isfinite(v) else None
                            for v in pd.to_numeric(df[AXIS_SOURCE['velocity_band']],
                                                   errors='coerce')]
-    df['delta_beta'] = df['delta_beta_label']
     return df
 
 
@@ -338,12 +290,11 @@ def cramers_v(a, b):
 
 # ---------------------------------------------------------------------------
 def parametrisation_table(all_df, root):
-    """The (β, psd_amplitude_1km) parametrisation diagnostic, deliberately outside the matrix.
+    """The (β, A_1km) parametrisation diagnostic, deliberately outside the matrix.
 
-    Carries the pairs beta_intercept_check drew, on the same homogeneous window set as
-    everything else here, so the two are comparable for the first time. psd_intercept appears
-    in this table and its own figures and nowhere else: it is not a vector element, and the
-    matrix stays ELEMENTS. Pooled and per-region side by side, same as every other table.
+    psd_intercept appears in this table and its own figures and nowhere else: it is not a
+    vector element, and the matrix stays ELEMENTS. Pooled and per-region side by side, same
+    as every other table.
     """
     rows = []
     for x, y in PARAMETRISATION_PAIRS:
@@ -368,7 +319,7 @@ def parametrisation_table(all_df, root):
               f"{', '.join(f'{r.scope} {r.spearman:+.2f}' for r in per.itertuples())}"
               f"{'  SIGN FLIP' if flip else ''}")
     print(f"    β × intercept is the evidence for the in-band coordinate: the raw intercept is "
-          f"close to a restatement of β, which is why the vector carries psd_amplitude_1km. "
+          f"close to a restatement of β, which is why the vector carries A_1km. "
           f"Read the first two rows as before/after on the same windows.")
     return t
 
@@ -625,58 +576,6 @@ def cross_region(all_df, per_region, root, n_axis_scatter=4, n_scatter=4):
           f"carry a pooled sign that is the minority one. Do not quote ρ_pool alone on a "
           f"flagged row; p_ind is withheld on all of them for the same reason. **")
 
-    # Delta_beta is restricted to the fits that passed the gate, but passing the gate is not
-    # resolving a direction: most 'ok' fits return `zero`. A near-zero Delta_beta cell is then
-    # a statement about the fit, not about the bed, so the composition is printed and the same
-    # pairs are re-run over the resolved fits alone.
-    db = AXIS_SOURCE['delta_beta']
-    ok = all_df[all_df[db].notna()]
-    if len(ok):
-        lv = ok['delta_beta'].value_counts()
-        n_res = int(lv.get('pos_sig', 0) + lv.get('neg_sig', 0))
-        print(f"\n  Δβ COMPOSITION — {len(ok)} windows passed the gate, {n_res} of them "
-              f"resolve a direction ({', '.join(f'{k} {v}' for k, v in lv.items())})")
-        for r, g in ok.groupby('region'):
-            gv = g['delta_beta'].value_counts()
-            print(f"    {r:8s} n_ok={len(g):4d}  "
-                  f"{', '.join(f'{k} {v}' for k, v in gv.items())}")
-        print(f"    ** {len(ok) - n_res}/{len(ok)} are non-detections, so a flat Δβ cell says "
-              f"the variable carries no resolved signal on these windows, NOT that it is "
-              f"independent of the others. **")
-        res = ok[ok['delta_beta'].isin(('pos_sig', 'neg_sig'))]
-        if len(res) >= 10:
-            rp = pair_table(res, 'DELTA_BETA_RESOLVED')
-            rp = rp[((rp.a == db) | (rp.b == db)) & rp.spearman.notna()]
-            rp.to_csv(os.path.join(root, 'vector_independence_delta_beta_resolved.csv'),
-                      index=False)
-            rp = rp.reindex(rp.spearman.abs().sort_values(ascending=False).index)
-            # The resolved subset is not evenly sourced: one region can supply most of the
-            # positive fits and another most of the negative ones, in which case a pooled
-            # coefficient here is a region contrast wearing Δβ's name. Same treatment as the
-            # axis table, so this block cannot be read the way it warns against.
-            rw = pd.concat([pair_table(g, r) for r, g in res.groupby('region')
-                            if len(g) >= MIN_N_FOR_P], ignore_index=True) \
-                .pivot_table(index=['a', 'b'], columns='scope', values='spearman')
-            med = res.groupby('region')[db].median()
-            print(f"    the same Δβ pairs over the {len(res)} RESOLVED fits only "
-                  f"(sensitivity, not the headline: keeping only large |Δβ| truncates the "
-                  f"variable and the regions no longer contribute equally):")
-            for _, r in rp.head(6).iterrows():
-                other = r['b'] if r['a'] == db else r['a']
-                full = side.loc[(r['a'], r['b'])]
-                v = (rw.loc[(r['a'], r['b'])].dropna() if (r['a'], r['b']) in rw.index
-                     else pd.Series(dtype=float))
-                flip = ' SIGN FLIP' if (v > 0).any() and (v < 0).any() else ''
-                print(f"      Δβ × {SHORT.get(other, other):<9s} ρ={r['spearman']:+.2f} "
-                      f"n={r['n']:.0f}   (all {len(ok)} gated fits: "
-                      f"ρ={full['spearman']:+.2f} n={full['n']:.0f})   per region "
-                      f"{', '.join(f'{k} {x:+.2f}' for k, x in v.items()) or 'n/a'}{flip}")
-            print(f"    ** median Δβ per region on that subset: "
-                  f"{', '.join(f'{k} {x:+.2f}' for k, x in med.items())}. Where those differ "
-                  f"in sign, any variable that differs between those regions correlates with "
-                  f"Δβ here for that reason alone, and at these per-region n the two "
-                  f"explanations are not separable. **")
-
     print(f"\n  STRONGEST MEASURED PAIRS OVERALL (by-construction pairs excluded)")
     free = side.reset_index()
     free = free[(free.by_construction == '') & free.spearman.notna()]
@@ -763,7 +662,7 @@ def cross_region(all_df, per_region, root, n_axis_scatter=4, n_scatter=4):
     for _, r in list(ax_pairs.head(n_axis_scatter).iterrows()) + \
             list(free.head(n_scatter).iterrows()):
         k = frozenset((r['a'], r['b']))
-        if k not in seen and np.isfinite(r['spearman']) and not (k & RANK_EXCLUDE):
+        if k not in seen and np.isfinite(r['spearman']):
             seen.add(k)
             draw.append((r['a'], r['b']))
     print(f"\n  SCATTER PANELS ({len(draw)} pairs)")
@@ -792,10 +691,6 @@ def main(root=DEFAULT_ROOT):
         print(f"\nOnly {len(frames)} usable region(s) under {root}, nothing to pool.")
         return
     all_df = pd.concat(frames, ignore_index=True)
-    missing = [r for r, p in per_region.items() if not p['df']['delta_beta_local'].notna().any()]
-    if missing:
-        print(f"\n  Δβ is empty in {len(missing)} region(s): {', '.join(missing)}. Every Δβ "
-              f"cell is measured on the remaining ones only, so its n is not the matrix n.")
     cross_region(all_df, per_region, root)
 
 

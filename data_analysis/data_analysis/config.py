@@ -34,7 +34,8 @@ PROCESSING_FLAG_COLORS = {
 }
 
 # Spectral-reliability caveat keyed on migration status. Shared by the scripts that
-# report beta-derived quantities (bed_character, beta_intercept_check, weighted_anisotropy).
+# report beta-derived quantities (bed_character, weighted_anisotropy, landscape_vector,
+# vector_independence).
 PROCESSING_FLAG_NOTE = {
     'migrated':              'migrated — β reliable',
     'partial':               'PARTIAL migration — β may be biased by residual diffraction',

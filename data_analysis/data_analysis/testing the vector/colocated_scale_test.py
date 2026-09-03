@@ -25,7 +25,7 @@ window-size sweep; pass a second argument to point elsewhere.
 
     python colocated_scale_test.py [individual_region_TEST] [30km_run_tree]
 """
-import glob, os, sys
+import glob, json, os, sys
 import numpy as np, pandas as pd
 import matplotlib
 matplotlib.use('Agg')
@@ -38,12 +38,12 @@ from config import Tee, WINDOW_SIZE, STEP_SIZE
 
 ROOT = sys.argv[1] if len(sys.argv) > 1 else str(ROOT_DIR / 'individual_region_TEST')
 ALT = sys.argv[2] if len(sys.argv) > 2 else str(
-    ROOT_DIR / 'v23' / 'outdated results' / 'window_size' / 'runs' / 'window_csvs')
+    ROOT_DIR / 'v23' / 'window_size' / 'runs' / 'window_csvs')
 
 ALT_TOKEN = 'w30km'
 PROD_TOKEN = f'w{WINDOW_SIZE // 1000}km'
 MATCH_TOL_KM = 7.5          # half the 30 km run's step, so each 50 km centre takes one partner
-TEXTURE = ['beta', 'psd_amplitude_1km', 'rms_roughness', 'eta_wavelength_m',
+TEXTURE = ['beta', 'A_1km', 'rms_roughness', 'eta_wavelength_m',
            'hill_count', 'relief_m', 'xi_band', 'skewness']
 SMOOTH = ['bed_elev_mean', 'measures_speed_mean']
 ELEMENTS = TEXTURE + SMOOTH
@@ -59,6 +59,10 @@ def load(root, per_region_folders=True):
     out = {}
     for f in sorted(glob.glob(pat)):
         d = pd.read_csv(f)
+        missing = [e for e in ELEMENTS if e not in d.columns]
+        if missing:
+            raise SystemExit(f"{f} is missing {missing}. Both runs must carry the same "
+                             f"column names, so re-run the one that is on the old names.")
         d = d[~d.is_transition].copy()
         key = os.path.basename(os.path.dirname(os.path.dirname(f))) if per_region_folders \
             else os.path.basename(f)
@@ -114,69 +118,123 @@ def madogram(d):
 MADOGRAM_UNRELIABLE = ['xi_band']
 
 
+def _stack(y, gap, lo=0.0, hi=1.0):
+    """Label positions in axes fraction, ordered as y and at least gap apart."""
+    y = np.asarray(y, float)
+    order = np.argsort(y)
+    v = y[order].copy()
+    for i in range(1, v.size):
+        v[i] = max(v[i], v[i - 1] + gap)
+    v -= v.mean() - y.mean()
+    v -= max(v[-1] - hi, 0.0)
+    v += max(lo - v[0], 0.0)
+    out = np.empty_like(v)
+    out[order] = v
+    return out
+
+
+TITLE = 'The elements a transect contributes are the ones that resist gridding'
+
+CAPTION = (
+    'Blue circles: texture measured along the profile. Red squares: long-wavelength '
+    'fields, of which only velocity is borrowed (MEaSUREs). Top right of the right panel '
+    'is reproducible and unmappable, which is what a transect adds over a gridded product.'
+)
+
+
+def write_metadata(png):
+    """Sidecar JSON holding the caption, written next to the figure it describes."""
+    out = os.path.splitext(png)[0] + '.json'
+    meta = {'figure': os.path.basename(png), 'title': TITLE, 'caption': CAPTION}
+    with open(out, 'w') as f:
+        json.dump(meta, f, indent=2)
+    return out
+
+
 def plot_crossing(med, tbl, out_path):
     """Left: how fast each element forgets itself along the line. Right: the crossing,
     reproduces well against decorrelates fast. Texture sits top right, smooth bottom right."""
-    fig, (a1, a2) = plt.subplots(1, 2, figsize=(12.6, 5.4))
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(13.4, 5.6))
     x = np.arange(len(LABELS))
+    LABEL_X = x[-1] + 0.28
 
     a1.axhline(1.0, color='0.35', lw=1.0, ls=':', zorder=1)
     a1.annotate('uncorrelated', xy=(0.02, 1.0), xytext=(0, 4), xycoords=('axes fraction', 'data'),
                 textcoords='offset points', fontsize=7.5, color='0.35')
-    for e in ELEMENTS:
-        if e not in tbl:
-            continue
+    drawn = [e for e in ELEMENTS if e in tbl]
+    for e in drawn:
         grey = e in MADOGRAM_UNRELIABLE
         smooth = e in SMOOTH
         a1.plot(x, tbl[e].to_numpy(float),
                 color='0.72' if grey else ('#b22222' if smooth else '#1a6faf'),
                 ls=':' if grey else ('--' if smooth else '-'),
                 lw=1.0 if grey else (2.0 if e in ('beta', 'eta_wavelength_m') else 1.3),
-                marker='o', ms=4, zorder=2, label=e)
-        a1.annotate(e + (' (normalisation fails)' if grey else ''),
-                    xy=(x[-1], tbl[e].iloc[-1]), xytext=(5, 0), textcoords='offset points',
-                    va='center', fontsize=7, color='0.55' if grey else '0.25')
+                marker='o', ms=3.5, zorder=2, label=e)
     a1.set_xticks(x); a1.set_xticklabels(LABELS, fontsize=8)
-    a1.set_xlim(-0.15, len(LABELS) - 0.35)
+    a1.set_xlim(-0.15, LABEL_X + 1.35)
+    lo, hi = a1.get_ylim()
+    a1.set_ylim(lo, hi)
+
+    # The far-bin values are too close together to label in place, so the labels are
+    # stacked in a column at LABEL_X and joined to their lines by leaders.
+    ends = np.array([tbl[e].iloc[-1] for e in drawn], float)
+    for e, y0, f in zip(drawn, ends, _stack((ends - lo) / (hi - lo), 0.046, 0.01, 0.99)):
+        grey = e in MADOGRAM_UNRELIABLE
+        colour = '0.72' if grey else ('#b22222' if e in SMOOTH else '#1a6faf')
+        y1 = lo + f * (hi - lo)
+        a1.plot([x[-1], LABEL_X], [y0, y1], color=colour, lw=0.6, alpha=0.55, zorder=1)
+        a1.annotate(e + (' (normalisation fails)' if grey else ''),
+                    xy=(LABEL_X, y1), xytext=(4, 0), textcoords='offset points',
+                    va='center', fontsize=7.5, color='0.55' if grey else '0.25')
+
     a1.set_ylabel('mean|Δ| / 1.128 sd      (1.0 = uncorrelated)')
     a1.set_xlabel('separation along one trajectory')
     a1.set_title('Texture is forgotten within one window; the smooth fields are not',
                  fontsize=10)
     a1.grid(alpha=0.25, lw=0.6)
 
-    for e in ELEMENTS:
-        if e not in med.index or e not in tbl:
-            continue
+    pts = [(e, med[e], tbl[e].iloc[1]) for e in ELEMENTS
+           if e in med.index and e in tbl and np.isfinite(med[e])]
+    for e, mx, my in pts:
         smooth = e in SMOOTH
-        a2.scatter(med[e], tbl[e].iloc[1], s=58, zorder=3,
+        a2.scatter(mx, my, s=58, zorder=3,
                    color='#b22222' if smooth else '#1a6faf',
                    marker='s' if smooth else 'o',
                    edgecolor='0.15', linewidth=0.6)
-        a2.annotate(e, xy=(med[e], tbl[e].iloc[1]), xytext=(0, 9),
-                    textcoords='offset points', ha='center', fontsize=7.5, color='0.25')
+    a2.margins(x=0.13, y=0.12)
+    # Labels go above the point, and flip below or inwards where that would collide
+    # with an already placed label or overrun the right edge.
+    x0, x1 = a2.get_xlim(); y0, y1 = a2.get_ylim()
+    placed = []
+    for e, mx, my in sorted(pts, key=lambda p: -p[2]):
+        above = not any(abs(mx - px) < 0.05 * (x1 - x0) and abs(my - py) < 0.13 * (y1 - y0)
+                        for px, py in placed)
+        inward = mx > x1 - 0.22 * (x1 - x0)
+        a2.annotate(e, xy=(mx, my), xytext=(-6 if inward else 0, 9 if above else -9),
+                    textcoords='offset points', ha='right' if inward else 'center',
+                    va='bottom' if above else 'top', fontsize=7.5, color='0.25')
+        placed.append((mx, my))
     a2.axhline(1.0, color='0.35', lw=1.0, ls=':')
     a2.set_xlabel('reproduces between 30 km and 50 km windows  (median r)')
     a2.set_ylabel(f'decorrelation at {LABELS[1]}')
     a2.set_title('Reliable and fast: what only a transect gives you', fontsize=10)
     a2.grid(alpha=0.25, lw=0.6)
 
-    fig.suptitle('The elements a transect contributes are the ones that resist gridding',
-                 fontsize=13)
-    fig.text(0.5, 0.005,
-             'Blue circles: texture measured along the profile. Red squares: long-wavelength '
-             'fields, of which only velocity is borrowed (MEaSUREs).\n'
-             'Top right of the right panel is reproducible and unmappable, which is what a '
-             'transect adds over a gridded product.',
-             ha='center', va='top', fontsize=7.5, color='0.35')
+    fig.suptitle(TITLE, fontsize=13)
     plt.tight_layout()
     fig.savefig(out_path, dpi=200, bbox_inches='tight')
     plt.close(fig)
+    meta = write_metadata(out_path)
     print(f"  Saved: {out_path}")
+    print(f"  Saved: {meta}")
 
 
 if __name__ == '__main__':
     sys.stdout = Tee(os.path.join(ROOT, 'colocated_scale_test_log.txt'))
     prod, alt = load(ROOT), load(ALT, per_region_folders=False)
+    if not alt:
+        raise SystemExit(f"No {ALT_TOKEN} window CSVs under {ALT}. Regenerate the reference "
+                         f"with v23/run_window_size_sweep.py, or pass its tree as argument 2.")
     alt = {os.path.basename(f).replace(f'_{ALT_TOKEN}_window_stats.csv', ''): d
            for (d, f) in alt.values()}
     print(f"production: {ROOT}\n{ALT_TOKEN} tree : {ALT}\n")

@@ -37,7 +37,7 @@ Verdict adds RESOLVED-WITH-EXTERNAL, which turns on discriminator logic irreleva
 
     python hypothesis_test.py [individual_region_TEST] [n_permutations]
 """
-import glob, itertools, os, sys
+import glob, itertools, json, os, sys
 import numpy as np, pandas as pd
 import matplotlib
 matplotlib.use('Agg')
@@ -114,9 +114,29 @@ def permute(units, regions, rng, within_region):
     return out
 
 
+TITLE = 'No single statistic identifies landscape class'
+
+CAPTION = (
+    f"Best axis combination at each size, {LEVEL} units. "
+    f"B beta, R relief, V velocity, E elevation, D delta-beta. "
+    f"A set of one is a bound that excluded ten entries, not an identification."
+)
+
+
+def write_metadata(png, tag):
+    """Sidecar JSON holding the caption, written next to the figure it describes."""
+    out = os.path.splitext(png)[0] + '.json'
+    note = f"Migration widening {'on' if tag == 'widened' else 'off'}."
+    meta = {'figure': os.path.basename(png), 'title': TITLE,
+            'caption': CAPTION + ' ' + note}
+    with open(out, 'w') as f:
+        json.dump(meta, f, indent=2)
+    return out
+
+
 def plot_subset_curve(curve, tag):
     """The claim in one panel: how far the admissible set falls as axes are added, and
-    where resolution stops improving. The flat step is delta_beta contributing nothing."""
+    where resolution stops improving. A flat step is an axis that excludes nothing."""
     x = curve['n_axes'].to_numpy()
     fig, (a1, a2) = plt.subplots(2, 1, figsize=(7.2, 6.4), sharex=True,
                                  gridspec_kw={'height_ratios': [1.15, 1]})
@@ -135,7 +155,7 @@ def plot_subset_curve(curve, tag):
     a2.set_xlabel('axes live')
     a2.legend(fontsize=8, frameon=False)
 
-    # The dead axis reads as a flat step: whichever k adds it changes nothing.
+    # An axis that excludes nothing reads as a flat step.
     flat = [k for k in range(1, len(curve))
             if np.isclose(curve['resolved'].iloc[k], curve['resolved'].iloc[k - 1])
             and np.isclose(curve['mean'].iloc[k], curve['mean'].iloc[k - 1])]
@@ -148,7 +168,7 @@ def plot_subset_curve(curve, tag):
 
     # Initials, because the full combination names overrun the axes by n_axes = 4.
     sym = {'beta_class': 'B', 'relief_class': 'R', 'velocity_band': 'V',
-           'elevation_class': 'E', 'delta_beta': 'D'}
+           'elevation_class': 'E'}
     for _, r in curve.iterrows():
         lab = '+'.join(sym.get(a, a) for a in r['best_combination'].split('+')) \
             if r['best_combination'] != '(none)' else 'none'
@@ -160,18 +180,14 @@ def plot_subset_curve(curve, tag):
     for ax in (a1, a2):
         ax.grid(alpha=0.25, lw=0.6)
         ax.set_xticks(x)
-    fig.suptitle('No single statistic identifies landscape class', fontsize=13)
-    fig.text(0.5, 0.005,
-             f'Best axis combination at each size, {LEVEL} units, '
-             f'migration widening {"on" if tag == "widened" else "off"}.  '
-             f'B beta, R relief, V velocity, E elevation, D delta-beta.\n'
-             f'A set of one is a bound that excluded ten entries, not an identification.',
-             ha='center', va='top', fontsize=7.5, color='0.35')
+    fig.suptitle(TITLE, fontsize=13)
     plt.tight_layout()
     out = os.path.join(ROOT, f'hypothesis_test_subset_curve_{tag}.png')
     fig.savefig(out, dpi=200, bbox_inches='tight')
     plt.close(fig)
+    meta = write_metadata(out, tag)
     print(f"  Saved: {out}")
+    print(f"  Saved: {meta}")
 
 
 def run(regions, units, tag):

@@ -1,4 +1,4 @@
-"""FIG 7c: per-window maps, one panel per region.
+"""FIG 6b: per-window maps, one panel per region.
 
 Every window is drawn at its step centre as its true 50 km along-track footprint, so the 50%
 overlap is visible rather than hidden behind a dot. No thinning: halving the data to
@@ -13,11 +13,12 @@ Three colourings of the same geometry, written to separate files:
 
 Reads the output tree directly, so it does not depend on which regions are live in loading.py.
 
-    python fig7c_maps.py [individual_region_TEST] [scheme]
+    python fig6b_maps.py [individual_region_TEST] [scheme]
 """
-import glob, os, sys
+import glob, json, os, sys
 import numpy as np, pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib import patheffects
 from matplotlib.lines import Line2D
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -71,17 +72,17 @@ def archetype_label(d):
 SCHEMES = {
     'verdict': dict(
         label=lambda d: d.verdict.fillna('unclassified'), colors=VERDICT_COLORS,
-        title='FIG 7c. Per-window archetype verdict', legend='window verdict',
+        title='FIG 6b. Per-window archetype verdict', legend='window verdict',
         note='Read the map for where verdicts change, not for how much area each covers.'),
     'bed_class': dict(
         label=lambda d: d.bed_class.fillna('unclassified'), colors=BED_COLORS,
         title='Per-window $\\beta$ class', legend='bed_class',
-        note='The point estimate. The catalogue classifies on the 2$\\sigma$ envelope, which is\n'
-             'wider, so a window shown in one class is often admissible in its neighbour too.'),
+        note='The point estimate. The catalogue classifies on the 2\u03c3 envelope, which is wider, '
+             'so a window shown in one class is often admissible in its neighbour too.'),
     'archetype': dict(
         label=archetype_label, colors=ARCHETYPE_COLORS,
         title='Per-window archetype, where one survives', legend='admissible entry',
-        note='Only windows with exactly one admissible entry are named. Grey is a degenerate\n'
+        note='Only windows with exactly one admissible entry are named. Grey is a degenerate '
              'set of two or more, and that is the common case, not a gap in the map.'),
 }
 
@@ -119,14 +120,16 @@ def footprints(ax, d, lab, colors, lw=2.4, alpha=0.55, missing='0.6'):
                 c=colors.get(v, missing), lw=lw, alpha=alpha, solid_capstyle='butt')
 
 
-def scale_bar(ax, xlim, ylim, length_m=WINDOW_M, frac=(0.06, 0.08), lw=3):
-    """A bar exactly one window long, so the reader can see the footprint against the frame."""
+def scale_bar(ax, xlim, ylim, length_m=WINDOW_M, frac=(0.06, 0.90), lw=3):
+    """A bar exactly one window long, so the reader can see the footprint against the frame.
+    Cartopy draws the parallel labels inside the map, along the bottom and right of the
+    frame, so the bar goes in the top left corner."""
     x0 = xlim[0] + frac[0] * (xlim[1] - xlim[0])
     y0 = ylim[0] + frac[1] * (ylim[1] - ylim[0])
     ax.plot([x0, x0 + length_m], [y0, y0], transform=PS71, c='k', lw=lw,
             solid_capstyle='butt', zorder=5)
     ax.text(x0, y0 + 0.02 * (ylim[1] - ylim[0]), f"{length_m/1000:.0f} km window",
-            transform=PS71, fontsize=7, zorder=5)
+            transform=PS71, fontsize=10, zorder=5)
 
 
 def panel(ax, d, lab, region, colors, **kw):
@@ -139,37 +142,66 @@ def panel(ax, d, lab, region, colors, **kw):
     ax.set_title(f"{region}   n = {len(d)}{lead}", fontsize=9)
 
 
-def locator(ax, d, box_pad_m=WINDOW_M):
-    """Where the seven sit. Boxes, not points, because a region is 300 km across."""
+def locator(ax, d, box_pad_m=WINDOW_M, fontsize=9, gap=0.04, near=0.14):
+    """Where the seven sit. Boxes, not points, because a region is 300 km across. Where the
+    boxes cluster the names would collide, so each label is pushed up clear of the ones
+    already placed below it and tied back to its own box by a leader line."""
     ax.set_extent([-180, 180, -90, -63], crs=ccrs.PlateCarree())
     ax.add_feature(cfeature.LAND, facecolor='#e8e8e8', edgecolor='black', linewidth=0.3)
     ax.add_feature(cfeature.OCEAN, facecolor='#cce5ff', alpha=0.5)
+    corner = {}
     for region, g in d.groupby('region'):
         x0, x1 = g.center_x.min() - box_pad_m, g.center_x.max() + box_pad_m
         y0, y1 = g.center_y.min() - box_pad_m, g.center_y.max() + box_pad_m
         ax.plot([x0, x1, x1, x0, x0], [y0, y0, y1, y1, y0], transform=PS71,
                 c='#cf222e', lw=1.0, zorder=4)
-        ax.text(x1, y1, region, transform=PS71, fontsize=6, c='#cf222e', zorder=5)
+        corner[region] = tuple(ax.transAxes.inverted().transform(
+            ax.transData.transform((x1, y1))))
+
+    placed = []
+    for region in sorted(corner, key=lambda r: corner[r][1]):
+        x, y = corner[region]
+        for px, py in placed:
+            if abs(x - px) < near and y - py < gap:
+                y = py + gap
+        placed.append((x, y))
+        inward = x > 0.8
+        ax.annotate(region, xy=corner[region], xycoords='axes fraction',
+                    xytext=(x - 0.015 if inward else x + 0.015, y), textcoords='axes fraction',
+                    ha='right' if inward else 'left', va='center',
+                    fontsize=fontsize, c='#cf222e', zorder=5,
+                    path_effects=[patheffects.withStroke(linewidth=2.5, foreground='white')],
+                    arrowprops=dict(arrowstyle='-', color='#cf222e', lw=0.6,
+                                    shrinkA=0, shrinkB=1))
     ax.set_title('region locations', fontsize=9)
 
 
 def legend_panel(ax, lab, spec):
     ax.axis('off')
     counts = lab.value_counts()
-    handles = [Line2D([], [], c=c, lw=4,
+    handles = [Line2D([], [], c=c, lw=7,
                       label=f"{v}  {counts.get(v, 0)} ({100*counts.get(v, 0)/len(lab):.1f}%)")
                for v, c in spec['colors'].items() if counts.get(v, 0)]
-    ax.legend(handles=handles, loc='upper center', frameon=False, fontsize=8,
-              title=spec['legend'], title_fontsize=9)
-    ax.text(0.5, 0.02, CAPTION + '\n' + spec['note'], ha='center', va='bottom',
-            fontsize=7, transform=ax.transAxes)
+    ax.legend(handles=handles, loc='upper center', frameon=False, fontsize=13,
+              title=spec['legend'], title_fontsize=15, labelspacing=0.8,
+              handlelength=2.5, handletextpad=1.0)
 
 
 CAPTION = (
-    f"Each bar is one {WINDOW_M//1000} km along-track window drawn at its step centre.\n"
-    f"Windows step every {STEP_M//1000} km, so adjacent bars overlap by half and are not\n"
+    f"Each bar is one {WINDOW_M//1000} km along-track window drawn at its step centre. "
+    f"Windows step every {STEP_M//1000} km, so adjacent bars overlap by half and are not "
     f"independent: the class tuple only decorrelates at {DECORRELATION_KM} km."
 )
+
+
+def write_metadata(png, spec):
+    """Sidecar JSON holding the caption, written next to the figure it describes."""
+    out = os.path.splitext(png)[0] + '.json'
+    meta = {'figure': os.path.basename(png), 'title': spec['title'],
+            'caption': CAPTION + ' ' + spec['note']}
+    with open(out, 'w') as f:
+        json.dump(meta, f, indent=2)
+    return out
 
 
 def render(d, regions, name, root, **kw):
@@ -186,12 +218,14 @@ def render(d, regions, name, root, **kw):
     legend_panel(fig.add_subplot(3, 3, 9), lab, spec)
 
     fig.suptitle(spec['title'], fontsize=14, y=0.92)
-    out = os.path.join(root, 'landscape_vector', f'fig7c_{name}_map.png')
+    out = os.path.join(root, 'landscape_vector', f'fig6b_{name}_map.png')
     fig.savefig(out, dpi=400, bbox_inches='tight')
     plt.close(fig)
+    meta = write_metadata(out, spec)
     print(f"\n=== {name} ===")
     print(lab.value_counts().to_string())
     print(f"  Saved: {out}")
+    print(f"  Saved: {meta}")
 
 
 def main(root, only=None, **kw):
@@ -207,5 +241,5 @@ if __name__ == '__main__':
     root = args[0] if args and args[0] not in SCHEMES else 'individual_region_TEST'
     only = next((a for a in args if a in SCHEMES), None)
     os.makedirs(os.path.join(root, 'landscape_vector'), exist_ok=True)
-    sys.stdout = Tee(os.path.join(root, 'landscape_vector', 'fig7c_maps_log.txt'))
+    sys.stdout = Tee(os.path.join(root, 'landscape_vector', 'fig6b_maps_log.txt'))
     main(root, only)

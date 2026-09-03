@@ -366,25 +366,19 @@ def print_coordinate_summary(coords):
             print(f"    - {traj_id}: {len(traj_data['lon'])} points")
 
 
-def plot_tracks_on_ockenden(coords, output_path='tracks_on_ockenden.png',
-                            metrics_dir='all_data/Ockenden/Data_Science_Zenodo/Data_Science_Zenodo/Metrics/',
-                            zoom=False, track_ms=None, casing_ms=None, track_alpha=None):
-    """
-    Overlay flight tracks on Ockenden et al. Fig 4 landscape classification,
-    recreated natively from the published metrics data (no image needed).
+OCKENDEN_METRICS_DIR = 'all_data/Ockenden/Data_Science_Zenodo/Data_Science_Zenodo/Metrics/'
 
-    zoom=True frames on the track bundle (padded) instead of the whole continent,
-    drops classification cells outside that frame, and grows the cell markers to
-    the 50 km grid so they stay contiguous at the zoomed scale.
+# PS71 frame covering the whole continent.
+CONTINENT_XLIM, CONTINENT_YLIM = (-2.55e6, 2.7e6), (-2.2e6, 2.2e6)
 
-    track_ms/casing_ms/track_alpha override the track styling; they default to the
-    continental values when zoom=False and to a heavier, solid, white-cased line
-    when zoom=True (the thin 30%-alpha black reads fine over the whole continent
-    but is lost against the dark classes once zoomed).
+
+def ockenden_classes(metrics_dir=OCKENDEN_METRICS_DIR):
+    """Cell centres in PS71 metres and a (mask, colour, label) triple per landscape class.
+
+    The masks are reproduced from the published metrics with the thresholds and
+    the draw order of Antarctic_FIGURES.ipynb cell 45.
     """
     from netCDF4 import Dataset
-    from matplotlib.lines import Line2D
-    import geopandas as gpd
 
     def load_metric(name):
         ds = Dataset(os.path.join(metrics_dir, name + '.nc'))
@@ -395,7 +389,6 @@ def plot_tracks_on_ockenden(coords, output_path='tracks_on_ockenden.png',
     x_ifpa = load_metric('X_ifpa')
     y_ifpa = load_metric('Y_ifpa')
 
-    # Reproduce classification masks from Ockenden source (Antarctic_FIGURES.ipynb cell 45)
     i_rms_slope_h = load_metric('i_rms_slope_h')
     ifpa_count_250 = load_metric('ifpa_count_max_250')
     ifpa_mean = load_metric('ifpa_mean')
@@ -421,47 +414,91 @@ def plot_tracks_on_ockenden(coords, output_path='tracks_on_ockenden.png',
     icestreams_mask2 = (~mountain_mask) & (~poordetail_mask) & (~dunes_mask) & \
                        (~SGM_mask) & (~SGM_mask2) & (~icestreams_mask)
 
-    # Tracks in PS71; the zoom frame is the shared padded box, clipped to the continent
-    tracks = {name: _TO_PS.transform(data['lon'], data['lat']) for name, data in coords.items()}
-    xlim, ylim = (-2.55e6, 2.7e6), (-2.2e6, 2.2e6)
-    if zoom:
-        fx, fy = frame_bounds_ps(coords)
-        xlim = (max(xlim[0], fx[0]), min(xlim[1], fx[1]))
-        ylim = (max(ylim[0], fy[0]), min(ylim[1], fy[1]))
-
-    # Drop classification cells outside the frame (+1 cell) so only the local landscape is drawn
-    inview = ((x_ifpa > xlim[0] - OCKENDEN_CELL_M) & (x_ifpa < xlim[1] + OCKENDEN_CELL_M) &
-              (y_ifpa > ylim[0] - OCKENDEN_CELL_M) & (y_ifpa < ylim[1] + OCKENDEN_CELL_M))
-
-    # Plot classification (same colors and draw order as Ockenden source)
-    fig, ax = plt.subplots(figsize=(12, 10))
-    s, marker = 30, 'o'
     classes = [(poordetail_mask, '#f3e738', 'Low relief landscape'),
                (SGM_mask | SGM_mask2, '#ff9248', 'Alpine landscape (subglacial)'),
                (mountain_mask, '#e75921', 'Alpine landscape (subaerial)'),
                (icestreams_mask, '#4399bf', 'Selective erosion (ice streams)'),
                (icestreams_mask2, '#2f64b4', 'Selective erosion (relict)'),
                (dunes_mask, 'white', 'Invalid data (dunes)')]
+    return x_ifpa, y_ifpa, classes
+
+
+def draw_ockenden(ax, xlim, ylim, metrics_dir=OCKENDEN_METRICS_DIR):
+    """Draw the landscape classification and the grounding line on PS71 metre axes.
+
+    Cells more than one grid spacing outside the frame are dropped. Returns the
+    cell collections, which `grow_cells_to_grid` resizes, and the legend handles.
+    """
+    from matplotlib.lines import Line2D
+    import geopandas as gpd
+
+    x_ifpa, y_ifpa, classes = ockenden_classes(metrics_dir)
+    inview = ((x_ifpa > xlim[0] - OCKENDEN_CELL_M) & (x_ifpa < xlim[1] + OCKENDEN_CELL_M) &
+              (y_ifpa > ylim[0] - OCKENDEN_CELL_M) & (y_ifpa < ylim[1] + OCKENDEN_CELL_M))
+
     cells, handles = [], []
     for mask, color, label in classes:
         mask = mask & inview
         if not mask.any():
             continue
-        cells.append(ax.scatter(x_ifpa[mask], y_ifpa[mask], c=color, s=s, marker=marker))
-        handles.append(Line2D([], [], marker=marker, ls='', ms=10, color=color,
+        cells.append(ax.scatter(x_ifpa[mask], y_ifpa[mask], c=color, s=30, marker='o'))
+        handles.append(Line2D([], [], marker='o', ls='', ms=10, color=color,
                               mec='0.4', mew=0.3, label=label))
 
-    # Grounding line
     gl_path = os.path.join(os.path.dirname(metrics_dir), 'GroundingLine_Antarctica_v2.shp')
     if os.path.exists(gl_path):
         gpd.read_file(gl_path).plot(ax=ax, facecolor='None', edgecolor='k', linewidth=0.5)
+
+    return cells, handles
+
+
+def grow_cells_to_grid(fig, ax, cells, xlim):
+    """Resize the classification markers to the 50 km grid spacing.
+
+    Call once the axes box is final, so the cells are contiguous rather than
+    isolated dots at the zoomed scale.
+    """
+    fig.canvas.draw()
+    pts_per_m = ax.get_window_extent().width * 72 / fig.dpi / (xlim[1] - xlim[0])
+    for pc in cells:
+        pc.set_sizes([(OCKENDEN_CELL_M * pts_per_m) ** 2])
+
+
+def plot_tracks_on_ockenden(coords, output_path='tracks_on_ockenden.png',
+                            metrics_dir=OCKENDEN_METRICS_DIR,
+                            zoom=False, track_ms=None, casing_ms=None, track_alpha=None):
+    """
+    Overlay flight tracks on Ockenden et al. Fig 4 landscape classification,
+    recreated natively from the published metrics data (no image needed).
+
+    zoom=True frames on the track bundle (padded) instead of the whole continent,
+    drops classification cells outside that frame, and grows the cell markers to
+    the 50 km grid so they stay contiguous at the zoomed scale.
+
+    track_ms/casing_ms/track_alpha override the track styling; they default to the
+    continental values when zoom=False and to a heavier, solid, white-cased line
+    when zoom=True (the thin 30%-alpha black reads fine over the whole continent
+    but is lost against the dark classes once zoomed).
+    """
+    from matplotlib.lines import Line2D
+
+    # Tracks in PS71; the zoom frame is the shared padded box, clipped to the continent
+    tracks = {name: _TO_PS.transform(data['lon'], data['lat']) for name, data in coords.items()}
+    xlim, ylim = CONTINENT_XLIM, CONTINENT_YLIM
+    if zoom:
+        fx, fy = frame_bounds_ps(coords)
+        xlim = (max(xlim[0], fx[0]), min(xlim[1], fx[1]))
+        ylim = (max(ylim[0], fy[0]), min(ylim[1], fy[1]))
+
+    fig, ax = plt.subplots(figsize=(12, 10))
+    cells, handles = draw_ockenden(ax, xlim, ylim, metrics_dir)
 
     # Overlay tracks (continental defaults unchanged; zoomed gets a visible casing + solid black)
     casing_ms = casing_ms if casing_ms is not None else (5.0 if zoom else 2)
     track_ms = track_ms if track_ms is not None else (2.0 if zoom else 1)
     track_alpha = track_alpha if track_alpha is not None else (1.0 if zoom else 0.3)
     for name, (x, y) in tracks.items():
-        ax.plot(x, y, '.', color='white', ms=casing_ms, zorder=3)
+        ax.plot(x, y, '.', color='white', ms=0, zorder=3)
         ax.plot(x, y, '.', color='black', ms=track_ms, alpha=track_alpha, zorder=4)
         handles.append(Line2D([], [], marker='.', ls='', ms=10, color='black', label=name))
 
@@ -473,12 +510,8 @@ def plot_tracks_on_ockenden(coords, output_path='tracks_on_ockenden.png',
                  + (' (regional)' if zoom else ''), fontsize=12)
     plt.tight_layout()
 
-    # Grow the cell markers to the 50 km grid once the axes box is final
     if zoom and cells:
-        fig.canvas.draw()
-        pts_per_m = ax.get_window_extent().width * 72 / fig.dpi / (xlim[1] - xlim[0])
-        for pc in cells:
-            pc.set_sizes([(OCKENDEN_CELL_M * pts_per_m) ** 2])
+        grow_cells_to_grid(fig, ax, cells, xlim)
 
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"Saved overlay map to {output_path}")

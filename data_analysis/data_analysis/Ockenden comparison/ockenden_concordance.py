@@ -5,15 +5,17 @@ different data, and if a transect on point measurements did reproduce an areal c
 built by interpolation, the co-located result would be in trouble. Three questions instead:
 
   1. OVERLAP     do her classes separate at all on my elements? (z >= 2 AND d >= 1, the
-                 two-scale rule, spread from every window and n_eff only shrinking the error)
+                 two-scale rule, spread from every window and the independent count only
+                 shrinking the error)
   2. EXPLAINED   how much of each element's variance does her classification account for?
                  Kruskal-Wallis epsilon-squared, the same statistic as the hill_count doc.
   3. RESOLVED    how much of it sits INSIDE one 50 km cell, where her method has exactly one
                  value by construction? This is what a transect adds to an areal map.
 
-Read 3 against the borrowed axes as a control: bed elevation and velocity are smooth gridded
-products and should hold little within-cell variance, while the fast-decorrelating elements
-ODSA measures should hold a lot. That contrast is the claim.
+Read 3 against the smooth axes as a control: bed elevation and velocity are long-wavelength
+fields and should hold little within-cell variance, while the fast-decorrelating texture
+elements should hold a lot. That contrast is the claim. Only velocity is borrowed, from
+MEaSUREs; bed_elev_mean is a radar pick, so its smoothness is the field and not a grid.
 
     python ockenden_concordance.py [root]
 
@@ -37,13 +39,39 @@ MIN_N = 10          # classes thinner than this are reported but not tested
 Z_MIN, D_MIN = 2.0, 1.0
 
 # hill_count_50 is her published gate; 20 m is production. Both are hers, so report both.
-MEASURED = ['beta', 'psd_amplitude_1km', 'rms_roughness', 'eta_wavelength_m', 'hill_count',
-            'hill_count_50', 'skewness', 'kurtosis', 'xi_band', 'relief_m']
-BORROWED = ['bed_elev_mean', 'measures_speed_mean']
+TEXTURE = ['beta', 'A_1km', 'rms_roughness', 'eta_wavelength_m', 'hill_count',
+           'hill_count_50', 'skewness', 'kurtosis', 'xi_band', 'relief_m']
+# Long-wavelength, not borrowed: only measures_speed_mean comes from a grid.
+SMOOTH = ['bed_elev_mean', 'measures_speed_mean']
 
 # Two of her five classes are not positively defined. Say so wherever they are quoted.
 SOFT = {'sel_erosion_relict': 'RESIDUAL — none-of-the-above in her mask chain',
         'low_relief': 'poordetail mask — low curvature OR few hills OR low slope'}
+
+
+# Agreement slack on the provenance guard, in units of the last bit of a float64. Exact
+# equality is the intent, but 31 of 784 windows differ by 1 ULP across the CSV round trip
+# while every gate matches, so zero would abort on arithmetic noise. A real provenance
+# change moves beta by 1e-6 or more, a billion times this.
+BETA_ULP = 8
+
+
+def snapshot_guard(d):
+    # SNAP is a cached sub-run. A stale one attaches the wrong hill_count_50 to the right
+    # windows and the concordance comes out looking clean, so check it against a column both
+    # trees carry. beta is the pipeline's primary output and any provenance difference moves
+    # it. Fatal, not a warning: a stale snapshot corrupts every row rather than shifting one.
+    m = d.beta.notna() & d.beta_snap.notna()
+    diff = (d.beta[m] - d.beta_snap[m]).abs()
+    bad = int((diff > BETA_ULP * np.spacing(d.beta[m].abs())).sum())
+    print(f"snapshot provenance: {int(m.sum())} windows share beta with the snapshot, "
+          f"max|dbeta| {diff.max():.2e}, {bad} beyond {BETA_ULP} ULP")
+    if bad:
+        print(f"ERROR: the hill-count snapshot was not produced by this pipeline. {bad} of "
+              f"{int(m.sum())} shared windows disagree on beta, max|dbeta| {diff.max():.2e}.\n"
+              f"       Re-run the snapshot under {SNAP} or point SNAP at a current tree; "
+              f"hill_count_50 from a stale run corrupts every concordance row.")
+        sys.stdout.flush(); sys.exit(1)
 
 
 def load(root):
@@ -68,35 +96,52 @@ def load(root):
     # The frozen snapshot is the only run carrying the other three gates.
     snap_files = sorted(glob.glob(os.path.join(SNAP, '*_window_stats.csv')))
     assert snap_files, f'frozen hill-count snapshot not found at {SNAP}'
-    snap = pd.concat([pd.read_csv(f)[KEY + ['hill_count_50']].assign(src=os.path.basename(f))
+    snap = pd.concat([pd.read_csv(f)[KEY + ['hill_count_50', 'beta']]
+                      .rename(columns={'beta': 'beta_snap'}).assign(src=os.path.basename(f))
                       for f in snap_files], ignore_index=True)
     d = d.merge(snap, on=['src'] + KEY, how='left')
     assert len(d) == n, f'snapshot join fanned {n} rows to {len(d)}'
+    snapshot_guard(d)
+    d = d.drop(columns='beta_snap')
 
-    d = d[~d.is_transition & d.ockenden_class.notna() & (d.ockenden_class != 'invalid_dunes')]
-    print(f"{n} windows in, {len(d)} classified non-transition, "
-          f"hill_count_50 present on {d.hill_count_50.notna().sum()}")
+    # Every stage of the loss is printed so a change in either join shows up in the log.
+    tr = d.is_transition.astype(bool)
+    n_tr = int(tr.sum())
+    n_nocls = int((~tr & d.ockenden_class.isna()).sum())
+    n_dunes = int((~tr & (d.ockenden_class == 'invalid_dunes')).sum())
+    d = d[~tr & d.ockenden_class.notna() & (d.ockenden_class != 'invalid_dunes')]
+    n_nogate = int(d.hill_count_50.isna().sum())
+    print(f"\nwindow attrition\n"
+          f"  {n:5d}  read from {root}\n"
+          f"  {-n_tr:5d}  is_transition (ASB-LR and MSB have none, so they check this stage)\n"
+          f"  {n - n_tr:5d}  non-transition\n"
+          f"  {-n_nocls:5d}  no ockenden_class, unsnapped in ockenden_class.py\n"
+          f"  {-n_dunes:5d}  invalid_dunes\n"
+          f"  {len(d):5d}  into the concordance\n"
+          f"  {-n_nogate:5d}  no hill_count_50 in the snapshot\n"
+          f"  {len(d) - n_nogate:5d}  carry her published gate")
     return d.copy()
 
 
 def cols(d):
-    return [c for c in MEASURED + BORROWED if c in d]
+    return [c for c in TEXTURE + SMOOTH if c in d]
 
 
-def n_eff(g):
+def n_independent(g):
     """Independent windows in this class, greedy at the tuple decorrelation distance."""
     return max(len(_independent_subset(g[['center_x', 'center_y']].values, COMPOSITION_DECIMATE_KM)), 1)
 
 
 # --- 1. OVERLAP ------------------------------------------------------------------------
 def pairs(d, col):
-    """Every class pair on one element, z shrunk by n_eff and d on the pooled spread."""
+    """Every class pair on one element, z shrunk by the independent count and d on the
+    pooled spread."""
     out, stat = [], {}
     for c, g in d.groupby('ockenden_class'):
         v = g[col].dropna()
         if len(v) < MIN_N:
             continue
-        stat[c] = (v.median(), v.std(ddof=1), len(v), n_eff(g.loc[v.index]))
+        stat[c] = (v.median(), v.std(ddof=1), len(v), n_independent(g.loc[v.index]))
     for a, b in [(a, b) for i, a in enumerate(stat) for b in list(stat)[i + 1:]]:
         (ma, sa, na, ea), (mb, sb, nb, eb) = stat[a], stat[b]
         se = np.hypot(sa / np.sqrt(ea), sb / np.sqrt(eb))
@@ -104,7 +149,7 @@ def pairs(d, col):
         z = (ma - mb) / se if se else np.nan
         dd = (ma - mb) / pooled if pooled else np.nan
         out.append({'element': col, 'a': a, 'b': b, 'median_a': ma, 'median_b': mb,
-                    'n_a': na, 'n_b': nb, 'n_eff_a': ea, 'n_eff_b': eb,
+                    'n_a': na, 'n_b': nb, 'n_independent_a': ea, 'n_independent_b': eb,
                     'z': z, 'd': dd, 'separates': abs(z) >= Z_MIN and abs(dd) >= D_MIN})
     return out
 
@@ -133,7 +178,7 @@ def variance_table(d):
     rows = []
     for c in cols(d):
         frac, ncell, per = within_cell(d, c)
-        rows.append({'element': c, 'family': 'borrowed' if c in BORROWED else 'measured',
+        rows.append({'element': c, 'family': 'smooth' if c in SMOOTH else 'texture',
                      'eps2_class': eps2(d, c), 'within_cell_frac': frac,
                      'n_cells': ncell, 'windows_per_cell': per})
     return pd.DataFrame(rows).sort_values('within_cell_frac', ascending=False)
@@ -175,7 +220,7 @@ if __name__ == '__main__':
         os.path.join(ROOT, 'ockenden_concordance.csv'), index=False)
     pd.concat([var, var2], ignore_index=True).to_csv(
         os.path.join(ROOT, 'ockenden_variance.csv'), index=False)
-    print("\nRead the within-cell column against family: borrowed axes are smooth gridded")
-    print("products and should sit low; the elements ODSA measures should sit high.")
+    print("\nRead the within-cell column against family: the smooth axes are long-wavelength")
+    print("fields and should sit low; the texture elements should sit high.")
     print(f"Wrote {os.path.join(ROOT, 'ockenden_concordance.csv')}, "
           f"{os.path.join(ROOT, 'ockenden_variance.csv')}")
