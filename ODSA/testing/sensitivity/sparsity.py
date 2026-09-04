@@ -3,19 +3,29 @@ N_band = # of geomspace(1/L, 1/(2dx), 500) points with wavelength in [250,50000]
 ±5-bin peak buffer removes up to (2*5+1)=11 bins -> fraction 11/N_band per peak.
 
 Run from v23/; writes results to v23/TESTING_LANDSCAPE_SPLITTING/."""
-import numpy as np, pandas as pd, os, re
+import numpy as np, pandas as pd, os, re, glob
 from pyproj import Transformer
 import sys
 HERE = os.path.dirname(os.path.abspath(__file__))            # .../v23
 ODSA = os.path.dirname(HERE)                                 # .../ODSA — current codebase + results
 OUT = os.path.join(HERE, "TESTING_LANDSCAPE_SPLITTING")      # this script's results folder
 sys.path.insert(0, ODSA)
-from loading import load_datasets
+from loading import load_datasets, OUTPUT_BASE_PATH
 from segmentation import split_into_segments, split_by_landscape
 from config import WINDOW_SIZE, FIT_BAND_M, Tee
-RESULTS = os.path.join(ODSA, "Ockenden-regions")  # most recent codebase run
+RESULTS = OUTPUT_BASE_PATH
 os.makedirs(OUT, exist_ok=True)
 sys.stdout = Tee(os.path.join(OUT, "sparsity_log.txt"))
+
+
+def csv_map(sub, suffix):
+    """Basename -> path for both tree layouts: flat <root>/<sub>/ and per-region
+    <root>/<region>/<sub>/."""
+    hits = (glob.glob(os.path.join(RESULTS, sub, '*' + suffix)) or
+            glob.glob(os.path.join(RESULTS, '*', sub, '*' + suffix)))
+    return {os.path.basename(p): p for p in hits}
+
+SEGMENTS = csv_map("segment_csvs", "_segment_stats.csv")
 
 # --- Drift guard. nband() below reproduces the grid of analyse_sliding_windows
 # (bed_analysis.py); the band comes from config, the grid bins and dx floor are still
@@ -58,7 +68,7 @@ regions={'Aurora':'ASB_ICECAP_2010_Fig4C_Aurora_SB_lowrelief',
          'Pensacola':'POLARGAP_2015_Pensacola_Pole',
          'Hercules':'POLARGAP_2015_Fig2C_Hercules_Dome'}
 for reg,dn in regions.items():
-    seg=pd.read_csv(os.path.join(RESULTS,'segment_csvs',dn+'_w50km_segment_stats.csv'))
+    seg=pd.read_csv(SEGMENTS[dn+'_w50km_segment_stats.csv'])
     single=seg[seg['n_windows']==1]
     Ls,dxs,nbs=[],[],[]
     for _,r in single.iterrows():

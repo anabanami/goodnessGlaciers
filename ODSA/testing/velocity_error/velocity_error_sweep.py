@@ -2,45 +2,39 @@
 """
 Velocity error sensitivity sweep for the landscape vector: the ONSET/DIVIDE seam.
 
-VELOCITY_ERROR_M_YR = 5.0 at K_SIGMA = 2 puts a +/-10 m/yr envelope on every segment.
-The within-unit spread adds almost nothing (half-width runs 10.0 min, 10.0 median, 12.4
-max over the 379 test segments), so the envelope is effectively a constant -- and it is
-20 m/yr wide while every break it has to resolve (very_low|low at 5, low|moderate at 10)
-sits inside 0-10 m/yr. Median segment speed is 8.15 m/yr.
+Velocity is the only axis that separates ONSET from DIVIDE, so the width of its envelope
+decides how many segments admit both. The half-width is K_SIGMA * velocity_sigma, where
+velocity_sigma combines the sampled per-window MEaSUREs error with the across-window spread
+of segment speed, in quadrature.
 
-The consequence is that 279 of 379 segments (74%) carry the identical envelope
-{very_low, low, moderate}, and all 127 segments admitting both ONSET and DIVIDE are
-inside that group with no exceptions. On those 127 every other axis has already done what
-it can: elevation is resolved on 113 and never reads `elevated` (the one value that drops
-DIVIDE), relief on 93, delta_beta on 58 -- and delta_beta resolving to `zero` cannot
-help, since both entries allow zero. Velocity is the only axis left in the comparison.
+This sweeps a multiplier on the sampled error and tabulates what the classification does, so
+that the seam is diagnosed as an envelope-width problem or ruled out as one before the
+catalogue is touched. The multiplier scales the sampled term alone: the across-window spread
+is a measurement of the segment itself and stays fixed, so the envelope grows in quadrature
+rather than linearly.
 
-This sweeps the constant and tabulates what the classification does, so that the seam is
-diagnosed as an envelope-width problem or ruled out as one before the catalogue is touched.
+The scale enters velocity_sigma inside build_vector, so the vectors are rebuilt for each
+cell. Scale 1.0 is production, and the script asserts that cell reproduces the live
+archetype reports.
 
-PREDICTION, registered before the run: narrowing an envelope admits fewer archetypes, so
-ONSET|DIVIDE should FALL, DEGENERATE should FALL, RESOLVED should RISE and OUT-OF-CATALOGUE
-should RISE toward the preregistered 44% ceiling. Same direction as the delta_beta run and
-the opposite of the relief/elevation sweep, which widened.
+Reading it: narrowing the envelope admits fewer archetypes, so ONSET|DIVIDE and DEGENERATE
+fall while RESOLVED and OUT-OF-CATALOGUE rise. Widening does the reverse. A cell that breaks
+that ordering is flagged. If ONSET|DIVIDE barely moves across the grid, the seam is not a
+question of envelope width and the answer is elsewhere.
 
-Two things to hold while reading it:
+Filling the transitional+`low` catalogue hole cannot move the seam either way, because a
+wider allowed set only ever ADDS archetypes. That hole is unreachable until this envelope
+narrows, so the two are one fix rather than two.
 
-  - 0 and None are the same setting (`if nominal:` in observe() treats 0 as falsy), so the
-    0 cell is NOT the truth. It drops back to the within-unit spread alone, which a
-    single-window segment does not have, so velocity goes `assumed-exact` on those and the
-    axis resolves against the 5 m/yr break with no uncertainty at all. That is the
-    over-confidence the constant was added to prevent. Read `exact_velocity` alongside the
-    verdicts: gains bought by that column are not gains.
-  - Nothing here changes the catalogue. Filling the transitional+`low` hole is monotone
-    (a wider allowed set only ever ADDS archetypes), so it cannot move the 127 either way.
-    The hole is unreachable until this envelope narrows; the two are one fix, not two.
+The sidecar is required. Without it velocity falls back to the VELOCITY_ERROR_M_YR constant,
+which is one number for the whole survey and offers the scale nothing to act on.
 
-The production baseline is the 5.0 cell and the script asserts it reproduces the live
-reports. Nothing writes into the region trees; results go to v23/velocity_error/.
+Nothing here changes the catalogue and nothing writes into the region trees; results go to
+v23/velocity_error/.
 
       python velocity_error_sweep.py
-      python velocity_error_sweep.py --errors 0 5              # cheap baseline pair
-      python velocity_error_sweep.py --root ../Ockenden-regions
+      python velocity_error_sweep.py --scales 0.5 1 2          # cheap triple
+      python velocity_error_sweep.py --root ../individual_region_TEST
 """
 import argparse, glob, os, sys
 from pathlib import Path
@@ -54,8 +48,8 @@ OUT_ROOT = HERE / 'velocity_error'
 sys.path.insert(0, str(ODSA))
 import landscape_vector as lv                                          # noqa: E402
 
-ERRORS_M_YR = [0.0, 1.0, 2.0, 5.0, 10.0]
-BASELINE = 5.0                                  # production
+SCALES = [0.25, 0.5, 1.0, 2.0, 4.0]
+BASELINE = 1.0                                  # production
 SEAM = frozenset({'very_low', 'low', 'moderate'})
 SEAM_PAIR = ('ONSET', 'DIVIDE')
 VERDICTS = ['RESOLVED', 'RESOLVED-WITH-EXTERNAL', 'DEGENERATE', 'OUT-OF-CATALOGUE']
@@ -64,24 +58,33 @@ SHORT = {'RESOLVED': 'resolved', 'RESOLVED-WITH-EXTERNAL': '+external',
 
 
 def load_region(csv_path):
-    """The same frame process_region classifies: transitions dropped, local delta_beta merged."""
+    """The frame process_region classifies: transitions dropped and the velocity sidecar
+    merged, so every cell is measured against production's own inputs."""
     df = pd.read_csv(csv_path).dropna(subset=['beta'])
     pflag = lv.region_flag(df)
     if 'is_transition' in df.columns:
         df = df[~df['is_transition']].copy()
-    dbl = lv.load_delta_beta(csv_path)
-    if dbl is not None:
-        keys = [c for c in ('trajectory', 'segment', 'window_id')
-                if c in dbl.columns and c in df.columns]
-        df = df.merge(dbl[keys + ['delta_beta_local', 'delta_beta_local_se',
-                                  'delta_beta_status', 'delta_beta_label']],
-                      on=keys, how='left')
+    vel = lv.load_velocity_error(csv_path)
+    if vel is None:
+        sys.exit(f"No *_velocity_error.csv beside {csv_path}. The scale has nothing to act "
+                 f"on without it; run velocity_error_sidecar.py first.")
+    keys = [c for c in ('trajectory', 'segment', 'window_id')
+            if c in vel.columns and c in df.columns]
+    df = df.merge(vel[keys + ['measures_err_m_yr', 'measures_cnt']], on=keys, how='left')
     return df, pflag
 
 
+def vectors_at(df, pflag, scale):
+    """Segment vectors with the sampled error scaled. _agg folds it into velocity_sigma in
+    quadrature with the standard error of the median, which the scale leaves alone."""
+    g = df.copy()
+    g['measures_err_m_yr'] = g['measures_err_m_yr'] * scale
+    return [lv.build_vector(sub, u, pflag) for u, sub in lv.units_from(g, 'segment')]
+
+
 def classify(vecs, pflag):
-    """Verdicts under whatever lv.VELOCITY_ERROR_M_YR is set to now. The vectors are
-    error-independent -- the constant enters at observe(), folded in by hypot."""
+    """Verdicts for one region's segment vectors. The scale is already inside them, since it
+    enters velocity_sigma at build time rather than at observe()."""
     rows = []
     for v in vecs:
         obs = lv.observe(v, pflag)
@@ -100,7 +103,7 @@ def classify(vecs, pflag):
     return pd.DataFrame(rows)
 
 
-def sweep(root, errors):
+def sweep(root, scales):
     found = {os.path.basename(f).replace('_window_stats.csv', ''): f
              for f in sorted(glob.glob(os.path.join(root, '**', '*_window_stats.csv'),
                                        recursive=True))}
@@ -108,21 +111,19 @@ def sweep(root, errors):
         sys.exit(f"No *_window_stats.csv under {root}")
     print(f"Regions: {len(found)}")
 
-    # Build each region's segment vectors once; only the observation step is swept.
+    # Read each region once; the scale is applied to a copy of the frame per cell.
     frames = {}
     for r, f in found.items():
         df, pflag = load_region(f)
-        vecs = [lv.build_vector(g, u, pflag) for u, g in lv.units_from(df, 'segment')]
-        frames[r] = (vecs, pflag)
-        print(f"  {r:48s} {len(vecs):4d} segments")
+        frames[r] = (df, pflag)
+        print(f"  {r:48s} {df.groupby(['trajectory', 'segment']).ngroups:4d} segments")
 
     rows = []
-    for err in errors:
-        lv.VELOCITY_ERROR_M_YR = err or None
-        for r, (vecs, pflag) in frames.items():
-            s = classify(vecs, pflag)
+    for k in scales:
+        for r, (df, pflag) in frames.items():
+            s = classify(vectors_at(df, pflag, k), pflag)
             matched = s.loc[s.n_admissible > 0, 'n_admissible']
-            rec = {'velocity_error_m_yr': err, 'region': r, 'n_segments': len(s),
+            rec = {'error_scale': k, 'region': r, 'n_segments': len(s),
                    'median_admissible': matched.median() if len(matched) else np.nan,
                    'onset_divide': int(s.seam_pair.sum()),
                    'seam_envelope': int(s.seam_envelope.sum()),
@@ -133,13 +134,12 @@ def sweep(root, errors):
                    'unavailable_velocity': int(s.unavail_vel.sum())}
             rec.update({v: int((s.verdict == v).sum()) for v in VERDICTS})
             rows.append(rec)
-    lv.VELOCITY_ERROR_M_YR = BASELINE                    # leave the module as we found it
     return pd.DataFrame(rows)
 
 
 def baseline_check(root, d):
-    """The 5.0 cell must reproduce the live archetype reports; if it does not, this script
-    is not classifying the way process_region does and nothing below it is trustworthy."""
+    """Scale 1.0 must reproduce the live archetype reports; if it does not, this script is
+    not classifying the way process_region does and nothing below it is trustworthy."""
     files = glob.glob(os.path.join(root, '*', 'landscape_vector', '*_archetype_report.csv'))
     if not files:
         print("\n  (no archetype reports under root -- baseline not cross-checked)")
@@ -149,7 +149,10 @@ def baseline_check(root, d):
     seam = int((live.archetypes.fillna('').str.contains(SEAM_PAIR[0]) &
                 live.archetypes.fillna('').str.contains(SEAM_PAIR[1])).sum())
     counts = live.verdict.value_counts()
-    mine = d[d.velocity_error_m_yr == BASELINE]
+    mine = d[d.error_scale == BASELINE]
+    if not len(mine):
+        print(f"\n  (scale {BASELINE:g} not in the grid -- baseline not cross-checked)")
+        return
     bad = {v: (int(mine[v].sum()), int(counts.get(v, 0))) for v in VERDICTS
            if int(mine[v].sum()) != int(counts.get(v, 0))}
     if int(mine.onset_divide.sum()) != seam:
@@ -159,19 +162,19 @@ def baseline_check(root, d):
               + ', '.join(f"{v} {a} vs {b}" for v, (a, b) in bad.items())
               + " -- do not read the sweep until this is explained **")
     else:
-        print(f"\n  Baseline check: {BASELINE} m/yr reproduces the live reports exactly "
+        print(f"\n  Baseline check: scale {BASELINE:g} reproduces the live reports exactly "
               f"({', '.join(f'{SHORT[v]} {int(mine[v].sum())}' for v in VERDICTS if mine[v].sum())}"
               f", ONSET|DIVIDE {seam})")
 
 
-def report(d, errors, out_root):
-    tot = d.groupby('velocity_error_m_yr', as_index=False).sum(numeric_only=True)
-    base = tot[tot.velocity_error_m_yr == BASELINE]
+def report(d, scales, out_root):
+    tot = d.groupby('error_scale', as_index=False).sum(numeric_only=True)
+    base = tot[tot.error_scale == BASELINE]
     base = base.iloc[0] if len(base) else None
-    n = int(d[d.velocity_error_m_yr == errors[0]].n_segments.sum())
+    n = int(d[d.error_scale == scales[0]].n_segments.sum())
 
     if base is not None:
-        print(f"\n{'='*104}\n  BASELINE ({BASELINE} m/yr, = production)  {n} segments\n{'='*104}")
+        print(f"\n{'='*104}\n  BASELINE (scale {BASELINE:g}, = production)  {n} segments\n{'='*104}")
         print("    " + '  '.join(f"{SHORT[v]} {int(base[v])}" for v in VERDICTS if base[v]))
         print(f"    ONSET|DIVIDE co-admitted: {int(base.onset_divide)} "
               f"({base.onset_divide / n:.0%})")
@@ -179,50 +182,51 @@ def report(d, errors, out_root):
               f"({base.seam_envelope / n:.0%})")
 
     print(f"\n{'='*104}\n  THE SWEEP\n{'='*104}")
-    hdr = ['err m/yr'] + [SHORT[v] for v in VERDICTS] + \
+    hdr = ['scale'] + [SHORT[v] for v in VERDICTS] + \
           ['ONSET|DIV', 'seam env', 'exact_vel', 'mean|band|', 'med|set|']
     print('  ' + ''.join(f"{h:>12s}" for h in hdr))
-    for e in errors:
-        r = tot[tot.velocity_error_m_yr == e].iloc[0]
-        g = d[d.velocity_error_m_yr == e]
-        vals = [f"{e:g}"] + [f"{int(r[v])}" for v in VERDICTS] + \
+    for k in scales:
+        r = tot[tot.error_scale == k].iloc[0]
+        g = d[d.error_scale == k]
+        vals = [f"{k:g}"] + [f"{int(r[v])}" for v in VERDICTS] + \
                [f"{int(r.onset_divide)}", f"{int(r.seam_envelope)}", f"{int(r.exact_velocity)}",
                 f"{g.mean_n_bands.mean():.2f}", f"{g.median_admissible.median():.0f}"]
         print('  ' + ''.join(f"{x:>12s}" for x in vals))
 
     print(f"\n{'='*104}\n  ONSET|DIVIDE PER REGION\n{'='*104}")
-    print(f"  {'region':30s}{'n':>6s}" + ''.join(f"{f'{e:g}':>10s}" for e in errors))
+    print(f"  {'region':30s}{'n':>6s}" + ''.join(f"{f'{k:g}':>10s}" for k in scales))
     for r, g in d.groupby('region'):
-        cells = [f"{int(g[g.velocity_error_m_yr == e].onset_divide.iloc[0])}" for e in errors]
+        cells = [f"{int(g[g.error_scale == k].onset_divide.iloc[0])}" for k in scales]
         print(f"  {r[:30]:30s}{int(g.n_segments.iloc[0]):>6d}" +
               ''.join(f"{c:>10s}" for c in cells))
 
     print(f"\n{'='*104}\n  WHAT THE VELOCITY AXIS IS DOING\n{'='*104}")
-    print("  exact_vel is the trap: at 0 the axis loses its error bar on single-window")
-    print("  segments and resolves against the 5 m/yr break with no uncertainty. Any")
-    print("  resolution bought there is over-confidence, not measurement.")
-    print(f"\n  {'err m/yr':>10s}{'med half-width':>16s}{'exact':>8s}{'ambiguous':>11s}"
+    print("  With the sidecar merged, a unit whose windows carry no MEaSUREs coverage is")
+    print("  routed to `unavailable` and widens to every band, so `exact` stays 0 across the")
+    print("  grid. A non-zero entry means a unit reached classify_set with no sigma at all.")
+    print(f"\n  {'scale':>10s}{'med half-width':>16s}{'exact':>8s}{'ambiguous':>11s}"
           f"{'unavailable':>13s}")
-    for e in errors:
-        r = tot[tot.velocity_error_m_yr == e].iloc[0]
-        hw = d[d.velocity_error_m_yr == e].median_half_width.median()
-        print(f"  {e:>10g}{hw if np.isfinite(hw) else float('nan'):>16.1f}"
+    for k in scales:
+        r = tot[tot.error_scale == k].iloc[0]
+        hw = d[d.error_scale == k].median_half_width.median()
+        print(f"  {k:>10g}{hw if np.isfinite(hw) else float('nan'):>16.1f}"
               f"{int(r.exact_velocity):>8d}{int(r.ambiguous_velocity):>11d}"
               f"{int(r.unavailable_velocity):>13d}")
 
     if base is not None:
-        print(f"\n{'='*104}\n  AGAINST THE PREDICTION\n{'='*104}")
-        print(f"  Registered, relative to the {BASELINE} m/yr baseline: narrowing the envelope")
-        print("  cuts ONSET|DIVIDE and DEGENERATE, raises RESOLVED and OUT-OF-CATALOGUE.")
-        for e in [x for x in errors if x < BASELINE]:
-            r = tot[tot.velocity_error_m_yr == e].iloc[0]
+        print(f"\n{'='*104}\n  DIRECTION\n{'='*104}")
+        print(f"  Relative to scale {BASELINE:g}: a narrower envelope cuts ONSET|DIVIDE and")
+        print("  DEGENERATE and raises RESOLVED and OUT-OF-CATALOGUE. A wider one reverses it.")
+        for k in [x for x in scales if x != BASELINE]:
+            r = tot[tot.error_scale == k].iloc[0]
             dsm = int(r.onset_divide - base.onset_divide)
             dres = int(r.RESOLVED - base.RESOLVED)
             dout = int(r['OUT-OF-CATALOGUE'] - base['OUT-OF-CATALOGUE'])
             ddeg = int(r.DEGENERATE - base.DEGENERATE)
-            ok = 'as predicted' if (dsm <= 0 and dres >= 0 and dout >= 0 and ddeg <= 0) \
-                 else '** AGAINST **'
-            print(f"  {e:4g} m/yr : ONSET|DIVIDE {dsm:+4d}   resolved {dres:+4d}   "
+            s = 1 if k < BASELINE else -1          # expected sign of dres and dout
+            ok = 'consistent' if (s * dsm <= 0 and s * dres >= 0 and s * dout >= 0
+                                  and s * ddeg <= 0) else '** AGAINST **'
+            print(f"  {k:4g} x : ONSET|DIVIDE {dsm:+4d}   resolved {dres:+4d}   "
                   f"out-of-cat {dout:+4d}   degenerate {ddeg:+4d}   {ok}")
         print("\n  If ONSET|DIVIDE barely moves, the seam is not envelope width and the")
         print("  catalogue hole is not the other half of it either -- look elsewhere.")
@@ -238,16 +242,25 @@ def report(d, errors, out_root):
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('--root', default=str(ODSA / 'individual_region_TEST'))
-    ap.add_argument('--errors', nargs='+', type=float, default=ERRORS_M_YR)
+    ap.add_argument('--scales', nargs='+', type=float, default=SCALES)
     a = ap.parse_args()
+
+    scales = sorted(set(a.scales))
+    # At scale 0 the sampled error becomes a finite 0.0 rather than absent, so a
+    # single-window segment gets sigma 0.0, resolves against the break with no uncertainty
+    # and is not flagged `exact`. The cell would read as resolution rather than as the
+    # over-confidence it is.
+    if any(k <= 0 for k in scales):
+        sys.exit("Scales must be positive.")
 
     os.makedirs(OUT_ROOT, exist_ok=True)
     sys.stdout = lv.Tee(str(OUT_ROOT / 'velocity_error_sweep_log.txt'))
-    errors = sorted(set(a.errors))
-    print(f"Velocity error sweep: {[f'{e:g}' for e in errors]} m/yr, {len(errors)} cells")
-    print(f"K_SIGMA = {lv.K_SIGMA}, so the envelope half-width is K_SIGMA x error")
+    print(f"Velocity error scale sweep: {[f'{k:g}' for k in scales]} x sampled error, "
+          f"{len(scales)} cells")
+    print(f"K_SIGMA = {lv.K_SIGMA}, so the envelope half-width is "
+          f"K_SIGMA x sqrt(spread^2 + (scale x sampled error)^2)")
     print(f"Root: {a.root}")
 
-    d = sweep(a.root, errors)
+    d = sweep(a.root, scales)
     baseline_check(a.root, d)
-    report(d, errors, str(OUT_ROOT))
+    report(d, scales, str(OUT_ROOT))

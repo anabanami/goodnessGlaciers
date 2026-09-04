@@ -2,34 +2,32 @@
 """
 Relief / elevation error sensitivity sweep for the landscape vector.
 
-RELIEF_ERROR_M and ELEVATION_ERROR_M were None until 2026-08-07, so relief and elevation
-resolved against their class breaks carrying no uncertainty at all: 306 of 379 segments
-(81%) read `assumed-exact` on both. **They are now set, 30 m and 10 m, from [Pritchard_2025],
-and `assumed-exact` no longer fires anywhere.** This sweep is what justified setting them and
-it is kept as the sensitivity record.
+RELIEF_ERROR_M and ELEVATION_ERROR_M put a nominal error bar on the relief and elevation
+axes, which a single-window segment would otherwise resolve against its class breaks with no
+uncertainty at all. Both are set from [Pritchard_2025]. This sweeps them independently over a
+relief x elevation grid, so the sensitivity of the adopted pair is measured rather than
+assumed.
 
-The two axes go exact on exactly the SAME segments in all 7 regions -- a single-window
-segment has neither an across-window spread nor a formal error, so both lose their error
-bar together. The diagonal therefore carries most of the signal; the off-diagonal cells
-say which of the two is doing the work.
+The two axes lose their error bar on the same segments, because a single-window segment has
+neither an across-window spread nor a formal error. The diagonal therefore carries most of
+the signal, and the off-diagonal cells say which of the two is doing the work.
 
-PREDICTION, registered before the first run: widening an envelope admits more archetypes, so
-OUT-OF-CATALOGUE should FALL, DEGENERATE should RISE and RESOLVED should FALL. That is
-the opposite direction to the delta_beta run, which narrowed envelopes and walked the
-out-of-catalogue rate up toward the preregistered ceiling. Confirmed at every level in all
-three runs so far.
+The constants enter at observe(), so the vectors are built once per region and only the
+observation step is swept. The live values are added to the grid automatically, and the
+script asserts that cell reproduces the live archetype reports.
 
-NOTE: 0 and None are the same setting -- `if nominal:` in observe() treats 0 as falsy -- so
-the 0/0 cell means "no nominal error on either axis". **It is no longer production.** It is
-now the counterfactual that isolates what setting the constants bought, and the cell that
-must reproduce the live reports is PROD_RELIEF / PROD_ELEV, which is what baseline_check
-compares and which is added to the grid automatically.
+Reading it: widening an envelope admits more archetypes, so DEGENERATE rises while RESOLVED
+and OUT-OF-CATALOGUE fall. A cell that breaks that ordering is flagged. The 0/0 cell is the
+reference point, where neither axis carries a nominal error, so `assumed-exact` fires on
+every single-window segment and any resolution gained there is over-confidence rather than
+measurement. 0 and None are the same setting, since `if nominal:` in observe() treats 0 as
+falsy.
 
 Nothing here writes into the region trees; results go to v23/relief_elevation_error/.
 
       python relief_elevation_error_sweep.py
       python relief_elevation_error_sweep.py --errors 0 50          # cheap 2x2
-      python relief_elevation_error_sweep.py --root ../Ockenden-regions
+      python relief_elevation_error_sweep.py --root ../individual_region_TEST
 """
 import argparse, glob, os, sys
 from pathlib import Path
@@ -53,25 +51,19 @@ SHORT = {'RESOLVED': 'resolved', 'RESOLVED-WITH-EXTERNAL': '+external',
 
 
 def load_region(csv_path):
-    """The same frame process_region classifies: transitions dropped, local delta_beta merged."""
+    """The same frame process_region classifies: transitions dropped, sampled velocity
+    error merged."""
     df = pd.read_csv(csv_path).dropna(subset=['beta'])
     pflag = lv.region_flag(df)
     if 'is_transition' in df.columns:
         df = df[~df['is_transition']].copy()
-    dbl = lv.load_delta_beta(csv_path)
-    if dbl is not None:
-        keys = [c for c in ('trajectory', 'segment', 'window_id')
-                if c in dbl.columns and c in df.columns]
-        df = df.merge(dbl[keys + ['delta_beta_local', 'delta_beta_local_se',
-                                  'delta_beta_status', 'delta_beta_label']],
-                      on=keys, how='left')
-    # Without this the sampled velocity error is absent, velocity falls back to the
-    # VELOCITY_ERROR_M_YR constant, and the sweep silently runs at the old baseline.
+    # The velocity axis is not swept here, but production classifies with the sampled
+    # error merged, so the baseline cell only reproduces the live reports if it is present.
     vel = lv.load_velocity_error(csv_path)
     if vel is not None:
         keys = [c for c in ('trajectory', 'segment', 'window_id')
                 if c in vel.columns and c in df.columns]
-        df = df.merge(vel[keys + ['measures_err_m_yr']], on=keys, how='left')
+        df = df.merge(vel[keys + ['measures_err_m_yr', 'measures_cnt']], on=keys, how='left')
     return df, pflag
 
 
@@ -123,19 +115,15 @@ def sweep(root, errors):
                        'ambiguous_elevation': int(s.amb_elev.sum())}
                 rec.update({v: int((s.verdict == v).sum()) for v in VERDICTS})
                 rows.append(rec)
-    # Restore the live values, NOT None -- these are set in production since 2026-08-07.
     lv.RELIEF_ERROR_M, lv.ELEVATION_ERROR_M = PROD_RELIEF or None, PROD_ELEV or None
     return pd.DataFrame(rows)
 
 
 def baseline_check(root, d):
-    """The cell matching the LIVE constants must reproduce the archetype reports; if it does
+    """The cell matching the live constants must reproduce the archetype reports; if it does
     not, this script is not classifying the way process_region does and nothing below it is
-    trustworthy.
-
-    That cell is not 0/0 any more. Relief and elevation were unset until 2026-08-07 and are now
-    30 m and 10 m, so 0/0 is a counterfactual (`no nominal error`) rather than production. The
-    live values are added to the swept grid so this check always has a cell to land on."""
+    trustworthy. Those values are added to the swept grid so this check always has a cell to
+    land on."""
     files = glob.glob(os.path.join(root, '*', 'landscape_vector', '*_archetype_report.csv'))
     if not files:
         print("\n  (no archetype reports under root -- baseline not cross-checked)")
@@ -200,15 +188,16 @@ def report(d, errors, out_root):
         print(f"  {r[:30]:30s}{int(g.n_segments.iloc[0]):>6d}" +
               ''.join(f"{c:>12s}" for c in cells))
 
-    print(f"\n{'='*100}\n  AGAINST THE PREDICTION\n{'='*100}")
-    print("  Registered: out-of-catalogue FALLS, degenerate RISES, resolved FALLS.")
+    print(f"\n{'='*100}\n  DIRECTION\n{'='*100}")
+    print("  Relative to 0/0: a wider envelope admits more archetypes, so degenerate rises")
+    print("  while resolved and out-of-catalogue fall.")
     for e in errors[1:]:
         r = tot[(tot.relief_error_m == e) & (tot.elevation_error_m == e)].iloc[0]
         dres = int(r.RESOLVED - base.RESOLVED)
         dout = int(r['OUT-OF-CATALOGUE'] - base['OUT-OF-CATALOGUE'])
         ddeg = int(sum(r[v] for v in VERDICTS if v.startswith('DEGEN'))
                    - sum(base[v] for v in VERDICTS if v.startswith('DEGEN')))
-        ok = 'as predicted' if (dres <= 0 and dout <= 0 and ddeg >= 0) else '** AGAINST **'
+        ok = 'consistent' if (dres <= 0 and dout <= 0 and ddeg >= 0) else '** AGAINST **'
         print(f"  {e:4d} m : resolved {dres:+4d}   out-of-cat {dout:+4d}   "
               f"degenerate {ddeg:+4d}   {ok}")
 

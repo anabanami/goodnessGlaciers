@@ -98,6 +98,34 @@ class Tee:
         self.log.flush()
 
 
+class tee_to:
+    """Duplicate stdout into an extra log file for the duration of a block, restoring
+    the previous stdout on exit. Nests inside a Tee, so a run that already logs to one
+    file writes a second copy of the block to its own file."""
+    def __init__(self, filepath):
+        self.filepath = filepath
+    def __enter__(self):
+        self.previous = sys.stdout
+        self.log = open(self.filepath, 'w')
+        previous, log = self.previous, self.log
+
+        class _Fork:
+            def write(self, msg):
+                previous.write(msg)
+                log.write(msg)
+            def flush(self):
+                previous.flush()
+                log.flush()
+
+        sys.stdout = _Fork()
+        sys.stdout.write(f"Console output saved to {self.filepath}\n")
+        return self
+    def __exit__(self, *exc):
+        sys.stdout = self.previous
+        self.log.close()
+        return False
+
+
 def get_region_folder(dataset_name):
     is_2008 = '_2008_' in dataset_name
     match = re.search(r'(Fig\w+_\w+)$', dataset_name)

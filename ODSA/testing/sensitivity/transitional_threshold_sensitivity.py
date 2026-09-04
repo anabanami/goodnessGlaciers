@@ -10,7 +10,7 @@ Two layers of output, all under transitional_threshold_sensitivity/ :
     actually move with the boundary (pooled KDE plot, per-region KDE plot,
     classification breakdown), plus that candidate's log.
 
-Data source: the current ODSA window-level CSVs (Ockenden-regions/window_csvs).
+Data source: the window-level CSVs of the run tree loading.OUTPUT_BASE_PATH names.
 """
 import sys
 from pathlib import Path
@@ -26,6 +26,7 @@ HERE = Path(__file__).resolve().parent          # .../v23
 ODSA = HERE.parent                              # .../ODSA
 sys.path.insert(0, str(ODSA))
 from config import Tee                          # noqa: E402
+from loading import OUTPUT_BASE_PATH             # noqa: E402
 # The chaotic/hard and transitional/soft boundaries are held fixed while the hard/
 # transitional one is swept, so they are production values rather than parameters of this
 # test. Read them from BED_CLASSES instead of copying the numbers, which is what left this
@@ -37,11 +38,12 @@ EDGE_TRANS_SOFT = float(BED_EDGES[3])            # 2.5
 OUT_ROOT = HERE / "transitional_threshold"
 THRESHOLDS = [2.0, 2.1, 2.2]
 
-# Gather all window-level CSVs from whichever region dirs exist
-csv_dirs = [d for d in [
-    ODSA / "Ockenden-regions" / "window_csvs",
-    ODSA / "SMUG-regions" / "window_csvs",
-] if d.exists()]
+# The window_csvs/ folders of the run tree, under either layout: flat <root>/window_csvs/
+# and per-region <root>/<region>/window_csvs/.
+SRC = Path(OUTPUT_BASE_PATH)
+csv_dirs = sorted({p.parent for p in
+                   (list(SRC.glob("window_csvs/*_window_stats.csv")) or
+                    list(SRC.glob("*/window_csvs/*_window_stats.csv")))})
 
 # ── Step 1: load pooled beta (done once) ─────────────────────────────
 frames = []

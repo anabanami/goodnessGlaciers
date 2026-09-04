@@ -44,6 +44,7 @@ def _odsa_root(start):
 ODSA = _odsa_root(HERE)
 sys.path.insert(0, str(HERE if (HERE / 'config.py').exists() else HERE.parent))
 from config import WINDOW_SIZE, BEDFORM_BAND_M  # noqa: E402
+from loading import OUTPUT_BASE_PATH             # noqa: E402
 
 
 def _resolve(p):
@@ -51,7 +52,7 @@ def _resolve(p):
     return q if q.exists() else ODSA / p
 
 
-SOURCES = [_resolve(a) for a in sys.argv[1:]] or [ODSA / 'Ockenden-regions']
+SOURCES = [_resolve(a) for a in sys.argv[1:]] or [Path(OUTPUT_BASE_PATH)]
 OUT = HERE / 'wavelength_characteristic'
 OUT.mkdir(parents=True, exist_ok=True)
 
@@ -62,7 +63,7 @@ BAND_M = BEDFORM_BAND_M
 # Elements the reduction has to be independent of, all read from the window CSV except
 # beta_iqr, which is a segment property broadcast onto its windows. hill_count is the
 # overlap this test exists to measure.
-AGAINST = ['beta', 'beta_iqr', 'relief_m', 'rms_roughness', 'psd_amplitude_1km',
+AGAINST = ['beta', 'beta_iqr', 'relief_m', 'rms_roughness', 'A_1km',
            'skewness', 'kurtosis', 'hill_count', 'measures_speed_mean', 'incidence_deg']
 # wl_eta is Li_2010's eta, computed in the pipeline over the same band and read from the
 # window CSV rather than reduced from the peak list. The others pick one peak; it uses
@@ -105,13 +106,16 @@ def _spacing(src):
 
 regions, skipped = {}, []
 for src in SOURCES:
-    spacing = _spacing(src)
     dets = sorted(src.glob('*/*_wavelength_detections.csv')) or \
            sorted(src.glob('*/*/*_wavelength_detections.csv'))
     for f in dets:
         stem = f.name.replace('_wavelength_detections.csv', '')
-        seg_f = src / 'segment_csvs' / f'{stem}_segment_stats.csv'
-        win_f = src / 'window_csvs' / f'{stem}_window_stats.csv'
+        # Both tree layouts hold window_csvs/, segment_csvs/ and the run log beside the
+        # detections' parent: the run root when flat, the region folder when per-region.
+        base = f.parent.parent
+        spacing = _spacing(base)
+        seg_f = base / 'segment_csvs' / f'{stem}_segment_stats.csv'
+        win_f = base / 'window_csvs' / f'{stem}_window_stats.csv'
         if not win_f.exists():
             skipped.append(f'{_short(stem)} (no window CSV)')
             continue
@@ -222,17 +226,17 @@ if any('xi_band' in d for d in regions.values()):
     for name, d in sorted(regions.items()):
         if 'xi_band' not in d or 'wl_eta' not in d:
             continue
-        m = d.wl_eta.notna() & d.xi_band.notna() & d.psd_amplitude_1km.notna()
+        m = d.wl_eta.notna() & d.xi_band.notna() & d.A_1km.notna()
         if m.sum() < 8:
             continue
         print(f'{name:<34s} {spearmanr(d.loc[m, "wl_eta"], d.loc[m, "xi_band"]).statistic:12.2f} '
-              f'{spearmanr(d.loc[m, "xi_band"], d.loc[m, "psd_amplitude_1km"]).statistic:15.2f} '
+              f'{spearmanr(d.loc[m, "xi_band"], d.loc[m, "A_1km"]).statistic:15.2f} '
               f'{int(m.sum()):6d}')
     print()
 
 # ── Region separation beyond the existing elements ────────────────────────────
 # The same four the hill count residual was tested against, so the two are comparable.
-CONTROLS = ['beta', 'relief_m', 'rms_roughness', 'psd_amplitude_1km']
+CONTROLS = ['beta', 'relief_m', 'rms_roughness', 'A_1km']
 
 
 def _eps2(groups):

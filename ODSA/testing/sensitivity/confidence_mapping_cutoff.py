@@ -3,7 +3,7 @@ Cutoff-angle sensitivity of the MEaSUREs-weighted cos²θ anisotropy fit.
 
 Recomputes Δβ and R² for every region at a range of flow-direction weighting
 cutoffs, at both window and segment level, straight from the current ODSA
-CSVs (Ockenden-regions/{window,segment}_csvs) — no hand-transcribed numbers.
+CSVs (<region>/{window,segment}_csvs), with no hand-transcribed numbers.
 The unweighted fit is the baseline; a tighter cutoff trusts fewer windows
 (only those where REMA and MEaSUREs agree closely on flow direction). If the
 anisotropy is real and noisy flow directions were diluting it, tightening the
@@ -28,6 +28,7 @@ HERE = Path(__file__).resolve().parent          # .../v23
 ODSA = HERE.parent                              # .../ODSA
 sys.path.insert(0, str(ODSA))
 from config import Tee                                       # noqa: E402
+from loading import OUTPUT_BASE_PATH                          # noqa: E402
 from weighted_anisotropy import (discover_regions,           # noqa: E402
                                  flow_weight, fit_cos2)
 
@@ -35,10 +36,11 @@ OUT_ROOT = HERE / "confidence_mapping_of_surface_flow"
 CUTOFFS = [45, 50, 60, 70, 75]
 
 # Region CSV roots — discover_regions reads window_csvs/ and segment_csvs/ under each
-region_roots = [d for d in [
-    ODSA / "Ockenden-regions",
-    ODSA / "SMUG-regions",
-] if d.exists()]
+# discover_regions reads window_csvs/ and segment_csvs/ directly under each root, so a
+# per-region tree contributes one root per region.
+SRC = Path(OUTPUT_BASE_PATH)
+region_roots = ([SRC] if (SRC / "window_csvs").is_dir()
+                else sorted(p.parent for p in SRC.glob("*/window_csvs")))
 
 
 def short_label(region):

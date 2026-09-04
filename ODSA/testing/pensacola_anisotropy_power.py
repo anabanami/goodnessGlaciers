@@ -21,17 +21,19 @@ HERE = Path(__file__).resolve().parent; ODSA = HERE.parent
 sys.path.insert(0, str(ODSA))
 from weighted_anisotropy import flow_weight, fit_cos2, _do_curve_fit
 from config import Tee
+from loading import OUTPUT_BASE_PATH
 
 OUT = HERE / "TESTING_LANDSCAPE_SPLITTING"; OUT.mkdir(parents=True, exist_ok=True)
 sys.stdout = Tee(str(OUT / "pensacola_anisotropy_power_log.txt"))
 
 REGION = sys.argv[1] if len(sys.argv) > 1 else "Pensacola"
-WIN = ODSA / "Ockenden-regions" / "window_csvs"
-SEG = ODSA / "Ockenden-regions" / "segment_csvs"
+SRC = Path(OUTPUT_BASE_PATH)
 
-def _find(d):
-    hits = [p for p in d.glob("*.csv") if REGION.lower() in p.name.lower()]
-    if not hits: sys.exit(f"no CSV matching {REGION!r} in {d}")
+def _find(sub):
+    """Both tree layouts: flat <root>/<sub>/ and per-region <root>/<region>/<sub>/."""
+    found = list(SRC.glob(f"{sub}/*.csv")) or list(SRC.glob(f"*/{sub}/*.csv"))
+    hits = [p for p in found if REGION.lower() in p.name.lower()]
+    if not hits: sys.exit(f"no CSV matching {REGION!r} in {sub} under {SRC}")
     return hits[0]
 
 def prep(path):
@@ -72,8 +74,8 @@ def characterise(name, th, b, w):
     return dict(n=int(m.sum()), ess=ess(w), c2=wstd(c2m), par=par, perp=perp, fit=fit_w)
 
 print(f"{'='*66}\n#1 anisotropy power/coverage diagnostic — {REGION}\n{'='*66}")
-wth, wb, ww = prep(_find(WIN)); W = characterise("WINDOW level", wth, wb, ww)
-sth, sb, sw = prep(_find(SEG)); S = characterise("SEGMENT level", sth, sb, sw)
+wth, wb, ww = prep(_find("window_csvs")); W = characterise("WINDOW level", wth, wb, ww)
+sth, sb, sw = prep(_find("segment_csvs")); S = characterise("SEGMENT level", sth, sb, sw)
 
 # Secondary: does the window signal survive at segment n? Subsample windows to the
 # segment used-count and refit B times. If Δβ stays significant, n alone isn't the

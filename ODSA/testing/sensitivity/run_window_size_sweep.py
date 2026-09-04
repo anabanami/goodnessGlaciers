@@ -54,10 +54,12 @@ def run_one(size_km):
     # the sweep tracks the standard. Pinning a non-standard taper here would also suffix
     # the output filenames, which build_table() does not expect -- it would silently
     # assemble a table of NaNs (_aniso returns {} for a missing file).
+    # The sweep reads the run's CSVs alone, so the pipeline's own figures are weight.
     env = dict(os.environ,
                ODSA_WINDOW_SIZE=str(size_km * 1000),
                ODSA_OUTPUT_BASE=str(RUNS) + os.sep,
-               ODSA_REGION_FILTER=','.join(REGIONS))
+               ODSA_REGION_FILTER=','.join(REGIONS),
+               ODSA_NO_PLOTS='1')
     print(f"\n{'='*70}\n  WINDOW_SIZE = {size_km} km\n{'='*70}")
     subprocess.run([sys.executable, 'bed_analysis.py'], cwd=str(ODSA), env=env, check=True)
 

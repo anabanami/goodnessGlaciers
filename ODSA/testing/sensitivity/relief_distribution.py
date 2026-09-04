@@ -5,7 +5,10 @@ from matplotlib.lines import Line2D
 
 HERE = Path(__file__).resolve().parent          # .../v23
 ODSA = HERE.parent                               # .../ODSA
-OCKENDEN = ODSA / 'Ockenden-regions'
+import sys as _sys
+_sys.path.insert(0, str(ODSA))
+from loading import OUTPUT_BASE_PATH
+RUN_TREE = Path(OUTPUT_BASE_PATH)
 # THRESHOLDS = [200, 600]  # initial values — to be revised from this analysis
 # THRESHOLDS = [300, 800]
 # THRESHOLDS = [350, 900]
@@ -18,8 +21,6 @@ THRESHOLDS = [350, 800]
 # non-fatal reminder, not an error: if a swept value is adopted, RELIEF_CLASSES in
 # bed_character.py has to be updated to match. The message is emitted after the Tee
 # is installed below, so it lands in relief_distribution.log alongside the results.
-import sys as _sys
-_sys.path.insert(0, str(ODSA))
 try:
     from bed_character import RELIEF_THRESHOLDS as _PROD_THRESHOLDS
 except Exception as _e:
@@ -57,8 +58,11 @@ CLASS_COLORS = {
 }
 
 def load_windows(folder):
+    """Both tree layouts: flat <root>/window_csvs/ and per-region <root>/<region>/window_csvs/."""
     dfs = {}
-    for f in sorted((folder / 'window_csvs').glob('*window_stats*.csv')):
+    hits = (sorted(folder.glob('window_csvs/*window_stats*.csv')) or
+            sorted(folder.glob('*/window_csvs/*window_stats*.csv')))
+    for f in hits:
         name = f.stem.replace('_w50km_window_stats', '')
         for pfx in ['ASB_ICECAP_2010_', 'POLARGAP_2015_', 'Rec_Catch_']:
             name = name.replace(pfx, '')
@@ -83,7 +87,7 @@ sys.stdout = Tee(sys.__stdout__, _tee_buf)
 for _line in THRESHOLD_CHECK:
     print(_line)
 
-regions = load_windows(OCKENDEN)
+regions = load_windows(RUN_TREE)
 
 # tag each region with its landscape class
 for name in list(regions):

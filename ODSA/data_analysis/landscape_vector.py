@@ -1,7 +1,7 @@
 import os, sys, glob, itertools
 import numpy as np
 import pandas as pd
-from config import Tee, PROCESSING_FLAG_NOTE as _FLAG_NOTE, processing_flag_of as region_flag
+from config import Tee, tee_to, PROCESSING_FLAG_NOTE as _FLAG_NOTE, processing_flag_of as region_flag
 from bed_character import (BED_CLASSES, RELIEF_CLASSES, ELEVATION_CLASSES,
                            discover_window_csvs, select_region)
 from loading import OUTPUT_BASE_PATH as _REGION_BASE
@@ -32,6 +32,11 @@ def output_dir_for(csv_path):
 # Half-width of the uncertainty envelope used to decide whether a class boundary is
 # resolved, in sigma. An axis with an envelope that crosses a break returns both classes.
 K_SIGMA = 2.0
+
+# Columns of the two per-region pair tables. Declared here so that a region with no
+# qualifying pairs still writes a header row.
+COLLAPSE_COLS = ['unit_a', 'unit_b', 'max_z', 'on', 'cases_a', 'cases_b']
+BLIND_COLS = ['unit_a', 'unit_b', 'archetypes', 'element', 'z', 'd']
 
 # Lag at which the class tuple reaches chance agreement (window_atom_test.py). Set for the
 # verdict.
@@ -501,7 +506,7 @@ def collapse_pairs(vec_df, reports, z_min=2.0):
                          'max_z': max(zs.values()),
                          'on': max(zs, key=zs.get),
                          'cases_a': reports[a['unit']], 'cases_b': reports[b['unit']]})
-    return pd.DataFrame(rows).sort_values('max_z') if rows else pd.DataFrame()
+    return pd.DataFrame(rows).sort_values('max_z') if rows else pd.DataFrame(columns=COLLAPSE_COLS)
 
 
 def unthresholded_separation(vec_df, reports, z_min=2.0, d_min=SEPARATION_D_MIN):
@@ -537,7 +542,7 @@ def unthresholded_separation(vec_df, reports, z_min=2.0, d_min=SEPARATION_D_MIN)
                 rows.append({'unit_a': a['unit'], 'unit_b': b['unit'],
                              'archetypes': ca, 'element': c, 'z': z, 'd': d})
         n_answerable += answerable
-    out = pd.DataFrame(rows).sort_values('z', ascending=False) if rows else pd.DataFrame()
+    out = pd.DataFrame(rows).sort_values('z', ascending=False) if rows else pd.DataFrame(columns=BLIND_COLS)
     return out, n_same, n_answerable
 
 
@@ -751,8 +756,8 @@ def process_region(region_name, csv_path, levels=('window', 'segment', 'region')
               f"and fractions are not comparable between regions")
 
     cp = collapse_pairs(vec[vec.level == 'segment'], admissible_by_unit)
+    cp.to_csv(os.path.join(out, f'{region_name}_collapsed_pairs.csv'), index=False)
     if len(cp):
-        cp.to_csv(os.path.join(out, f'{region_name}_collapsed_pairs.csv'), index=False)
         both = cp[(cp.cases_a != '') & (cp.cases_b != '')]
         diff = both[both.cases_a != both.cases_b]
         print(f"\n  COLLAPSED PAIRS: {len(cp)} segment pairs separated by nothing at 2 sigma; "
@@ -765,8 +770,8 @@ def process_region(region_name, csv_path, levels=('window', 'segment', 'region')
         print(f"\n  CATALOGUE-BLIND: {n_same} segment pairs get the same archetype answer; "
               f"{n_ans} ({n_ans/n_same:.0%}) have a within-unit spread on at least one "
               f"unthresholded element, so the question is answerable for those only")
+    us.to_csv(os.path.join(out, f'{region_name}_catalogue_blind.csv'), index=False)
     if len(us):
-        us.to_csv(os.path.join(out, f'{region_name}_catalogue_blind.csv'), index=False)
         npairs = len(us.groupby(['unit_a', 'unit_b']))
         print(f"      {npairs} of the {n_ans} differ at 2 sigma AND by a full population "
               f"spread on an unthresholded element")
@@ -880,8 +885,8 @@ if __name__ == "__main__":
     # Compare regions already processed.
     if arg == '--compare':
         root = sys.argv[2] if len(sys.argv) > 2 else _REGION_BASE
-        sys.stdout = Tee(os.path.join(root, 'cross_region_log.txt'))
-        compare_regions(root)
+        with tee_to(os.path.join(root, 'cross_region_log.txt')):
+            compare_regions(root)
         sys.exit(0)
 
     if arg and os.path.isdir(arg):
@@ -891,7 +896,9 @@ if __name__ == "__main__":
         print(f"Walking {arg}: {len(found)} region CSVs")
         for r, f in found.items():
             process_region(r, f)
-        compare_regions(arg)
+        # The log is written wherever the CSV is, so the two cannot diverge.
+        with tee_to(os.path.join(arg, 'cross_region_log.txt')):
+            compare_regions(arg)
         sys.exit(0)
 
     os.makedirs(os.path.join(_REGION_BASE, 'landscape_vector'), exist_ok=True)

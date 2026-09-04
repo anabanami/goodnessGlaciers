@@ -6,19 +6,30 @@ median after shifting the affected subset rather than scaling the offset linearl
 Both linear predictions are printed alongside so the gap is visible.
 
 Run from v23/; writes results to v23/TESTING_LANDSCAPE_SPLITTING/."""
-import numpy as np, pandas as pd, os, sys
+import numpy as np, pandas as pd, os, sys, glob
 from pyproj import Transformer
 HERE = os.path.dirname(os.path.abspath(__file__))            # .../v23
 ODSA = os.path.dirname(HERE)                                 # .../ODSA — current codebase + results
 OUT = os.path.join(HERE, "TESTING_LANDSCAPE_SPLITTING")      # this script's results folder
 sys.path.insert(0, ODSA)
-from loading import load_datasets
+from loading import load_datasets, OUTPUT_BASE_PATH
 from segmentation import split_into_segments, split_by_landscape
 from config import WINDOW_SIZE, FIT_BAND_M, Tee
 from bed_character import BED_EDGES, CLASS_ORDER          # class breaks, imported not mirrored
-RESULTS = os.path.join(ODSA, "Ockenden-regions")  # most recent codebase run
+RESULTS = OUTPUT_BASE_PATH
 os.makedirs(OUT, exist_ok=True)
 sys.stdout = Tee(os.path.join(OUT, "s8_refit_costing_log.txt"))
+
+
+def csv_map(sub, suffix):
+    """Basename -> path for both tree layouts: flat <root>/<sub>/ and per-region
+    <root>/<region>/<sub>/."""
+    hits = (glob.glob(os.path.join(RESULTS, sub, '*' + suffix)) or
+            glob.glob(os.path.join(RESULTS, '*', sub, '*' + suffix)))
+    return {os.path.basename(p): p for p in hits}
+
+WINDOWS = csv_map("window_csvs", "_window_stats.csv")
+SEGMENTS = csv_map("segment_csvs", "_segment_stats.csv")
 
 # Measured truncated-vs-full-band offset, §9 (Pensacola, relief-matched n-weighted mean).
 # Not a mirror of a production constant: a measurement. Re-derive if §9 is re-run.
@@ -56,12 +67,12 @@ for d in load_datasets():
 
 cls = lambda b: CLASS_ORDER[int(np.searchsorted(BED_EDGES[1:-1], b))]
 rows = []
-for fn in sorted(os.listdir(os.path.join(RESULTS, 'window_csvs'))):
+for fn in sorted(WINDOWS):
     if not fn.endswith('_window_stats.csv'): continue
     dset = fn.replace('_w50km_window_stats.csv', '')
     if dset not in loaded:
         print(f"WARNING: {fn} has no matching loaded dataset {dset!r} — skipped."); continue
-    w = pd.read_csv(os.path.join(RESULTS, 'window_csvs', fn))
+    w = pd.read_csv(WINDOWS[fn])
     w['L'] = [lengths.get((dset, str(t), int(s)), np.nan) for t, s in zip(w.trajectory, w.segment)]
     d = w[~w.is_transition.astype(bool)].dropna(subset=['L', 'beta'])
     n_unmatched = w[~w.is_transition.astype(bool)]['L'].isna().sum()
@@ -70,7 +81,7 @@ for fn in sorted(os.listdir(os.path.join(RESULTS, 'window_csvs'))):
     trunc, full = L < WINDOW_SIZE, L >= WINDOW_SIZE
 
     # window-count proxy, for the impurity comparison only
-    seg = pd.read_csv(os.path.join(RESULTS, 'segment_csvs', fn.replace('_window_stats', '_segment_stats')))
+    seg = pd.read_csv(SEGMENTS[fn.replace('_window_stats', '_segment_stats')])
     nwin = seg.set_index(['trajectory', 'segment']).n_windows
     proxy_trunc = np.array([nwin.get(k, np.nan) == 1 for k in zip(d.trajectory, d.segment)])
 

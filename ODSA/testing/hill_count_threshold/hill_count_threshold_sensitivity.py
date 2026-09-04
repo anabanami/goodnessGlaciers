@@ -7,11 +7,14 @@ if the count is degenerate (most windows at 0-1, or saturated at the WINDOW_SIZE
 ceiling) and redundant if it tracks an existing element. incidence_deg is included
 because a transect count is a geometry-dependent read of an areal quantity.
 
-Usage:  python hill_count_threshold_sensitivity.py [run folder ...]   (from v23/ or ODSA/)
-        default is Ockenden-regions/; pass several when the regions were run
-        one per folder, e.g. individual_region_TEST/{RSL,HD,PPB}
+Usage:  python hill_count_threshold_sensitivity.py <run folder> ...   (from v23/ or ODSA/)
+        The run folder is explicit, since the two datasets answer different questions.
+        A run has to carry every swept gate, which production does only when
+        ODSA_HILL_THRESHOLDS names them. Two such runs sit in hill_count_threshold/:
+        'ODSA Ockenden-regions_skew' for the individual_region_TEST regions, and
+        'snapshot_new' for the new/ regions. Results go to results/<run folder>/.
 """
-import sys, io
+import sys, io, re
 from pathlib import Path
 import numpy as np, pandas as pd
 import matplotlib.pyplot as plt
@@ -38,8 +41,8 @@ sys.path.insert(0, str(HERE if (HERE / 'config.py').exists() else HERE.parent))
 from config import HILL_THRESHOLD_M, HILL_BOX_M, WINDOW_SIZE
 
 # The swept values are this test's parameter, not production's, so they live here.
-# Production carries only the adopted gate. Reading them from config instead would
-# silently reduce the sweep to that one column. Ockenden_2026 publish these four.
+# Reading them from config instead would follow ODSA_HILL_THRESHOLDS and reduce the sweep
+# to whatever a given run happened to emit. Ockenden_2026 publish these four.
 HILL_SWEEP_THRESHOLDS = (20, 50, 100, 250)
 
 # Cross-check against the adopted value, the same way relief_distribution.py checks its
@@ -60,8 +63,18 @@ def _resolve(p):
     return q if q.exists() else ODSA / p
 
 
-SOURCES = [_resolve(a) for a in sys.argv[1:]] or [ODSA / 'Ockenden-regions']
-OUT = HERE / 'hill_count_threshold'
+RUNS = HERE / 'hill_count_threshold'
+if len(sys.argv) < 2:
+    sys.exit('Name the run folder to sweep. Two carry every swept gate:\n'
+             f"  {RUNS / 'ODSA Ockenden-regions_skew'}\n"
+             f"      the individual_region_TEST regions, from the pinned snapshot\n"
+             f"  {RUNS / 'snapshot_new'}\n"
+             f"      the new/ regions, from production with ODSA_HILL_THRESHOLDS widened")
+SOURCES = [_resolve(a) for a in sys.argv[1:]]
+
+# Results are keyed by run folder, so the two datasets do not overwrite each other, and
+# they sit under results/ so a run never writes inside the folder it reads.
+OUT = RUNS / 'results' / '+'.join(re.sub(r'[^A-Za-z0-9._-]+', '_', s.name) for s in SOURCES)
 OUT.mkdir(parents=True, exist_ok=True)
 
 # The vector elements the count has to be independent of to be worth adding, plus the
@@ -72,7 +85,7 @@ OUT.mkdir(parents=True, exist_ok=True)
 # only for segments holding two or more windows, which is a minority everywhere and
 # near-absent at Hercules Dome, so it is joined on from the segment CSV and will be blank
 # where the segment could not support it.
-AGAINST = ['beta', 'beta_iqr', 'relief_m', 'rms_roughness', 'psd_amplitude_1km',
+AGAINST = ['beta', 'beta_iqr', 'relief_m', 'rms_roughness', 'A_1km',
            'skewness', 'kurtosis', 'bed_elev_mean', 'measures_speed_mean', 'incidence_deg']
 CEILING = WINDOW_SIZE / HILL_BOX_M
 
@@ -90,7 +103,7 @@ for _line in ADOPTED_CHECK:
     print(_line)
 print()
 
-# A source is either a run folder holding window_csvs/ (Ockenden-regions) or a parent of
+# A source is either a run folder holding window_csvs/ (the flat layout) or a parent of
 # run folders (individual_region_TEST). Take both, and label by run folder as well as
 # region when more than one run is in play, so a baseline and a re-run cannot collide.
 found = []
@@ -124,6 +137,15 @@ cols = [f'hill_count_{t}' for t in HILL_SWEEP_THRESHOLDS]
 regions, skipped, iqr_note = {}, [], []
 for run, name, f in found:
     df = pd.read_csv(f)
+    # The amplitude column is A_1km in the current pipeline and psd_amplitude_1km in the
+    # pinned snapshot.
+    if 'A_1km' not in df.columns and 'psd_amplitude_1km' in df.columns:
+        df = df.rename(columns={'psd_amplitude_1km': 'A_1km'})
+    # The pipeline names the adopted gate `hill_count` and numbers the rest; the pinned
+    # snapshot numbers all of them. Address every gate by value.
+    adopted = f'hill_count_{HILL_THRESHOLD_M}'
+    if adopted not in df.columns and 'hill_count' in df.columns:
+        df = df.rename(columns={'hill_count': adopted})
     if any(c not in df.columns for c in cols):
         skipped.append(f'{run}/{name}')
         continue
@@ -274,7 +296,7 @@ def _eps2(groups):
 # amplitude family, so a beta-residual that still separates the regions could be relief
 # re-expressed as an integer. CONTROLS is every existing element the count could be
 # hiding inside, removed together by rank regression.
-CONTROLS = [c for c in ['beta', 'relief_m', 'rms_roughness', 'psd_amplitude_1km']]
+CONTROLS = [c for c in ['beta', 'relief_m', 'rms_roughness', 'A_1km']]
 pool = pd.concat([d.assign(_region=k) for k, d in regions.items()], ignore_index=True)
 
 

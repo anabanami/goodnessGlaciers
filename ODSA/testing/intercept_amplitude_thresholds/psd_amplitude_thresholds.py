@@ -1,10 +1,13 @@
 """
-Derive psd_amplitude_1km threshold from window-level spectral data
+Derive A_1km threshold from window-level spectral data
 using Jenks natural breaks (2-class: low vs high amplitude).
 
 Sibling of psd_intercept_thresholds.py — same structure so the two are
-directly comparable. psd_amplitude_1km = psd_intercept + 3*beta, i.e. the
+directly comparable. A_1km = psd_intercept + 3*beta, i.e. the
 fit evaluated in-band (lambda=1km) rather than extrapolated to lambda=1m.
+
+Reads the window CSVs of the run tree that loading.OUTPUT_BASE_PATH names, and writes to
+v23/psd_amplitude_thresholds/.
 
 Outputs:
   - Pooled histogram with Jenks 2-class break
@@ -20,10 +23,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import jenkspy
 from pathlib import Path
-from loading import OUTPUT_BASE_PATH
-from config import Tee
 
-VAR = 'psd_amplitude_1km'
+HERE = Path(__file__).resolve().parent          # .../v23
+ODSA = HERE.parent                              # .../ODSA
+sys.path.insert(0, str(ODSA))
+from loading import OUTPUT_BASE_PATH            # noqa: E402
+from config import Tee                          # noqa: E402
+
+VAR = 'A_1km'
 LABEL = 'PSD amplitude @ 1 km'
 
 BED_COLORS = {
@@ -31,18 +38,31 @@ BED_COLORS = {
     'transitional': '#9467bd', 'soft': '#1f77b4',
 }
 
-OUT = Path(OUTPUT_BASE_PATH, "bed_character", "psd_amplitude_thresholds")
+OUT = HERE / "psd_amplitude_thresholds"
 OUT.mkdir(parents=True, exist_ok=True)
 sys.stdout = Tee(OUT / "psd_amplitude_thresholds_log.txt")
 
 # ── Load all windows ──
-csvs = sorted(Path(OUTPUT_BASE_PATH, "window_csvs").glob("*_window_stats.csv"))
+# A run tree either holds window_csvs/ directly or is a parent of per-region run folders.
+SRC = Path(OUTPUT_BASE_PATH)
+csvs = sorted(SRC.glob("window_csvs/*_window_stats.csv")) or \
+       sorted(SRC.glob("*/window_csvs/*_window_stats.csv"))
+if not csvs:
+    sys.exit(f"no window CSVs under {SRC} "
+             f"(looked in <source>/window_csvs and <source>/*/window_csvs)")
+
 all_df = pd.concat([
     pd.read_csv(f).assign(region=f.stem.replace("_w50km_window_stats", ""))
     for f in csvs
 ], ignore_index=True)
 all_df = all_df.dropna(subset=[VAR])
-all_df['survey'] = all_df['region'].str.split('_Fig').str[0]
+# A region is labelled <survey>_Fig<figure>_<place>, so the survey is the prefix. The two
+# POLARGAP regions are separate acquisitions and are named here to keep them apart.
+OWN_SURVEY = {
+    'POLARGAP_2015_Pensacola_Pole': 'POLARGAP_2015_Pensacola_Pole',
+    'POLARGAP_2015_Fig2C_Hercules_Dome': 'POLARGAP_2015_Hercules_Dome',
+}
+all_df['survey'] = all_df['region'].apply(lambda r: OWN_SURVEY.get(r, r.split('_Fig')[0]))
 A = all_df[VAR].values
 
 # ── Compute Jenks 2-class break ──
@@ -63,12 +83,12 @@ for reg in regions:
 
 # ── Per-survey breaks (geology vs acquisition check) ──
 surveys = sorted(all_df['survey'].unique())
-print(f"\n{'Survey':<25} {'n':>4}  {'median':>6}  {'jenks-2':>8}")
-print("-" * 50)
+print(f"\n{'Survey':<30} {'n':>4}  {'median':>6}  {'jenks-2':>8}")
+print("-" * 55)
 for sv in surveys:
     sc = all_df.loc[all_df.survey == sv, VAR].values
     j = jenkspy.jenks_breaks(sc, n_classes=2)[1] if len(sc) >= 4 else np.nan
-    print(f"{sv:<25} {len(sc):>4}  {np.median(sc):>6.2f}  {j:>8.2f}")
+    print(f"{sv:<30} {len(sc):>4}  {np.median(sc):>6.2f}  {j:>8.2f}")
 
 # ── Figure 1: Pooled histogram with Jenks break ──
 fig, ax = plt.subplots(figsize=(9, 5))
@@ -105,7 +125,7 @@ ax.legend(fontsize=7)
 
 for j in range(len(regions) + 1, len(axes)):
     axes[j].set_visible(False)
-fig.suptitle('Per-region psd_amplitude_1km with pooled Jenks break overlaid', fontweight='bold')
+fig.suptitle('Per-region A_1km with pooled Jenks break overlaid', fontweight='bold')
 fig.tight_layout()
 fig.savefig(OUT / "psd_amplitude_per_region_break.png", dpi=150)
 plt.close(fig)
@@ -138,7 +158,7 @@ ax.set_ylabel(LABEL)
 ax.set_title('amplitude by bed_class (box plots)')
 ax.legend(fontsize=8)
 
-fig.suptitle('Does psd_amplitude_1km separate bed classes? (bed_class is beta-derived)',
+fig.suptitle('Does A_1km separate bed classes? (bed_class is beta-derived)',
              fontweight='bold')
 fig.tight_layout()
 fig.savefig(OUT / "psd_amplitude_class_conditional.png", dpi=150)
@@ -153,10 +173,10 @@ for sv in surveys:
 ax.axvline(jenks_break, color='tab:red', ls='-', lw=2, label=f'pooled Jenks ({jenks_break:.2f})')
 ax.set_xlabel(LABEL)
 ax.set_ylabel('count')
-ax.set_title('psd_amplitude_1km by survey — does the pooled break sit in a survey gap?')
+ax.set_title('A_1km by survey — does the pooled break sit in a survey gap?')
 ax.legend(fontsize=8)
 fig.tight_layout()
 fig.savefig(OUT / "psd_amplitude_by_survey.png", dpi=150)
 plt.close(fig)
 
-print(f"\nPlots saved to {OUT.relative_to(Path.cwd())}")
+print(f"\nPlots saved to {OUT}")

@@ -1,11 +1,13 @@
 """Is production's absolute beta biased? Both estimators, one known truth, one geometry.
 
-Stage E (testing anisotropy model/) measured production's recipe returning beta = 2.369 on
-a synthetic bed built at 2.05, so +0.32. deviogram_calibration.py measured the deviogram
-reading LOW, -0.09 in beta at H = 0.5 and -0.29 at H = 0.8. Yet ODSA - open questions.md
-reports the calibrated deviogram and production agreeing on pooled level to 0.04 in beta.
-Those three statements cannot all be true. Nothing so far has run both estimators on the
-same profile with the truth known, which is the only comparison that separates them.
+deviogram_calibration.py measured the deviogram reading LOW, -0.09 in beta at H = 0.5
+and -0.29 at H = 0.8. Yet ODSA - open questions.md reports the calibrated deviogram and
+production agreeing on pooled level to 0.04 in beta. Those two statements sit awkwardly
+together, and nothing so far has run both estimators on the same profile with the truth
+known, which is the only comparison that separates them.
+
+TODO: the anisotropy testing offset that opened this question is being re-measured in
+testing anisotropy model/. Restate it here once that run reports.
 
 This does. fBm is synthesised at known H, so beta = 2H + 1 by construction, and each
 profile is measured twice: once by the production Lomb-Scargle recipe and once by the
@@ -18,7 +20,7 @@ absolute beta, and they are definitional in H (0.5 is the Brownian persistence b
 no instrument bias to cancel against, so an offset in the estimator moves every window
 across the breaks and nothing corrects it.
 
-Geometry is production's, not Stage A's: SEGMENT_KM of synthetic bed is cut into 50 km
+Geometry is production's: SEGMENT_KM of synthetic bed is cut into 50 km
 windows at 50% overlap, and the peak mask is built from the segment-averaged periodogram
 over those windows exactly as bed_analysis does. A single isolated window would mask off
 its own periodogram, which production only does for single-window segments.
@@ -49,7 +51,7 @@ SLICE_MULT = 32         # synthesis domain / segment length; a domain equal to t
                         # segment is circulant and suppresses long-lag variance
 # Must leave >= SAMPLES_PER_BAND_FLOOR grid points per wavelength at the short end of the
 # fit band, or the bed itself has no structure where the log-log slope has its longest
-# lever arm and every beta comes back low. Stage E ties its grid to band_lo/25.
+# lever arm and every beta comes back low.
 GRID_N = 524288
 SAMPLES_PER_BAND_FLOOR = 25.0
 SEED = 20260814
@@ -59,13 +61,12 @@ SEED = 20260814
 # Measured is biased low, so true beta must extend well above the largest measured value.
 H_GRID = np.array([0.00, 0.15, 0.25, 0.40, 0.50, 0.60, 0.75, 0.90, 1.05, 1.20, 1.40,
                    1.60, 1.75])
-# Points per 50 km window. Stage E ran at 10 m sampling, so 5000; real radar traces are
-# coarser. Swept because "does the bias depend on sampling density" is a live question
+# Points per 50 km window. Swept because "does the bias depend on sampling density" is a live question
 # for the PSD estimator, even though deviogram_calibration settled it for the deviogram.
 # The three real survey densities, so each survey's own curve needs no interpolation:
 # POLARGAP 1631 at 30.7 m, ICECAP 2257 at 22.2 m, ICEGRAV 5365 at 9.3 m.
 NPTS_GRID = [1631, 2257, 5365]
-# 'regular' is Stage A's grid cut and 'uniform_random' is the opposite worst case, which
+# 'regular' is a grid cut and 'uniform_random' is the opposite worst case, which
 # no radar produces. The two named surveys are measured off the Bedmap3 CSVs, valid bed
 # picks only. They differ enough to matter: ICECAP puts 37% of its track length inside
 # gaps against POLARGAP's 3.7%, and the four ICECAP regions are the four `partial` ones.
@@ -367,12 +368,11 @@ if inv:
     pd.DataFrame(inv).to_csv(os.path.join(OUT, "beta_inversion.csv"), index=False)
     print(f"\nwrote {os.path.join(OUT, 'beta_inversion.csv')}")
 
-print("\n### Read this against three numbers already on record")
-print("  Stage E, production recipe on a 2-D bed built at 2.05:        +0.32")
+print("\n### Read this against the numbers already on record")
 print("  deviogram_calibration.py, W = 50 km, H 0.5 / 0.8:        -0.09 / -0.29 in beta")
 print("  ODSA - open questions.md, calibrated devio vs production:  0.04 pooled, real bed")
-print("  Stage A sampled a grid regularly, so if the two sampling columns differ in sign")
-print("  the +0.32 is a property of cutting profiles out of a grid and does not transfer")
-print("  to production, which reads irregularly spaced picks along a track.")
+print("  TODO: the anisotropy-testing offset is being re-measured in")
+print("  testing anisotropy model/. Add it here, with the sampling-column comparison that")
+print("  says whether it is a property of cutting profiles out of a grid, once it reports.")
 print(f"\nwrote {os.path.join(OUT, 'beta_level_bias.csv')}")
 sys.stdout.flush()

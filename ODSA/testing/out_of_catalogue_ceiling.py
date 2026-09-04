@@ -10,10 +10,10 @@ whenever the catalogue moves and must be re-derived and re-registered, not quiet
 History: 44% against 44 uncovered cells. Widening DIVIDE to {very_low, low} on 2026-08-07
 covered 4 heavily-occupied cells and took it to 31.9% against 40 uncovered.
 
-Observable space is the four measurable axes only (beta x relief x elevation x velocity =
-144 cells). delta_beta is left free: a cell counts as covered if ANY setting of it admits
-an entry, because it is not something the survey resolves independently of the others.
-beta_spread is not a free axis, it is no axis at all: no catalogue entry constrains it.
+Observable space is the four measurable axes (beta x relief x elevation x velocity =
+144 cells), and a cell counts as covered if it admits at least one catalogue entry.
+beta_spread is not an axis at all: no catalogue entry constrains it, so it can neither
+cover a cell nor leave one uncovered.
 
 Reading it: approaching the ceiling means the coverage gap fully expressed, a catalogue
 result. Materially below means ambiguity is still rescuing cells, so the rate describes the
@@ -21,7 +21,7 @@ error bars and not the bed. Compare like with like -- this is a WINDOW rate, so 
 directly comparable to a segment-level OUT-OF-CATALOGUE count.
 
       python out_of_catalogue_ceiling.py
-      python out_of_catalogue_ceiling.py --root ../Ockenden-regions
+      python out_of_catalogue_ceiling.py --root ../individual_region_TEST
 """
 import argparse, collections, glob, itertools, os, sys
 from pathlib import Path
@@ -39,6 +39,14 @@ AXES = [('beta_class', 'beta', lv.BED_CLASSES),
         ('elevation_class', 'bed_elev_mean', lv.ELEVATION_CLASSES),
         ('velocity_band', 'measures_speed_mean', lv.VELOCITY_CLASSES)]
 
+# The ceiling is defined over the measurable axes alone, so every axis the catalogue
+# constrains must be one of them. Fatal: an unmodelled axis narrows coverage, and the
+# ceiling would be re-registered wrong with nothing in the output to show it.
+_unmodelled = {a for c in lv.CATALOGUE for a in c['c']} - {a for a, _, _ in AXES}
+if _unmodelled:
+    sys.exit(f"Catalogue constrains {sorted(_unmodelled)}, which this script does not "
+             f"model. Add the axis to AXES or marginalise over it before re-deriving.")
+
 
 def classify(v, classes):
     """Exact class for a value, or None if it is missing."""
@@ -48,14 +56,12 @@ def classify(v, classes):
 
 
 def covered_cells():
-    """Cells admitting at least one entry for some delta_beta setting."""
+    """Cells admitting at least one catalogue entry."""
     out = set()
-    free = lv.AXIS_VALUES['delta_beta']
     for combo in itertools.product(*[[n for n, _, _ in cl] for _, _, cl in AXES]):
         p = dict(zip([a for a, _, _ in AXES], combo))
-        if any(all(dict(p, delta_beta=d)[a] in allowed
-                   for a, allowed in c['c'].items())
-               for d in free for c in lv.CATALOGUE):
+        if any(all(p[a] in allowed for a, allowed in c['c'].items())
+               for c in lv.CATALOGUE):
             out.add(combo)
     return out
 

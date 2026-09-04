@@ -2,6 +2,9 @@
 Derive psd_intercept (C) threshold from window-level spectral data
 using Jenks natural breaks (2-class: low C vs high C).
 
+Reads the window CSVs of the run tree that loading.OUTPUT_BASE_PATH names, and writes to
+v23/psd_intercept_thresholds/.
+
 Outputs:
   - Pooled histogram with Jenks 2-class break
   - Per-region histograms with pooled break overlaid (generalisability check)
@@ -15,20 +18,31 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import jenkspy
 from pathlib import Path
-from loading import OUTPUT_BASE_PATH
-from config import Tee
+
+HERE = Path(__file__).resolve().parent          # .../v23
+ODSA = HERE.parent                              # .../ODSA
+sys.path.insert(0, str(ODSA))
+from loading import OUTPUT_BASE_PATH            # noqa: E402
+from config import Tee                          # noqa: E402
 
 BED_COLORS = {
     'chaotic': '#d62728', 'hard': '#ff7f0e',
     'transitional': '#9467bd', 'soft': '#1f77b4',
 }
 
-OUT = Path(OUTPUT_BASE_PATH, "bed_character", "psd_intercept_thresholds")
+OUT = HERE / "psd_intercept_thresholds"
 OUT.mkdir(parents=True, exist_ok=True)
 sys.stdout = Tee(OUT / "psd_intercept_thresholds_log.txt")
 
 # ── Load all windows ──
-csvs = sorted(Path(OUTPUT_BASE_PATH, "window_csvs").glob("*_window_stats.csv"))
+# A run tree either holds window_csvs/ directly or is a parent of per-region run folders.
+SRC = Path(OUTPUT_BASE_PATH)
+csvs = sorted(SRC.glob("window_csvs/*_window_stats.csv")) or \
+       sorted(SRC.glob("*/window_csvs/*_window_stats.csv"))
+if not csvs:
+    sys.exit(f"no window CSVs under {SRC} "
+             f"(looked in <source>/window_csvs and <source>/*/window_csvs)")
+
 all_df = pd.concat([
     pd.read_csv(f).assign(region=f.stem.replace("_w50km_window_stats", ""))
     for f in csvs
@@ -129,4 +143,4 @@ fig.tight_layout()
 fig.savefig(OUT / "psd_intercept_class_conditional.png", dpi=150)
 plt.close(fig)
 
-print(f"\nPlots saved to {OUT.relative_to(Path.cwd())}")
+print(f"\nPlots saved to {OUT}")

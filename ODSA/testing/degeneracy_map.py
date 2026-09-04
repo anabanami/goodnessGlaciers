@@ -33,15 +33,29 @@ def main():
     for (x, y), c in pairs.most_common():
         print(f"    {x} | {y}   {c}")
 
+    # A pair listing splits a point carrying three or more entries across several rows,
+    # so the combination itself is named here.
+    wide = collections.Counter(tuple(sorted(h)) for h in hits if len(h) > 2)
+    if wide:
+        print("\n  points carrying more than two entries")
+        for ids, c in wide.most_common():
+            print(f"    {' | '.join(ids)}   {c}")
+
+    # Overlapping points per entry, which is not the sum of its pair rows: a point with
+    # three entries is counted once here and in three pair rows above.
+    over = collections.Counter(i for h in hits if len(h) > 1 for i in h)
+    print("\n  overlapping points each entry appears in")
+    for c in lv.CATALOGUE:
+        print(f"    {c['id']:14s} {over.get(c['id'], 0):4d}")
+
     # An entry that is never a sole match cannot be reported on its own, whatever the data.
     sole = collections.Counter(h[0] for h in hits if len(h) == 1)
     print("\n  points where each entry is the sole match")
     for c in lv.CATALOGUE:
         print(f"    {c['id']:14s} {sole.get(c['id'], 0):4d}")
 
-    subsumed, dead = lv.reachable_groups()
-    print(f"\n  dead axes: {sorted(dead) or 'none'}")
-    print(f"  never a sole match: {sorted(subsumed) or 'none'}")
+    subsumed = lv.reachable_groups()
+    print(f"\n  never a sole match: {sorted(subsumed) or 'none'}")
     print("\n  Re-register §4 and the ceiling together if the catalogue has changed.")
 
 

@@ -49,10 +49,12 @@ def base_for(factor):
 
 
 def run_one(factor):
+    # The sweep reads the run's CSVs alone, so the pipeline's own figures are weight.
     env = dict(os.environ,
                ODSA_STENCIL_FACTOR=str(factor),
                ODSA_OUTPUT_BASE=str(base_for(factor)) + os.sep,
-               ODSA_REGION_FILTER=','.join(REGIONS))
+               ODSA_REGION_FILTER=','.join(REGIONS),
+               ODSA_NO_PLOTS='1')
     print(f"\n{'='*70}\n  STENCIL_FACTOR = {factor} x ice thickness\n{'='*70}")
     subprocess.run([sys.executable, 'bed_analysis.py'], cwd=str(ODSA), env=env, check=True)
 

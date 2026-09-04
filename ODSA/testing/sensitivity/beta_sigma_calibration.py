@@ -64,6 +64,7 @@ HERE = Path(__file__).resolve().parent          # .../v23
 ODSA = HERE.parent                              # .../ODSA
 sys.path.insert(0, str(ODSA))
 from config import Tee                                          # noqa: E402
+from loading import OUTPUT_BASE_PATH                             # noqa: E402
 from bed_character import (BED_COLORS, CLASS_ORDER,             # noqa: E402
                            add_soft_membership, expected_fractions,
                            parse_window_km)
@@ -72,10 +73,12 @@ OUT_ROOT = HERE / "beta_sigma_calibration"
 MAX_FIT_LAGS = 6        # independent lags used for the linear extrapolation to h=0
 MIN_PAIRS = 30          # a lag bin needs this many pairs to be trusted
 
-csv_dirs = [d for d in [
-    ODSA / "Ockenden-regions" / "window_csvs",
-    ODSA / "SMUG-regions" / "window_csvs",
-] if d.exists()]
+# The window_csvs/ folders of the run tree, under either layout: flat <root>/window_csvs/
+# and per-region <root>/<region>/window_csvs/.
+SRC = Path(OUTPUT_BASE_PATH)
+csv_dirs = sorted({p.parent for p in
+                   (list(SRC.glob("window_csvs/*_window_stats.csv")) or
+                    list(SRC.glob("*/window_csvs/*_window_stats.csv")))})
 
 
 def load(pattern=None):

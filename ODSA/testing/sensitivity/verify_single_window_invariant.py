@@ -17,7 +17,8 @@ ODSA = os.path.dirname(HERE)                                 # .../ODSA — curr
 OUT = os.path.join(HERE, "TESTING_LANDSCAPE_SPLITTING")      # this script's results folder
 sys.path.insert(0, ODSA)
 from config import Tee
-RESULTS = os.path.join(ODSA, "Ockenden-regions")  # most recent codebase run
+from loading import OUTPUT_BASE_PATH
+RESULTS = OUTPUT_BASE_PATH
 os.makedirs(OUT, exist_ok=True)
 sys.stdout = Tee(os.path.join(OUT, "verify_single_window_invariant_log.txt"))
 
@@ -35,12 +36,25 @@ def beta_match(seg_s, win_list):
 
 
 stem = lambda p: os.path.basename(p).replace("_segment_stats.csv", "").replace("_window_stats.csv", "")
-seg_csvs = sorted(glob.glob(os.path.join(RESULTS, "segment_csvs", "*_segment_stats.csv")))
-wmap = {stem(p): p for p in glob.glob(os.path.join(RESULTS, "window_csvs", "*_window_stats.csv"))}
+
+
+def csvs(sub, pattern):
+    """Both tree layouts: flat <root>/<sub>/ and per-region <root>/<region>/<sub>/."""
+    return (sorted(glob.glob(os.path.join(RESULTS, sub, pattern))) or
+            sorted(glob.glob(os.path.join(RESULTS, '*', sub, pattern))))
+
+
+seg_csvs = csvs("segment_csvs", "*_segment_stats.csv")
+wmap = {stem(p): p for p in csvs("window_csvs", "*_window_stats.csv")}
+# An empty run reports zero violations and exits 0, which reads as a pass. Refuse instead.
+if not seg_csvs:
+    sys.exit(f"No *_segment_stats.csv under {RESULTS}: nothing to check, so this is not a pass.")
 
 tot_sw = tot_mm = 0
 for sp in seg_csvs:
     region = stem(sp)
+    if region not in wmap:
+        sys.exit(f"{region}: segment CSV with no matching window CSV under {RESULTS}.")
     wbeta = {}  # (traj, segment) -> [raw beta strings]
     with open(wmap[region]) as f:
         r = csv.reader(f); h = next(r)
