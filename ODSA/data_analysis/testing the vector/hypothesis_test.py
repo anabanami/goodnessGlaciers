@@ -57,7 +57,7 @@ from loading import OUTPUT_BASE_PATH as _REGION_BASE
 ROOT = sys.argv[1] if len(sys.argv) > 1 else _REGION_BASE
 NPERM = int(sys.argv[2]) if len(sys.argv) > 2 else 200
 LEVEL = 'window'
-SUBSET_AXES = sorted(ALL_AXES)
+SUBSET_AXES = ALL_AXES
 ALL_OF = {a: frozenset(AXIS_VALUES[a]) for a in ALL_AXES}
 
 
@@ -72,7 +72,7 @@ def live_only(sets, live):
 def floors():
     """Smallest set a single axis could ever produce, over every value it can take."""
     out = {}
-    for a in sorted(ALL_AXES):
+    for a in ALL_AXES:
         out[a] = min((live_only({x: (frozenset({v}) if x == a else ALL_OF[x])
                                  for x in ALL_AXES}, {a}), v) for v in AXIS_VALUES[a])
     return out
@@ -121,7 +121,7 @@ TITLE = 'No single statistic identifies landscape class'
 
 CAPTION = (
     f"Best axis combination at each size, {LEVEL} units. "
-    f"B beta, R relief, V velocity, E elevation, D delta-beta. "
+    f"B beta, R relief, V velocity, E elevation. "
     f"A set of one is a bound that excluded ten entries, not an identification."
 )
 
@@ -199,7 +199,7 @@ def run(regions, units, tag):
     print("=== 1. SINGLE AXIS (resolution is structurally impossible; read set size only) ===")
     fl = floors()
     rows = {}
-    for a in sorted(ALL_AXES):
+    for a in ALL_AXES:
         rows[a] = {**stats([live_only(u, {a}) for u in units]),
                    'floor': fl[a][0], 'floor_at': fl[a][1]}
     rows['(none live)'] = {**stats([n_match({x: ALL_OF[x] for x in ALL_AXES})] * len(units)),

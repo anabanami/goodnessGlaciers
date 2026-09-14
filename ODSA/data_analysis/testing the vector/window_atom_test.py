@@ -1,6 +1,6 @@
 """Queue item 4: is a 50%-overlapping window a legitimate classification atom?
 
-Measures how fast the class tuple (beta, relief, elevation, velocity) decorrelates with
+Measures how fast the class tuple (beta, relief, velocity, elevation) decorrelates with
 distance. Agreement at chance = independent. Gives the decimation distance for item 5.
 
 Usage:
@@ -18,7 +18,7 @@ from landscape_vector import VELOCITY_CLASSES
 from loading import OUTPUT_BASE_PATH as _REGION_BASE
 
 ROOT = sys.argv[1] if len(sys.argv) > 1 else _REGION_BASE
-AXES = ['bed_class', 'relief_class', 'elevation_class', 'velocity_band']
+AXES = ['bed_class', 'relief_class', 'velocity_band', 'elevation_class']
 BINS = [0, 1, 25, 50, 75, 100, 150, 200, 300, 1e9]
 
 

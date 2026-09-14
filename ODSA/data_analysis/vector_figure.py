@@ -28,22 +28,21 @@ Usage:
   python vector_figure.py individual_region_TEST  # walk a tree of region folders
 """
 
-# ALL_AXES is alphabetical. The figure reads left to right from the best-measured axis
-# to the least.
-AXIS_ORDER = ['beta_class', 'relief_class', 'elevation_class', 'velocity_band']
-assert set(AXIS_ORDER) == set(ALL_AXES), f"axis list drifted from ALL_AXES: {ALL_AXES}"
+# The figure reads left to right in ALL_AXES order, which is decreasing additive
+# discriminating power.
+AXIS_ORDER = ALL_AXES
 
 # Bands in physical order, not alphabetical, so a cell reads as a range and not a set.
 AXIS_BANDS = {
     'beta_class':      [n for n, _, _ in BED_CLASSES],
     'relief_class':    [n for n, _, _ in RELIEF_CLASSES],
-    'elevation_class': [n for n, _, _ in ELEVATION_CLASSES],
     'velocity_band':   [n for n, _, _ in VELOCITY_CLASSES],
+    'elevation_class': [n for n, _, _ in ELEVATION_CLASSES],
 }
 assert all(set(AXIS_BANDS[a]) == set(AXIS_VALUES[a]) for a in AXIS_ORDER)
 
 AXIS_LABEL = {'beta_class': r'$\beta$ class', 'relief_class': 'relief',
-              'elevation_class': 'elevation', 'velocity_band': 'velocity'}
+              'velocity_band': 'velocity', 'elevation_class': 'elevation'}
 
 # Four statuses. A band set from a measurement is resolved, ambiguous or assumed-exact;
 # an axis widened to every band for want of a measurement is unavailable. assumed-exact

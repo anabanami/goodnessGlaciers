@@ -16,7 +16,7 @@ from plotting import flag_title as _flag_title, flag_suptitle as _flag_suptitle
 # landscape_vector imports bed_character, not this module, so there is no cycle to break
 # here and the import stays at the top. bed_character.region_panel's lazy import is for the
 # reverse direction only.
-from landscape_vector import (ELEMENTS, VELOCITY_CLASSES, AXIS_VALUES,
+from landscape_vector import (ELEMENTS, ALL_AXES, VELOCITY_CLASSES, AXIS_VALUES,
                               COMPOSITION_DECIMATE_KM, _independent_subset)
 from loading import OUTPUT_BASE_PATH as _REGION_BASE
 
@@ -43,7 +43,10 @@ DEFAULT_ROOT = _REGION_BASE
 # make another axis redundant. beta_iqr, the number behind it, is a within-unit spread that
 # exists per segment and per region and has NO window-level value at all, so it cannot enter
 # a window-level matrix without mixing two scales. Left out; see the AXIS TABLE note.
-AXIS_SOURCE = {axis: col for _, col, _, axis in ELEMENTS if axis and col}
+# Keyed in ALL_AXES order, so the matrix and the axis table read in the same order as the
+# other scripts.
+_SOURCE_OF = {axis: col for _, col, _, axis in ELEMENTS if axis and col}
+AXIS_SOURCE = {a: _SOURCE_OF[a] for a in ALL_AXES}
 DESCRIPTORS = [col for _, col, _, axis in ELEMENTS if col and not axis]
 CONTINUOUS = list(AXIS_SOURCE.values()) + DESCRIPTORS
 

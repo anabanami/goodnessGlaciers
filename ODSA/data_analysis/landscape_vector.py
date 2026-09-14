@@ -111,12 +111,12 @@ ELEMENTS = [
 AXIS_VALUES = {
     'beta_class':      [n for n, _, _ in BED_CLASSES],
     'relief_class':    [n for n, _, _ in RELIEF_CLASSES],
-    'elevation_class': [n for n, _, _ in ELEVATION_CLASSES],
     'velocity_band':   [n for n, _, _ in VELOCITY_CLASSES],
+    'elevation_class': [n for n, _, _ in ELEVATION_CLASSES],
     'beta_spread':     ['wide', 'narrow'],
 }
 NUMERIC_AXES = {'beta_class': BED_CLASSES, 'relief_class': RELIEF_CLASSES,
-                'elevation_class': ELEVATION_CLASSES, 'velocity_band': VELOCITY_CLASSES}
+                'velocity_band': VELOCITY_CLASSES, 'elevation_class': ELEVATION_CLASSES}
 MEASURABLE = list(NUMERIC_AXES)  # the axes ODSA can measure
 
 # Observables that would break a degeneracy but that ODSA cannot supply from RES.
@@ -190,7 +190,11 @@ CATALOGUE = [
          ext=[]),
 ]
 
-ALL_AXES = sorted({a for c in CATALOGUE for a in c['c']})
+# The classifying axes in decreasing order of additive discriminating power, as measured by
+# testing the vector/hypothesis_test.py. Every script that reports the axes follows this order.
+ALL_AXES = ['beta_class', 'relief_class', 'velocity_band', 'elevation_class']
+assert set(ALL_AXES) == {a for c in CATALOGUE for a in c['c']}, \
+    "ALL_AXES no longer matches the axes that the catalogue constrains"
 
 
 # ---------------------------------------------------------------------------
@@ -241,11 +245,11 @@ def observe(vec, pflag):
     obs = {}
     for axis, classes in NUMERIC_AXES.items():
         name = {'beta_class': 'beta', 'relief_class': 'relief',
-                'elevation_class': 'elevation', 'velocity_band': 'velocity'}[axis]
+                'velocity_band': 'velocity', 'elevation_class': 'elevation'}[axis]
         val, sig = vec[f'{name}'], vec[f'{name}_sigma']
-        nominal = {'velocity_band': VELOCITY_ERROR_M_YR, 'relief_class': RELIEF_ERROR_M,
-                   'elevation_class': ELEVATION_ERROR_M,
-                   'beta_class': BETA_SYSTEMATIC_ERROR}.get(axis)
+        nominal = {'beta_class': BETA_SYSTEMATIC_ERROR, 'relief_class': RELIEF_ERROR_M,
+                   'velocity_band': VELOCITY_ERROR_M_YR,
+                   'elevation_class': ELEVATION_ERROR_M}.get(axis)
         if axis == 'velocity_band':
             n_ok = vec.get('velocity_err_n_ok', np.nan)
             if np.isfinite(n_ok):

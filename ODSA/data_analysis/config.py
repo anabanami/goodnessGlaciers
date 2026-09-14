@@ -42,6 +42,19 @@ PROCESSING_FLAG_NOTE = {
     'unmigrated_or_unknown': 'UNMIGRATED/unknown — β classification suspect (diffraction tails)',
 }
 
+# Display names for the vector elements whose identifiers spell out a Greek letter. CSV
+# headers and every data key keep the ASCII spelling; these are for figure labels and
+# printed tables. Shared by catalogue_examples and colocated_scale_test.
+ELEMENT_LABEL = {
+    'eta_wavelength_m': 'η_wavelength_m',
+    'xi_band':          'ξ_band',
+}
+
+
+def element_label(col):
+    """Display name for a vector element, or the identifier itself where none is set."""
+    return ELEMENT_LABEL.get(col, col)
+
 
 def processing_flag_of(df):
     """Modal processing flag of a window/segment frame (None for pre-flag CSVs)."""
@@ -73,6 +86,10 @@ BEDFORM_BAND_M = (300.0, 1200.0)
 # Wavelength band the power-law fit and the wavelength detections are restricted to.
 # The upper edge tracks WINDOW_SIZE: no wavelength longer than one window is resolved.
 FIT_BAND_M = (250.0, 50000.0)
+
+# Minimum points for a periodogram. Both segmentation stages enforce it on a segment
+# and bed_analysis.analyse_sliding_windows enforces it again on each window.
+MIN_SEGMENT_POINTS = 50
 
 # Landscape splitting parameters
 SMOOTHING_LENGTH = WINDOW_SIZE  # metres

@@ -36,7 +36,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from config import Tee, WINDOW_SIZE, STEP_SIZE
+from config import Tee, WINDOW_SIZE, STEP_SIZE, element_label
 from loading import OUTPUT_BASE_PATH as _REGION_BASE
 
 ROOT = sys.argv[1] if len(sys.argv) > 1 else _REGION_BASE
@@ -178,7 +178,7 @@ def plot_crossing(med, tbl, out_path):
                 color='0.72' if grey else ('#b22222' if smooth else '#1a6faf'),
                 ls=':' if grey else ('--' if smooth else '-'),
                 lw=1.0 if grey else (2.0 if e in ('beta', 'eta_wavelength_m') else 1.3),
-                marker='o', ms=3.5, zorder=2, label=e)
+                marker='o', ms=3.5, zorder=2, label=element_label(e))
     a1.set_xticks(x); a1.set_xticklabels(LABELS, fontsize=8)
     a1.set_xlim(-0.15, LABEL_X + 1.35)
     lo, hi = a1.get_ylim()
@@ -192,7 +192,7 @@ def plot_crossing(med, tbl, out_path):
         colour = '0.72' if grey else ('#b22222' if e in SMOOTH else '#1a6faf')
         y1 = lo + f * (hi - lo)
         a1.plot([x[-1], LABEL_X], [y0, y1], color=colour, lw=0.6, alpha=0.55, zorder=1)
-        a1.annotate(e + (' (normalisation fails)' if grey else ''),
+        a1.annotate(element_label(e) + (' (normalisation fails)' if grey else ''),
                     xy=(LABEL_X, y1), xytext=(4, 0), textcoords='offset points',
                     va='center', fontsize=7.5, color='0.55' if grey else '0.25')
 

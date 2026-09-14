@@ -11,6 +11,7 @@ Usage:
 import glob, itertools, os, sys
 import numpy as np, pandas as pd
 from scipy.spatial import cKDTree
+from scipy.stats import norm
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score, adjusted_rand_score, normalized_mutual_info_score
 from pathlib import Path
@@ -84,16 +85,24 @@ def hopkins(z, rng, frac=0.1):
 
 def null_matrices(z, rng, kind):
     """marginal: shuffle each column independently, killing joint structure but keeping every
-    marginal. gauss: matched mean and covariance, unimodal by construction. The second is the
-    decisive one -- a correlated but single-blob cloud beats the marginal null on silhouette
-    for free, because k-means scores elongated clouds well."""
+    marginal. gauss: matched mean and covariance, unimodal by construction. copula: the
+    observed marginals exactly, with Gaussian dependence fitted on the normal scores, so it
+    holds the marginal shapes that gauss replaces with normals. gauss is scored against a
+    cloud that is both unimodal and Gaussian, and copula separates those two, since these
+    elements are log-normal-ish and a heavy tail raises the silhouette on its own."""
     if kind == 'marginal':
         return np.column_stack([rng.permutation(z[:, j]) for j in range(z.shape[1])])
-    return rng.multivariate_normal(z.mean(axis=0), np.cov(z, rowvar=False), size=len(z))
+    if kind == 'gauss':
+        return rng.multivariate_normal(z.mean(axis=0), np.cov(z, rowvar=False), size=len(z))
+    n, d = z.shape
+    g = norm.ppf((np.argsort(np.argsort(z, axis=0), axis=0) + 0.5) / n)
+    y = rng.multivariate_normal(np.zeros(d), np.corrcoef(g, rowvar=False), size=n)
+    return np.take_along_axis(np.sort(z, axis=0),
+                              np.argsort(np.argsort(y, axis=0), axis=0), axis=0)
 
 
-def sweep(z, ks=KS, seed=SEED):
-    """Silhouette per k against both nulls. z-scores say whether the structure is real."""
+def sweep(z, ks=KS, seed=SEED, kinds=('marginal', 'gauss', 'copula')):
+    """Silhouette per k against each null. z-scores say whether the structure is real."""
     rng = np.random.default_rng(seed)
     rows = []
     for k in ks:
@@ -102,7 +111,7 @@ def sweep(z, ks=KS, seed=SEED):
         lab = KMeans(k, n_init=10, random_state=seed).fit_predict(z)
         obs = silhouette_score(z, lab)
         rec = {'k': k, 'silhouette': obs}
-        for kind in ('marginal', 'gauss'):
+        for kind in kinds:
             s = []
             for _ in range(N_NULL):
                 y = null_matrices(z, rng, kind)
@@ -130,7 +139,8 @@ def decimated_sweep(d, cols, n_rep=200, seed=SEED):
         if len(sub) < 8:
             continue
         z = standardise(sub[cols].to_numpy(float))
-        s = sweep(z, ks=range(2, min(6, len(sub) - 1)), seed=rep)
+        s = sweep(z, ks=range(2, min(6, len(sub) - 1)), seed=rep,
+                  kinds=('marginal', 'gauss'))
         s['rep'], s['n'] = rep, len(sub)
         rows.append(s)
     return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()

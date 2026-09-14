@@ -9,6 +9,7 @@ import sys
 from config import (WINDOW_SIZE, STEP_SIZE, WINDOW_TYPE, STANDARD_WINDOW,
                     peak_masking_height_threshold, bin_buffer, WINDOW_MASK,
                     HILL_BOX_M, HILL_RELIEF_THRESHOLDS, HILL_THRESHOLD_M, BEDFORM_BAND_M, FIT_BAND_M,
+                    MIN_SEGMENT_POINTS,
                     SAVE_PLOTS, Tee, get_region_folder, ensure_output_dirs)
 from loading import  OUTPUT_BASE_PATH, load_datasets
 from segmentation import detect_data_gaps, split_into_segments, split_by_landscape
@@ -130,7 +131,7 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
         w_dist = dist[fit_mask]
         w_elev = elev[fit_mask]
 
-        if len(w_dist) > 50:
+        if len(w_dist) > MIN_SEGMENT_POINTS:
             w_detrended = signal.detrend(w_elev)
 
             # Taper is for the spectral estimate only. Keep it in a separate

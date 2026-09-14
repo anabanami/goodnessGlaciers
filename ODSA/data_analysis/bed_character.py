@@ -116,10 +116,11 @@ CAPTIONS = {
 }
 
 
-def write_metadata(png, title, caption):
-    """Sidecar JSON holding the caption, written next to the figure it describes."""
+def write_metadata(png, title, caption, **extra):
+    """Sidecar JSON holding the caption, written next to the figure it describes. Keyword
+    arguments become further keys, for structured detail that does not belong in prose."""
     out = os.path.splitext(png)[0] + '.json'
-    meta = {'figure': os.path.basename(png), 'title': title, 'caption': caption}
+    meta = {'figure': os.path.basename(png), 'title': title, 'caption': caption, **extra}
     with open(out, 'w') as f:
         json.dump(meta, f, indent=2)
     return out

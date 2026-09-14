@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.ndimage import uniform_filter1d
-from config import SMOOTHING_LENGTH, GRADIENT_THRESHOLD
+from config import SMOOTHING_LENGTH, GRADIENT_THRESHOLD, MIN_SEGMENT_POINTS
 
 
 def detect_data_gaps(distance, gap_threshold=2000):
@@ -12,7 +12,8 @@ def detect_data_gaps(distance, gap_threshold=2000):
     return gap_mask
 
 
-def split_into_segments(datafile, distance, gap_threshold=2000, min_segment_length=50, min_segment_km=10):
+def split_into_segments(datafile, distance, gap_threshold=2000,
+                        min_segment_length=MIN_SEGMENT_POINTS, min_segment_km=10):
     steps = np.diff(distance)
     gap_indices = np.where(steps > gap_threshold)[0]
 
@@ -36,7 +37,7 @@ def split_into_segments(datafile, distance, gap_threshold=2000, min_segment_leng
 
 def split_by_landscape(segment_data, segment_distance, smoothing_length=SMOOTHING_LENGTH,
                        gradient_threshold=GRADIENT_THRESHOLD,
-                       min_segment_km=10, min_segment_pts=50):
+                       min_segment_km=10, min_segment_pts=MIN_SEGMENT_POINTS):
     elev = segment_data['bedrock_altitude (m)'].values
     dist = np.asarray(segment_distance, dtype=float)
 
