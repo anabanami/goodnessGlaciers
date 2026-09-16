@@ -99,7 +99,7 @@ def frame(d, pad_frac=0.18, pad_min_m=1.5 * WINDOW_M):
 
 def basemap(ax, xlim, ylim, gridlines=True):
     ax.set_extent([*xlim, *ylim], crs=PS71)
-    ax.add_feature(cfeature.LAND, facecolor='#e8e8e8', edgecolor='black', linewidth=0.5)
+    ax.add_feature(cfeature.LAND, facecolor='#e8e8e8', edgecolor='none')
     ax.add_feature(cfeature.OCEAN, facecolor='#cce5ff', alpha=0.5)
     ax.coastlines(resolution='10m', linewidth=0.8)
     if gridlines:
@@ -150,8 +150,9 @@ def locator(ax, d, box_pad_m=WINDOW_M, fontsize=9, gap=0.04, near=0.14):
     boxes cluster the names would collide, so each label is pushed up clear of the ones
     already placed below it and tied back to its own box by a leader line."""
     ax.set_extent([-180, 180, -90, -63], crs=ccrs.PlateCarree())
-    ax.add_feature(cfeature.LAND, facecolor='#e8e8e8', edgecolor='black', linewidth=0.3)
+    ax.add_feature(cfeature.LAND, facecolor='#e8e8e8', edgecolor='none')
     ax.add_feature(cfeature.OCEAN, facecolor='#cce5ff', alpha=0.5)
+    ax.coastlines(resolution='50m', linewidth=0.3)
     corner = {}
     for region, g in d.groupby('region'):
         x0, x1 = g.center_x.min() - box_pad_m, g.center_x.max() + box_pad_m

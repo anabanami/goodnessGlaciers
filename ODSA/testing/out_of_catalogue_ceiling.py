@@ -10,7 +10,7 @@ whenever the catalogue moves and must be re-derived and re-registered, not quiet
 History: 44% against 44 uncovered cells. Widening DIVIDE to {very_low, low} on 2026-08-07
 covered 4 heavily-occupied cells and took it to 31.9% against 40 uncovered.
 
-Observable space is the four measurable axes (beta x relief x elevation x velocity =
+Observable space is the four measurable axes (beta x relief x velocity x elevation =
 144 cells), and a cell counts as covered if it admits at least one catalogue entry.
 beta_spread is not an axis at all: no catalogue entry constrains it, so it can neither
 cover a cell nor leave one uncovered.
@@ -36,8 +36,8 @@ import landscape_vector as lv                                          # noqa: E
 
 AXES = [('beta_class', 'beta', lv.BED_CLASSES),
         ('relief_class', 'relief_m', lv.RELIEF_CLASSES),
-        ('elevation_class', 'bed_elev_mean', lv.ELEVATION_CLASSES),
-        ('velocity_band', 'measures_speed_mean', lv.VELOCITY_CLASSES)]
+        ('velocity_band', 'measures_speed_mean', lv.VELOCITY_CLASSES),
+        ('elevation_class', 'bed_elev_mean', lv.ELEVATION_CLASSES)]
 
 # The ceiling is defined over the measurable axes alone, so every axis the catalogue
 # constrains must be one of them. Fatal: an unmodelled axis narrows coverage, and the

@@ -136,13 +136,18 @@ def analyse_sliding_windows(dist, elev, incidence_array, window_size, step_size,
 
             # Taper is for the spectral estimate only. Keep it in a separate
             # array so roughness_rms below stays on the untapered residuals.
-            w_tapered = w_detrended
+            taper = np.ones(len(w_detrended))
             if WINDOW_TYPE == 'hann':
-                w_tapered = w_detrended * signal.windows.hann(len(w_detrended))
+                taper = signal.windows.hann(len(w_detrended))
             elif WINDOW_TYPE == 'tukey':
-                w_tapered = w_detrended * signal.windows.tukey(len(w_detrended), alpha=0.5)
+                taper = signal.windows.tukey(len(w_detrended), alpha=0.5)
+            w_tapered = w_detrended * taper
 
-            pgram = signal.lombscargle(w_dist, w_tapered, angular_freqs, normalize=False)
+            # One-sided PSD in m^2 per cycle/m. The unnormalised periodogram scales with the
+            # number of samples, so we multiply by twice the mean sample spacing and divide
+            # by the mean square of the taper.
+            pgram = (signal.lombscargle(w_dist, w_tapered, angular_freqs, normalize=False)
+                     * 2 * window_size / len(w_dist) / np.mean(taper ** 2))
             psd_accumulator.append(pgram)
 
             local_relief = np.max(w_elev) - np.min(w_elev)

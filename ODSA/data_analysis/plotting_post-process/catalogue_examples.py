@@ -44,9 +44,9 @@ AXES = [
 
 # (landscape vector element, unit, value format)
 DESCRIPTORS = [
-    ('A_1km', '', '.2f'), ('rms_roughness', ' m', '.0f'), ('eta_wavelength_m', ' m', '.0f'),
+    ('A_1km', ' log₁₀ m³', '.2f'), ('rms_roughness', ' m', '.0f'), ('eta_wavelength_m', ' m', '.0f'),
     ('hill_count', '', '.0f'), ('skewness', '', '.2f'), ('kurtosis', '', '.2f'),
-    ('xi_band', '', '.3g'),
+    ('xi_band', ' m²', '#.3g'),
 ]
 
 
@@ -81,16 +81,26 @@ def observed(vec, w):
 
 
 def break_margin(case, obs):
-    """Smallest distance from a class break on the entry's constrained axes, in sigma."""
+    """Smallest signed distance, in sigma, from a break between an allowed and a disallowed
+    class on the entry's constrained axes. Negative if the value is outside the bound, and
+    zero if the axis has no value or sigma."""
     out = []
     for axis, sym, classes, _, _ in AXES:
-        if axis not in case['c']:
+        allowed = case['c'].get(axis)
+        if allowed is None:
+            continue
+        bounds = [hi for (a, _, hi), (b, _, _) in zip(classes, classes[1:])
+                  if (a in allowed) != (b in allowed)]
+        if not bounds:
             continue
         v, s = obs[axis]['value'], obs[axis]['sigma']
-        breaks = [hi for _, _, hi in classes if np.isfinite(hi)]
-        ok = np.isfinite(v) and np.isfinite(s) and s > 0
-        out.append((min(abs(v - b) for b in breaks) / s if ok else 0.0, sym))
-    return min(out)
+        if not (np.isfinite(v) and np.isfinite(s) and s > 0):
+            out.append((0.0, sym))
+            continue
+        z = min(abs(v - b) for b in bounds) / s
+        inside = any(lo <= v < hi for n, lo, hi in classes if n in allowed)
+        out.append((z if inside else -z, sym))
+    return min(out, default=(np.inf, ''))
 
 
 def candidates(d, vec, entry, min_segment_km):
@@ -105,9 +115,11 @@ def candidates(d, vec, entry, min_segment_km):
     return c.sort_values(['long', 'margin_sigma'], ascending=False)
 
 
-def choose(d, entry, cands, override):
+def choose(d, entry, cands, override, used):
+    """The override window, or else the highest-ranked candidate whose key is not in `used`."""
     if override is None:
-        return cands.iloc[0] if len(cands) else None
+        free = cands[~cands.key.isin(used)]
+        return free.iloc[0] if len(free) else None
     hit = d[(d.key == override) | (d.key.str.split('/', n=1).str[1] == override)]
     if len(hit) != 1:
         raise ValueError(f"{entry}: override {override!r} matches {len(hit)} non-transition "
@@ -119,23 +131,27 @@ def choose(d, entry, cands, override):
     return w
 
 
-def print_candidates(entry, cands, w, n_print, min_segment_km):
+def print_candidates(entry, cands, w, used, n_print, min_segment_km):
     print(f"\n=== {entry} ===")
     if not len(cands):
         print("  no admissible window")
         return
     n = int(cands.n_admissible.iloc[0])
     pool = 'admissible for this entry alone' if n == 1 else f'with {n} admissible entries'
-    print(f"  {len(cands)} windows {pool}, ranked by segment >= {min_segment_km:g} km, then "
-          f"margin (distance from a class break on this entry's axes, in sigma)")
+    print(f"  {len(cands)} window{'' if len(cands) == 1 else 's'} {pool}, ranked by segment "
+          f">= {min_segment_km:g} km, then margin (signed distance from this entry's bound, "
+          f"in sigma, negative outside the bound)")
     top = cands.head(n_print)
     for i, r in enumerate(top.itertuples(), 1):
         mark = '*' if w is not None and r.key == w.key else ' '
         print(f"  {mark}{i:3d}  {r.key:48s} segment {r.segment_km:6.1f} km  "
               f"margin {r.margin_sigma:5.1f} {r.margin_axis:9s}  beta {r.beta:.2f}  "
-              f"relief {r.relief_m:4.0f}  elev {r.bed_elev_mean:5.0f}  "
-              f"speed {r.measures_speed_mean:6.1f}  [{r.admissible}]")
-    if w is not None and w.key not in set(top.key):
+              f"relief {r.relief_m:4.0f}  speed {r.measures_speed_mean:6.1f}  "
+              f"elev {r.bed_elev_mean:5.0f}  [{r.admissible}]"
+              + (f"  shown on {used[r.key]}" if used.get(r.key, entry) != entry else ''))
+    if w is None:
+        print("  every admissible window is shown on another row")
+    elif w.key not in set(top.key):
         print(f"  * override {w.key}  segment {w.segment_km:.1f} km  [{w.admissible}]")
 
 
@@ -213,7 +229,7 @@ def draw_map(fig, cell, d, entry, w, st):
 TEXT_COLUMNS = ['bound', 'value', 'admitted', 'descriptor', 'measured']
 
 
-def draw_text(ax, entry, w, row, obs, st):
+def draw_text(ax, entry, w, row, obs, blocked, st):
     """Column 3 text, all at x = 0 until pack_columns() places it.
     Returns (text, text column, whether its width counts)."""
     ax.axis('off')
@@ -227,7 +243,8 @@ def draw_text(ax, entry, w, row, obs, st):
 
     head = dict(color=st['header_color'])
     if w is None:
-        put('bound', 0, 'No window in these regions is admissible for this entry',
+        put('bound', 0, 'Every window admissible for this entry is shown on another row'
+            if blocked else 'No window in these regions is admissible for this entry',
             measure=False, fontweight='bold')
     else:
         others = [e for e in w.admissible.split('|') if e != entry]
@@ -235,7 +252,7 @@ def draw_text(ax, entry, w, row, obs, st):
         put('bound', 0, 'A window admissible for this entry'
             + ('; also admissible: ' + ', '.join(others) if others else ', and for no other entry')
             + ('' if not ext else
-               ('; separating them needs ' if others else '; reading it needs ')
+               ('; separating them needs ' if others else '; confirming it needs ')
                + ', '.join(ext)),
             measure=False, fontweight='bold')
         put('value', 1.5, f'window value ± {K_SIGMA:g}σ', **head)
@@ -253,7 +270,9 @@ def draw_text(ax, entry, w, row, obs, st):
     for i, (col, unit, fmt) in enumerate(DESCRIPTORS):
         put('descriptor', 2.5 + i, element_label(col))
         put('measured', 2.5 + i,
-            f"{row[col]:{fmt}}{unit}" if np.isfinite(row[col]) else 'no value')
+            'no value' if not np.isfinite(row[col]) else
+            f"{row[col]:.0f}{unit}" if abs(row[col]) >= 999.5 else
+            f"{format(row[col], fmt).rstrip('.')}{unit}")
     return texts
 
 
@@ -272,7 +291,7 @@ def pack_columns(fig, texts, st):
         x += width[col] + (st['block_gap_pt'] if col == 'admitted' else st['col_gap_pt'])
 
 
-def render(d, vec, entries, picks, out, st):
+def render(d, vec, entries, picks, blocked, out, st):
     n = len(entries)
     fig = plt.figure(figsize=(sum(st['col_widths']), st['row_height'] * n))
     gs = fig.add_gridspec(n, 3, width_ratios=st['col_widths'], left=0, right=1, bottom=0,
@@ -283,7 +302,7 @@ def render(d, vec, entries, picks, out, st):
         row, obs = observed(vec, w) if w is not None else (None, None)
         draw_cartoon(fig.add_subplot(gs[i, 0]), entry, st)
         draw_map(fig, gs[i, 1], d, entry, w, st)
-        texts += draw_text(fig.add_subplot(gs[i, 2]), entry, w, row, obs, st)
+        texts += draw_text(fig.add_subplot(gs[i, 2]), entry, w, row, obs, entry in blocked, st)
     pack_columns(fig, texts, st)
     fig.savefig(out, dpi=st['dpi'], bbox_inches='tight')
     plt.close(fig)
@@ -298,9 +317,10 @@ def caption(d, entries, cands, picks, overrides, min_segment_km, root):
     hand = [e for e in shown if e in overrides]
     never_alone = [e for e in shown if cands[e].n_admissible.min() > 1]
     shared = [e for e in shown if picks[e].n_admissible > 1]
-    short = [e for e in shown if picks[e].segment_km < min_segment_km]
+    short = [e for e in shown if picks[e].segment_km < WINDOW_M / 1000]
     no_length = [e for e in shown if not np.isfinite(picks[e].segment_km)]
-    no_window = [e for e in entries if picks[e] is None]
+    no_window = [e for e in entries if picks[e] is None and not len(cands[e])]
+    blocked = [e for e in entries if picks[e] is None and len(cands[e])]
     no_cartoon = [e for e in entries if e not in CARTOONS]
 
     s = [
@@ -322,18 +342,17 @@ def caption(d, entries, cands, picks, overrides, min_segment_km, root):
         f"error, and relief and elevation carry the nominal Bedmap3 errors of "
         f"{RELIEF_ERROR_M:g} m and {ELEVATION_ERROR_M:g} m [Pritchard_2025].",
         "Right, second block: the window's measured values of the seven continuous descriptors. "
-        "The catalogue sets no per-entry ranges on these, and a single window has no spread. "
-        "The amplitude descriptors A_1km and ξ_band are not comparable between rows, because "
-        "the example windows come from different surveys.",
+        "The catalogue sets no per-entry ranges on these, and a single window has no spread.",
     ]
     rule = (f"taken from the smallest admissible set that contains its entry, preferring "
-            f"segments at least {min_segment_km:g} km long and then the largest distance from a "
-            f"class break.")
+            f"segments at least {min_segment_km:g} km long and then the largest distance inside "
+            f"the entry's bound, in units of σ. No window is shown on more than one row.")
     if not hand:
         s.append(f"Each example is {rule}")
     elif len(hand) < len(shown):
-        s.append(f"The examples for {listed(hand)} were chosen by hand. Each other example is "
-                 f"{rule}")
+        one = len(hand) == 1
+        s.append(f"The {'example' if one else 'examples'} for {listed(hand)} "
+                 f"{'was' if one else 'were'} chosen by hand. Each other example is {rule}")
     else:
         s.append("Every example was chosen by hand.")
     if never_alone:
@@ -341,18 +360,25 @@ def caption(d, entries, cands, picks, overrides, min_segment_km, root):
     if shared:
         s.append("Rows with more than one admissible entry name the others.")
     if short:
-        s.append(f"The examples for {listed(short)} come from segments shorter than "
-                 f"{min_segment_km:g} km, so their β carries a band-truncation offset of about "
-                 f"+{TRUNC_OFFSET:.1f}.")
+        one = len(short) == 1
+        s.append(f"The {'example' if one else 'examples'} for {listed(short)} "
+                 f"{'comes from a segment' if one else 'come from segments'} shorter than the "
+                 f"{WINDOW_M // 1000} km window, so {'its' if one else 'their'} β carries a "
+                 f"band-truncation offset of about +{TRUNC_OFFSET:.1f}.")
     if no_length:
-        s.append(f"The examples for {listed(no_length)} have no length in segment_lengths.csv.")
+        one = len(no_length) == 1
+        s.append(f"The {'example' if one else 'examples'} for {listed(no_length)} "
+                 f"{'has' if one else 'have'} no length in segment_lengths.csv.")
     if no_window:
         s.append(f"No window in these regions is admissible for {listed(no_window)}.")
+    if blocked:
+        s.append(f"Every window admissible for {listed(blocked)} is shown on another row.")
     if no_cartoon:
         s.append(f"{listed(no_cartoon)} {'has' if len(no_cartoon) == 1 else 'have'} no cartoon.")
     if any(e for x in shown for e in str(picks[x].needs_external).split(',') if e):
-        s.append("Externals named on a row are observables that ODSA cannot supply from RES; "
-                 "the externals key gives what each one reads.")
+        s.append("Externals named on a row are observables that ODSA cannot supply from RES. "
+                 "They are required to separate the admissible entries, or to confirm the entry "
+                 "on a row with one admissible entry. The externals key describes each one.")
     return ' '.join(s)
 
 
@@ -370,11 +396,20 @@ def main(root, entries, overrides, min_segment_km, n_print, **st):
     d, vec = load_all(root)
     print(f"{len(d)} non-transition windows, {d.region.nunique()} regions")
 
-    cands, picks = {}, {}
+    # We reserve the override windows first. For each remaining entry, in the order of
+    # `entries`, we pick the highest-ranked window that is not already used.
+    cands = {e: candidates(d, vec, e, min_segment_km) for e in entries}
+    picks, used = {}, {}
+    for e in [e for e in entries if e in overrides] + [e for e in entries if e not in overrides]:
+        picks[e] = choose(d, e, cands[e], overrides.get(e), used)
+        if picks[e] is None:
+            continue
+        if picks[e].key in used:
+            raise ValueError(f"{e}: override {picks[e].key} is also the override for "
+                             f"{used[picks[e].key]}")
+        used[picks[e].key] = e
     for e in entries:
-        cands[e] = candidates(d, vec, e, min_segment_km)
-        picks[e] = choose(d, e, cands[e], overrides.get(e))
-        print_candidates(e, cands[e], picks[e], n_print, min_segment_km)
+        print_candidates(e, cands[e], picks[e], used, n_print, min_segment_km)
         check_report(vec, picks[e])
 
     print("\n=== picks ===")
@@ -387,7 +422,8 @@ def main(root, entries, overrides, min_segment_km, n_print, **st):
               f"segment {w.segment_km:.1f} km{'  (override)' if e in overrides else ''}")
 
     out = os.path.join(root, 'landscape_vector', f'{NAME}.png')
-    render(d, vec, entries, picks, out, st)
+    blocked = {e for e in entries if picks[e] is None and len(cands[e])}
+    render(d, vec, entries, picks, blocked, out, st)
     meta = write_metadata(out, TITLE,
                           caption(d, entries, cands, picks, overrides, min_segment_km, root),
                           externals=externals_used(entries, picks))
@@ -404,7 +440,7 @@ if __name__ == '__main__':
         entries=['TRUNK', 'TRUNK-HARD', 'TRUNK-RELICT', 'ONSET', 'HIGHLAND', 'RIFT', 'BASIN',
                  'BASIN-HIGH', 'DISSECTED', 'DIVIDE', 'SHATTERED'],
         # entry -> 'REGION/traj|sN|wN', or the bare traj|sN|wN where it is unique
-        overrides={},
+        overrides={'DISSECTED': 'RSL/G12d|s3|w0'},
         min_segment_km=50,
         n_print=10,
         col_widths=(3.0, 3.0, 8.0), row_height=2.3, hspace=0.35, wspace=0.08, dpi=450,

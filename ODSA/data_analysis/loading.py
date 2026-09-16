@@ -32,8 +32,8 @@ _WARNED = set()
 # Output configuration (ODSA_OUTPUT_BASE env override isolates sweep runs)
 OUTPUT_BASE_PATH = os.environ.get('ODSA_OUTPUT_BASE') or os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
-    # 'Ockenden-regions/',
-    'individual_region_TEST/'
+    'Ockenden-regions/',
+    # 'individual_region_TEST/'
     # 'v23/peak-masking_threshold/threshold_10.0/Ockenden-regions-sensitivityTEST'
     # 'new/PPB_soar'
 )
@@ -98,15 +98,10 @@ def load_datasets():
         # the POLARGAP fan incl. the radial convergence node). Matches the
         # hand-drawn black square on the overview map; subset of the full PPB box.
         {
-            'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
-            'label': 'POLARGAP_2015_Pensacola_Pole',
-            'subset': _ppb_core_subset,
+           'file': 'BAS_2015_POLARGAP_AIR_BM3.csv',
+           'label': 'POLARGAP_2015_Pensacola_Pole',
+           'subset': _ppb_core_subset,
         },
-        # {
-        #   'file': 'UTIG_1999_SOAR-LVS-WLK_AIR_BM2.csv',
-        #   'label': 'SOAR_1999_Pensacola_Pole_SOAR_BM2',
-        #   'subset': _soar_ppb_subset,
-        # },
 
         # LOW-RELIEF: Aurora SB filtered to Ockenden low-relief cells
         {
@@ -115,13 +110,6 @@ def load_datasets():
             'subset': lambda df: _ps71_lowrelief_subset(
                 df, [1.05e6, 2.20e6, -0.80e6, 0.20e6]),
         },
-
-        # # # SELECTIVE EROSION/LOW RELIEF: Aurora Subglacial Basin
-        # # {
-        # #  'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        # #  'label': 'ASB_ICECAP_2010_Fig4C_Aurora_SB_square',
-        # #  'subset': lambda df, _b=[1100000.0, 1400000.0, -780000.0, -480000.0]: _ps71_subset(df, _b),
-        # # },
 
         # LOW-RELIEF / SELECTIVE EROSION: Maud Subglacial Basin
         {
@@ -163,29 +151,44 @@ def load_datasets():
                 df, [-0.6e6, -0.3e6, -0.23e6, 0.07e6]),
         },
 
+        # # =================================================================
+
+        ## {
+        ##   'file': 'UTIG_1999_SOAR-LVS-WLK_AIR_BM2.csv',
+        ##  'label': 'SOAR_1999_Pensacola_Pole_SOAR_BM2',
+        ##   'subset': _soar_ppb_subset,
+        ## },
+
+        ## SELECTIVE EROSION/LOW RELIEF: Aurora Subglacial Basin
+        ## {
+        ##  'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        ##  'label': 'ASB_ICECAP_2010_Fig4C_Aurora_SB_square',
+        ##  'subset': lambda df, _b=[1100000.0, 1400000.0, -780000.0, -480000.0]: _ps71_subset(df, _b),
+        ## },
+
         # # ALPINE/LOW RELIEF: Dome C
+        ## {
+        ## 'file': 'BAS_2005_WISE-ISODYN_AIR_BM2.csv',
+        ## 'label': 'BM2_DomeC_SW_sq_WISE_ISODYN',
+        ## 'subset': lambda df, _b=[1020000.0, 1320000.0, -1237000.0, -937000.0]:_ps71_subset(df, _b),
+        ## },
+        ## {
+        ## 'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        ## 'label': 'BM3_DomeC_SW_sq_ICECAP',
+        ## 'subset': lambda df, _b=[1020000.0, 1320000.0, -1237000.0, -937000.0]:_ps71_subset(df, _b),
+        ## },
         # {
-        # 'file': 'BAS_2005_WISE-ISODYN_AIR_BM2.csv',
-        # 'label': 'BM2_DomeC_SW_sq_WISE_ISODYN',
-        # 'subset': lambda df, _b=[1020000.0, 1320000.0, -1237000.0, -937000.0]:_ps71_subset(df, _b),
-        # },
-        # {
-        # 'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        # 'label': 'BM3_DomeC_SW_sq_ICECAP',
-        # 'subset': lambda df, _b=[1020000.0, 1320000.0, -1237000.0, -937000.0]:_ps71_subset(df, _b),
-        # },
-        # {
-        # 'file': 'NASA_2013_ICEBRIDGE_AIR_BM3.csv',
-        # 'label': 'BM3_DomeC_SW_sq_ICEBRIDGE',
-        # 'subset': lambda df, _b=[1020000.0, 1320000.0, -1237000.0, -937000.0]:_ps71_subset(df, _b),
-        # },
+        ## 'file': 'NASA_2013_ICEBRIDGE_AIR_BM3.csv',
+        ## 'label': 'BM3_DomeC_SW_sq_ICEBRIDGE',
+        ## 'subset': lambda df, _b=[1020000.0, 1320000.0, -1237000.0, -937000.0]:_ps71_subset(df, _b),
+        ## },
 
         # # ALPINE/SELECTIVE EROSION: Dronning Maud Land
-        # {
-        # 'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
-        # 'label': 'BM3_DML_3E_sq_ICECAP',
-        # 'subset': lambda df, _b=[-50000.0, 250000.0, 1620000.0, 1920000.0]: _ps71_subset(df, _b),
-        # },
+        ## {
+        ## 'file': 'UTIG_2010_ICECAP_AIR_BM3.csv',
+        ## 'label': 'BM3_DML_3E_sq_ICECAP',
+        ## 'subset': lambda df, _b=[-50000.0, 250000.0, 1620000.0, 1920000.0]: _ps71_subset(df, _b),
+        ## },
 
     ]
 

@@ -46,8 +46,8 @@ PROCESSING_FLAG_NOTE = {
 # headers and every data key keep the ASCII spelling; these are for figure labels and
 # printed tables. Shared by catalogue_examples and colocated_scale_test.
 ELEMENT_LABEL = {
-    'eta_wavelength_m': 'η_wavelength_m',
-    'xi_band':          'ξ_band',
+    'eta_wavelength_m': 'η',
+    'xi_band':          'ξ',
 }
 
 
@@ -84,7 +84,7 @@ SAVE_PLOTS = os.environ.get('ODSA_NO_PLOTS') != '1'
 BEDFORM_BAND_M = (300.0, 1200.0)
 
 # Wavelength band the power-law fit and the wavelength detections are restricted to.
-# The upper edge tracks WINDOW_SIZE: no wavelength longer than one window is resolved.
+# The frequency grid starts at 1/window_size, so the effective upper edge is the shorter of 50 km and the window length.
 FIT_BAND_M = (250.0, 50000.0)
 
 # Minimum points for a periodogram. Both segmentation stages enforce it on a segment
@@ -97,8 +97,10 @@ GRADIENT_THRESHOLD = 15 # 15 m/km is standard
 
 # Flow-direction stencil half-width, as a multiple of local ice thickness (used by
 # REMA_extractor.extract_rema_flow_vector to measure the surface slope that sets the
-# modelled flow bearing, hence the incidence angle theta). Production is 5; McCormack
-# et al. (2019) recommend ~10. Env-overridable for the stencil sensitivity sweep.
+# modelled flow bearing, hence the incidence angle theta). The stencil samples at plus and
+# minus this multiple, so production's 5 is a full width of 10 ice thicknesses, the top of
+# the 8 to 10 width McCormack et al. (2019) recommend. Env-overridable for the stencil
+# sensitivity sweep.
 STENCIL_FACTOR = float(os.environ.get('ODSA_STENCIL_FACTOR', 5))
 
 class Tee:
