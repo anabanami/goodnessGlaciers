@@ -83,7 +83,7 @@ def extract_coordinates(datasets):
     return coords
 
 
-def plot_antarctica_overview(coords, output_path='antarctica_tracks_overview.png'):
+def plot_antarctica_overview(coords, output_path='antarctica_tracks_overview.pdf'):
     """
     Plot all tracks on a full Antarctic map.
     Uses South Polar Stereographic projection (EPSG:3031).
@@ -116,12 +116,12 @@ def plot_antarctica_overview(coords, output_path='antarctica_tracks_overview.png
     ax.set_title('Radar Flight Tracks - Antarctica Overview', fontsize=14)
     
     plt.tight_layout()
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.savefig(output_path, bbox_inches='tight')
     print(f"Saved overview map to {output_path}")
     plt.close()
 
 
-def plot_regional_detail(coords, output_path='antarctica_tracks_regional.png'):
+def plot_regional_detail(coords, output_path='antarctica_tracks_regional.pdf'):
     """
     Plot tracks zoomed into the region of interest.
     Automatically determines extent from data bounds.
@@ -184,12 +184,12 @@ def plot_regional_detail(coords, output_path='antarctica_tracks_regional.png'):
                  fontsize=12)
     
     plt.tight_layout()
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.savefig(output_path, bbox_inches='tight')
     print(f"Saved regional map to {output_path}")
     plt.close()
 
 
-def plot_tracks_by_migration(coords, output_path='antarctica_tracks_migration.png'):
+def plot_tracks_by_migration(coords, output_path='antarctica_tracks_migration.pdf'):
     """Regional track map coloured by radar migration status (data provenance)."""
     from matplotlib.lines import Line2D
 
@@ -220,7 +220,7 @@ def plot_tracks_by_migration(coords, output_path='antarctica_tracks_migration.pn
     ax.set_title('Radar Flight Tracks — Migration Status', fontsize=12)
 
     plt.tight_layout()
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.savefig(output_path, bbox_inches='tight')
     print(f"Saved migration-status map to {output_path}")
     plt.close()
 
@@ -246,7 +246,7 @@ def load_region_tiers(directory=None):
     return {s: (t, d) for s, t, d in zip(stem, df['tier'], driver)}
 
 
-def plot_tracks_by_tier(coords, output_path='antarctica_tracks_tier.png', directory=None):
+def plot_tracks_by_tier(coords, output_path='antarctica_tracks_tier.pdf', directory=None):
     """Regional track map coloured by data-intrinsic coverage tier (A/B/C) from coverage_tags.py."""
     from matplotlib.lines import Line2D
 
@@ -295,12 +295,12 @@ def plot_tracks_by_tier(coords, output_path='antarctica_tracks_tier.png', direct
     ax.set_title('Radar Flight Tracks — Coverage Tier', fontsize=12)
 
     plt.tight_layout()
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.savefig(output_path, bbox_inches='tight')
     print(f"Saved coverage-tier map to {output_path}")
     plt.close()
 
 
-def plot_tracks_with_elevation(coords, datasets, output_path='antarctica_tracks_elevation.png'):
+def plot_tracks_with_elevation(coords, datasets, output_path='antarctica_tracks_elevation.pdf'):
     """
     Plot tracks colored by bedrock elevation.
     """
@@ -339,12 +339,13 @@ def plot_tracks_with_elevation(coords, datasets, output_path='antarctica_tracks_
                         transform=ccrs.PlateCarree())
     
     cbar = plt.colorbar(sc, ax=ax, shrink=0.6, pad=0.02)
+    cbar.solids.set_rasterized(False)
     cbar.set_label('Bedrock Elevation (m)', fontsize=10)
     
     ax.set_title('Radar Flight Tracks - Bedrock Elevation', fontsize=12)
     
     plt.tight_layout()
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.savefig(output_path, bbox_inches='tight')
     print(f"Saved elevation map to {output_path}")
     plt.close()
 
@@ -464,7 +465,7 @@ def grow_cells_to_grid(fig, ax, cells, xlim):
         pc.set_sizes([(OCKENDEN_CELL_M * pts_per_m) ** 2])
 
 
-def plot_tracks_on_ockenden(coords, output_path='tracks_on_ockenden.png',
+def plot_tracks_on_ockenden(coords, output_path='tracks_on_ockenden.pdf',
                             metrics_dir=OCKENDEN_METRICS_DIR,
                             zoom=False, track_ms=None, casing_ms=None, track_alpha=None):
     """
@@ -513,7 +514,7 @@ def plot_tracks_on_ockenden(coords, output_path='tracks_on_ockenden.png',
     if zoom and cells:
         grow_cells_to_grid(fig, ax, cells, xlim)
 
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.savefig(output_path, bbox_inches='tight')
     print(f"Saved overlay map to {output_path}")
     plt.close()
 
@@ -527,13 +528,13 @@ def main(datasets, prefix=''):
 
     out = lambda fn: os.path.join(OUTPUT_BASE_PATH, prefix + fn)
     print("\nGenerating maps...")
-    plot_antarctica_overview(coords, out('antarctica_tracks_overview.png'))
-    plot_regional_detail(coords, out('antarctica_tracks_regional.png'))
-    plot_tracks_by_migration(coords, out('antarctica_tracks_migration.png'))
-    plot_tracks_by_tier(coords, out('antarctica_tracks_tier.png'))
-    plot_tracks_with_elevation(coords, datasets, out('antarctica_tracks_elevation.png'))
-    plot_tracks_on_ockenden(coords, out('tracks_on_ockenden.png'))
-    plot_tracks_on_ockenden(coords, out('tracks_on_ockenden_regional.png'), zoom=True)
+    plot_antarctica_overview(coords, out('antarctica_tracks_overview.pdf'))
+    plot_regional_detail(coords, out('antarctica_tracks_regional.pdf'))
+    plot_tracks_by_migration(coords, out('antarctica_tracks_migration.pdf'))
+    plot_tracks_by_tier(coords, out('antarctica_tracks_tier.pdf'))
+    plot_tracks_with_elevation(coords, datasets, out('antarctica_tracks_elevation.pdf'))
+    plot_tracks_on_ockenden(coords, out('tracks_on_ockenden.pdf'))
+    plot_tracks_on_ockenden(coords, out('tracks_on_ockenden_regional.pdf'), zoom=True)
 
 
 if __name__ == "__main__":
@@ -550,10 +551,10 @@ if __name__ == "__main__":
     main(datasets)
 
     print("\nDone! Generated maps:")
-    print("  - antarctica_tracks_overview.png (full continent)")
-    print("  - antarctica_tracks_regional.png (zoomed to data)")
-    print("  - antarctica_tracks_migration.png (colored by migration status)")
-    print("  - antarctica_tracks_tier.png (colored by coverage tier)")
-    print("  - antarctica_tracks_elevation.png (colored by bed elevation)")
-    print("  - tracks_on_ockenden.png (tracks on Ockenden Fig 4)")
-    print("  - tracks_on_ockenden_regional.png (same, zoomed to the track bundle)")
+    print("  - antarctica_tracks_overview.pdf (full continent)")
+    print("  - antarctica_tracks_regional.pdf (zoomed to data)")
+    print("  - antarctica_tracks_migration.pdf (colored by migration status)")
+    print("  - antarctica_tracks_tier.pdf (colored by coverage tier)")
+    print("  - antarctica_tracks_elevation.pdf (colored by bed elevation)")
+    print("  - tracks_on_ockenden.pdf (tracks on Ockenden Fig 4)")
+    print("  - tracks_on_ockenden_regional.pdf (same, zoomed to the track bundle)")

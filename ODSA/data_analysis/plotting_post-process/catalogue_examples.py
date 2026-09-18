@@ -11,6 +11,7 @@ The output tree defaults to OUTPUT_BASE_PATH in loading.py.
 import glob, os, sys, textwrap
 import numpy as np, pandas as pd
 import matplotlib.pyplot as plt
+plt.rcParams['pdf.fonttype'] = 42
 import _bootstrap  # noqa: F401  (sets sys.path + cwd to ODSA/)
 from config import Tee, element_label
 from loading import OUTPUT_BASE_PATH as _REGION_BASE
@@ -24,6 +25,8 @@ from fig6b_maps import load, ARCHETYPE_COLORS, PS71, WINDOW_M, frame, basemap, f
 NAME = 'catalogue_examples'
 TITLE = 'Landscape catalogue: an example window for each entry'
 CASE = {c['id']: c for c in CATALOGUE}
+# Map artists below this zorder are rasterised in the PDF. The footprints are at zorder 3 and 4.
+RASTER_ZORDER = 5
 
 CARTOON_DIR = os.path.join('plotting_post-process', 'Landscape archetypes')
 CARTOONS = {
@@ -224,6 +227,8 @@ def draw_map(fig, cell, d, entry, w, st):
     footprints(ax, ex, pd.Series(entry, index=ex.index), ARCHETYPE_COLORS,
                lw=st['example_lw'], alpha=st['example_alpha'])
     ax.set_title(f"{w.region}   {w.key.split('/', 1)[1]}", fontsize=st['map_title_fontsize'])
+    ax.title.set_zorder(RASTER_ZORDER + 1)
+    ax.set_rasterization_zorder(RASTER_ZORDER)
 
 
 TEXT_COLUMNS = ['bound', 'value', 'admitted', 'descriptor', 'measured']
@@ -421,7 +426,7 @@ def main(root, entries, overrides, min_segment_km, n_print, **st):
         print(f"  {e:12s} {w.key:48s} n_admissible {int(w.n_admissible)}  "
               f"segment {w.segment_km:.1f} km{'  (override)' if e in overrides else ''}")
 
-    out = os.path.join(root, 'landscape_vector', f'{NAME}.png')
+    out = os.path.join(root, 'landscape_vector', f'{NAME}.pdf')
     blocked = {e for e in entries if picks[e] is None and len(cands[e])}
     render(d, vec, entries, picks, blocked, out, st)
     meta = write_metadata(out, TITLE,

@@ -117,7 +117,7 @@ def permute(units, regions, rng, within_region):
     return out
 
 
-TITLE = 'No single statistic identifies landscape class'
+TITLE = 'Admissible landscape classes vs number of classifiers'
 
 CAPTION = (
     f"Best axis combination at each size, {LEVEL} units. "
@@ -126,11 +126,11 @@ CAPTION = (
 )
 
 
-def write_metadata(png, tag):
+def write_metadata(fig_path, tag):
     """Sidecar JSON holding the caption, written next to the figure it describes."""
-    out = os.path.splitext(png)[0] + '.json'
+    out = os.path.splitext(fig_path)[0] + '.json'
     note = f"Migration widening {'on' if tag == 'widened' else 'off'}."
-    meta = {'figure': os.path.basename(png), 'title': TITLE,
+    meta = {'figure': os.path.basename(fig_path), 'title': TITLE,
             'caption': CAPTION + ' ' + note}
     with open(out, 'w') as f:
         json.dump(meta, f, indent=2)
@@ -155,7 +155,7 @@ def plot_subset_curve(curve, tag):
     a2.plot(x, curve['ooc'], '^-', color='#b22222', lw=1.4, ms=5,
             label='out of catalogue')
     a2.set_ylabel('% of units')
-    a2.set_xlabel('axes live')
+    a2.set_xlabel('number of classifiers used')
     a2.legend(fontsize=8, frameon=False)
 
     # An axis that excludes nothing reads as a flat step.
@@ -185,8 +185,8 @@ def plot_subset_curve(curve, tag):
         ax.set_xticks(x)
     fig.suptitle(TITLE, fontsize=13)
     plt.tight_layout()
-    out = os.path.join(ROOT, f'hypothesis_test_subset_curve_{tag}.png')
-    fig.savefig(out, dpi=200, bbox_inches='tight')
+    out = os.path.join(ROOT, f'hypothesis_test_subset_curve_{tag}.pdf')
+    fig.savefig(out, bbox_inches='tight')
     plt.close(fig)
     meta = write_metadata(out, tag)
     print(f"  Saved: {out}")

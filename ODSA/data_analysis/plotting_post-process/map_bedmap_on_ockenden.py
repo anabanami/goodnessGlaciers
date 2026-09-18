@@ -37,7 +37,7 @@ either script plots in seconds from the other.
 
 Output goes to all_data/Bedmap_track_plots/tracks_on_ockenden/, with the release
 digits and any institution filter in the filename:
-bedmap3_on_ockenden.png, bedmap123_on_ockenden.png, bedmap3_AWI-BAS_on_ockenden.png.
+bedmap3_on_ockenden.pdf, bedmap123_on_ockenden.pdf, bedmap3_AWI-BAS_on_ockenden.pdf.
 """
 
 import os
@@ -84,8 +84,10 @@ def plot_bedmap_on_ockenden(coords, output_path, group_of=institution_of,
         lonlat = np.vstack(groups[group])
         x, y = _TO_PS.transform(lonlat[:, 0], lonlat[:, 1])
         if casing_ms:
-            ax.plot(x, y, '.', color='white', ms=casing_ms, zorder=3)
-        ax.plot(x, y, '.', color='black', ms=track_ms, alpha=track_alpha, zorder=4)
+            ax.plot(x, y, '.', color='white', ms=casing_ms, zorder=3,
+                    rasterized=True)
+        ax.plot(x, y, '.', color='black', ms=track_ms, alpha=track_alpha, zorder=4,
+                rasterized=True)
         track_handles.append(Line2D([], [], marker='.', ls='', ms=10, color='black',
                                     label=f'{group} ({len(lonlat)} points)'))
 
@@ -104,7 +106,7 @@ def plot_bedmap_on_ockenden(coords, output_path, group_of=institution_of,
                           'landscape classification', fontsize=12)
 
     plt.tight_layout()
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.savefig(output_path, bbox_inches='tight', dpi=300)
     print(f"Saved overlay map to {output_path}")
     plt.close()
 
@@ -143,6 +145,6 @@ if __name__ == "__main__":
                   'INSTITUTION' if by_inst else 'RELEASE')
     plot_bedmap_on_ockenden(
         coords,
-        os.path.join(OUTPUT_BASE_PATH, f'bedmap{tag}_on_ockenden.png'),
+        os.path.join(OUTPUT_BASE_PATH, f'bedmap{tag}_on_ockenden.pdf'),
         group_of=institution_of if by_inst else generation_of,
         legend_title='Institution' if by_inst else 'Bedmap release')
